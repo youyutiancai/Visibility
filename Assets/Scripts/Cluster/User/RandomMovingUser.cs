@@ -11,7 +11,7 @@ public class RandomMovingUser : User
     }
     void Update()
     {
-        if (ClusterControl.Instance.moveIndividually)
+        if (ClusterControl.Instance.SimulationStrategy == SimulationStrategyDropDown.IndiUserRandomSpawn)
         {
             UpdatePath();
         }

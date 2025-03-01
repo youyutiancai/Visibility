@@ -18,7 +18,7 @@ public class ClusterControl : Singleton<ClusterControl>
     public float epsilon = 10;  // Radius for clustering
     public int minPts = 2;      // Minimum points to form a cluster
     public float updateInterval = 1.0f, timegapForSwapUsers;  // How often to update (in seconds)
-    public bool moveIndividually, regularlySwapUsers, regularlySwapLeader, writeToData;
+    public bool regularlySwapUsers, regularlySwapLeader, writeToData;
 
     [HideInInspector]
     public List<User> users = new List<User>();
@@ -86,17 +86,19 @@ public class ClusterControl : Singleton<ClusterControl>
 
         switch (SimulationStrategy)
         {
+            case SimulationStrategyDropDown.FollowStrategy:
+                ss = new FollowStrategy();
+                ss.CreateUsers(5, followUserPrefab);
+                break;
 
-        }
-        if (moveIndividually)
-        {
-            ss = new IndiUserRandomSpawn();
-            ss.CreateUsers(100, randomMovingUserPrefab);
-        } else
-        {
-            ss = new FollowStrategy();
-            ss.CreateUsers(5, followUserPrefab);
-        }        
+            case SimulationStrategyDropDown.IndiUserRandomSpawn:
+                ss = new IndiUserRandomSpawn();
+                ss.CreateUsers(100, randomMovingUserPrefab);
+                break;
+
+            case SimulationStrategyDropDown.RealUser:
+                break;
+        }    
     }
 
     void Update()

@@ -8,5 +8,5 @@ public abstract class SimulationStrategy : MonoBehaviour
 
 public enum SimulationStrategyDropDown
 {
-    FollowStrategy, IndiUserRandomSpawn
+    FollowStrategy, IndiUserRandomSpawn, RealUser
 } 
