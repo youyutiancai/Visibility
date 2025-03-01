@@ -24,10 +24,6 @@ public class TCPClient : MonoBehaviour
     [SerializeField]
     private TextMeshProUGUI debugText;
 
-    //[SerializeField]
-    TestControl testControl;
-    //private NFClient nfClient;
-
     public TcpClient client;
     private int messagestatus;
     private Thread listenerThread;
@@ -37,13 +33,11 @@ public class TCPClient : MonoBehaviour
     // create Singleton object before threads are created. 
     void Awake() {
         dispatcher = Dispatcher.Instance;
-        messagestatus = ReceiveStates.AVAILABLE;
         if (instance == null)
             instance = this;
     }
     void Start()
     {
-        testControl = TestControl.instance;
         try
         {
             client = new TcpClient(serverIPAddress, port);
@@ -75,7 +69,6 @@ public class TCPClient : MonoBehaviour
         return messagestatus;
     }
     public void ResetMessagestatus() {
-        messagestatus = ReceiveStates.AVAILABLE;
     }
 
     private void ConnectClient(TcpClient client, int clientId)
@@ -86,7 +79,6 @@ public class TCPClient : MonoBehaviour
                 NetworkStream stream = client.GetStream();
 
             while(true) {
-                NFClient nfClient = testControl.currentNFClient;
                 byte[] buffer = new byte[10000000];
                 int byteCount = stream.Read(buffer, 0, buffer.Length);
                 byte[] dataTemp = new byte[byteCount];
@@ -113,49 +105,7 @@ public class TCPClient : MonoBehaviour
 
     private void HandleMessagenfClient(byte[] dataTemp)
     {
-        NFClient nfClient = testControl.currentNFClient;
-        string messageType = null;
-        if (dataTemp.Length >= MessageType.MESSAGELENGTH)
-        {
-            messageType = System.Text.Encoding.ASCII.GetString(dataTemp, 0, MessageType.MESSAGELENGTH);
-            if (messageType == MessageType.TRIALFINISH)
-                Debug.Log(messageType);
-        }
-        int startIndex = 0;
-
-        if (messageType == MessageType.MESHSTART)
-        {
-            messagestatus = ReceiveStates.RECEIVEMESH;
-            nfClient.ResetMeshTemp();
-            startIndex = MessageType.MESSAGELENGTH;
-        }
-        else if (messageType == MessageType.SKYBOXTEXTURESTART)
-        {
-            messagestatus = ReceiveStates.RECEIVETEXTURE;
-            nfClient.ResetSkyboxTemp();
-            startIndex = MessageType.MESSAGELENGTH;
-        }
-        else if (messageType == MessageType.SHADOWMAPSTART)
-        {
-            messagestatus = ReceiveStates.RECEIVESHADOWMAP;
-            nfClient.ResetShadowMap();
-            startIndex = MessageType.MESSAGELENGTH;
-        } else if (messageType == MessageType.TRIALFINISH)
-        {
-            testControl.FinishTrial();
-        }
-
-        if (messagestatus == ReceiveStates.RECEIVEMESH)
-        {
-            nfClient.AddMeshTemp(startIndex, dataTemp);
-        } else if (messagestatus == ReceiveStates.RECEIVETEXTURE)
-        {
-            nfClient.AddSkyboxTemp(startIndex, dataTemp);
-        }
-        else if (messagestatus== ReceiveStates.RECEIVESHADOWMAP)
-        {
-            nfClient.AddShadowMapTemp(startIndex, dataTemp);
-        }
+        
             
     }
 
