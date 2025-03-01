@@ -25,6 +25,7 @@ public class ClusterControl : Singleton<ClusterControl>
     [HideInInspector]
     public List<List<SyntheticPathNode>> allPathNodes;
     private float timeSinceLastUpdate = 0f;
+    public SimulationStrategyDropDown SimulationStrategy;
     private SimulationStrategy ss;
     private Dictionary<int, Color> clusterColors = new Dictionary<int, Color>();  // Cluster ID to color mapping
     private Dictionary<int, GameObject> clusterGameObjects = new Dictionary<int, GameObject>(); // Cluster ID to GameObject mapping
@@ -80,6 +81,11 @@ public class ClusterControl : Singleton<ClusterControl>
             {
                 allPathNodes[i].Add(path.GetChild(j).GetComponent<SyntheticPathNode>());
             }
+
+        }
+
+        switch (SimulationStrategy)
+        {
 
         }
         if (moveIndividually)

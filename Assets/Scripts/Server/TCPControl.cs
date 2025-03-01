@@ -113,6 +113,6 @@ public class TCPControl : MonoBehaviour
 
     private void SendTable(TcpClient client)
     {
-
+        client.GetStream().Write(visibilityCheck.objectTable);
     }
 }
