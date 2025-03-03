@@ -5,36 +5,171 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
+using System.IO;
 
 public class UDPBroadcastClient : MonoBehaviour
 {
-
     public int port = 5005;
     private UdpClient udpClient;
+    // Define header size (3 ints: bundleId, totalChunks, chunkIndex)
+    private const int HEADER_SIZE = 12;
+
+    // A helper class to store data for a bundle transmission
+    private class BundleTransmission
+    {
+        public int totalChunks;
+        public Dictionary<int, byte[]> chunks = new Dictionary<int, byte[]>();
+        public double firstChunkTime;
+    }
+
+    // Dictionary mapping a bundleId to its transmission data
+    private Dictionary<int, BundleTransmission> activeTransmissions = new Dictionary<int, BundleTransmission>();
+
+    #region
+
+    public event Action<string> OnReceivedServerData;
+
+    #endregion
 
     void Start()
     {
-        // Bind the UDP client to listen on the designated port.
-        udpClient = new UdpClient(port);
-        udpClient.BeginReceive(new AsyncCallback(ReceiveCallback), null);
+        try
+        {
+            udpClient = new UdpClient(port);
+            udpClient.BeginReceive(new AsyncCallback(ReceiveMessage), null);
+            Debug.Log($"UDP client initialized on port {port}");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("UDP client initialization failed: " + ex.Message);
+        }
     }
 
-    private void ReceiveCallback(IAsyncResult ar)
+    private void ReceiveMessage(IAsyncResult ar)
     {
         IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, port);
-        byte[] data = udpClient.EndReceive(ar, ref remoteEP);
-        string message = Encoding.UTF8.GetString(data);
+        byte[] packet = udpClient.EndReceive(ar, ref remoteEP);
 
-        Debug.Log("Received: " + message + " from " + remoteEP);
+        // Validate packet size
+        if (packet.Length < HEADER_SIZE)
+        {
+            Debug.LogWarning("Received packet too small to contain header.");
+            udpClient.BeginReceive(new AsyncCallback(ReceiveMessage), null);
+            return;
+        }
 
-        // Continue listening for incoming messages.
-        udpClient.BeginReceive(new AsyncCallback(ReceiveCallback), null);
+        // Parse header values
+        int bundleId = BitConverter.ToInt32(packet, 0);
+        int totalChunks = BitConverter.ToInt32(packet, 4);
+        int chunkIndex = BitConverter.ToInt32(packet, 8);
+
+        int dataSize = packet.Length - HEADER_SIZE;
+        byte[] chunkData = new byte[dataSize];
+        Array.Copy(packet, HEADER_SIZE, chunkData, 0, dataSize);
+
+        // Store the chunk in the appropriate transmission buffer
+        if (!activeTransmissions.ContainsKey(bundleId))
+        {
+            activeTransmissions[bundleId] = new BundleTransmission { totalChunks = totalChunks, firstChunkTime = GetCurrentTime() };
+            Debug.Log($"Started receiving bundleId {bundleId} with {totalChunks} chunks.");
+        }
+
+        BundleTransmission transmission = activeTransmissions[bundleId];
+
+        // Avoid storing duplicate chunks
+        if (!transmission.chunks.ContainsKey(chunkIndex))
+        {
+            transmission.chunks[chunkIndex] = chunkData;
+            Debug.Log($"Received chunk {chunkIndex + 1}/{totalChunks} for bundleId {bundleId}");
+        }
+
+        // Check if all chunks are received.
+        if (transmission.chunks.Count == transmission.totalChunks)
+        {
+            Debug.Log("11111");
+
+            // reassamble asset bundle from chunks
+            Debug.Log($"All chunks received for bundleId {bundleId}. Reassembling asset bundle...");
+            int totalSize = 0;
+            for (int i = 0; i < transmission.totalChunks; i++)
+            {
+                totalSize += transmission.chunks[i].Length;
+            }
+
+            byte[] assetBundleData = new byte[totalSize];
+            int offset = 0;
+            for (int i = 0; i < transmission.totalChunks; i++)
+            {
+                byte[] chunk = transmission.chunks[i];
+                Buffer.BlockCopy(chunk, 0, assetBundleData, offset, chunk.Length);
+                offset += chunk.Length;
+            }
+
+            // write to the disk
+            string path = Application.dataPath + "net_asset_bundle";
+            File.WriteAllBytes(path, assetBundleData);
+
+            // dispatch the event to the listener
+            OnReceivedServerData?.Invoke(path);
+
+            activeTransmissions.Remove(bundleId);
+        }
+        else if (GetCurrentTime() - transmission.firstChunkTime > 0.5)
+        {
+            Debug.Log("2222");
+            // After 2 seconds, check for missing chunks and request retransmission.
+            List<int> missingChunks = new List<int>();
+            for (int i = 0; i < transmission.totalChunks; i++)
+            {
+                if (!transmission.chunks.ContainsKey(i))
+                {
+                    missingChunks.Add(i);
+                }
+            }
+
+            if (missingChunks.Count > 0)
+            {
+                RetransmissionRequest req = new RetransmissionRequest
+                {
+                    bundleId = bundleId,
+                    missingChunks = missingChunks.ToArray()
+                };
+                string jsonReq = JsonUtility.ToJson(req);
+                byte[] reqData = Encoding.UTF8.GetBytes(jsonReq);
+                // Send request to the server (assuming server IP is the one you received data from)
+                UdpClient requestClient = new UdpClient();
+                requestClient.Send(reqData, reqData.Length, remoteEP.Address.ToString(), port);
+                requestClient.Close();
+                Debug.Log("Requested retransmission for missing chunks: " + string.Join(",", missingChunks));
+                // Reset timer so you don't spam requests
+                transmission.firstChunkTime = GetCurrentTime();
+            }
+        }
+        else
+        {
+            Debug.Log($"{GetCurrentTime()} - {transmission.firstChunkTime}");
+        }
+
+        // Continue listening for incoming packets
+        udpClient.BeginReceive(new AsyncCallback(ReceiveMessage), null);
     }
+
+    
+    private double GetCurrentTime()
+    {
+        return (DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+    }
+
+    
 
     void OnDestroy()
     {
-        udpClient.Close();
+        if (udpClient != null)
+        {
+            udpClient.Close();
+        }
     }
+
 
 
     //public int port = 5005;
@@ -166,6 +301,13 @@ public class UDPBroadcastClient : MonoBehaviour
     //}
 }
 
+[Serializable]
+public class RetransmissionRequest
+{
+    public int bundleId;
+    public int[] missingChunks;
+}
+
 // Serializable class to hold individual object data from the JSON.
 [Serializable]
 public class ObjectData
@@ -180,3 +322,5 @@ public class ObjectTable
 {
     public ObjectData[] objects;
 }
+
+

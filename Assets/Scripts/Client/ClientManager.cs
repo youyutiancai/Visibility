@@ -1,18 +1,34 @@
 using UnityEngine;
 using System.IO;
-using UnityEngine;
-public class SerializationTest : MonoBehaviour
+
+public class ClientManager : MonoBehaviour
 {
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    [SerializeField] UDPBroadcastClient m_Client;
+
+    private void OnEnable()
     {
-        Deserialize();
+        m_Client.OnReceivedServerData += InitPrefab;
     }
 
-    private void Deserialize()
+    private void OnDisable()
     {
-        string assetBundlePath = Application.dataPath + "/asset_bundle_test";
-        byte[] assetBundleData = File.ReadAllBytes(assetBundlePath);
+        m_Client.OnReceivedServerData -= InitPrefab;
+    }
+
+    void Start()
+    {
+        InitPrefab(Application.dataPath + "net_asset_bundle");
+    }
+
+    
+    void Update()
+    {
+        
+    }
+
+    private void InitPrefab(string path)
+    {
+        byte[] assetBundleData = File.ReadAllBytes(path);
 
         // Optionally, you can now send this byte array over the network
         Debug.Log("AssetBundle loaded into byte array. Length: " + assetBundleData.Length);
@@ -36,11 +52,8 @@ public class SerializationTest : MonoBehaviour
         {
             Debug.LogError("Prefab not found in AssetBundle.");
         }
+
+
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
 }
