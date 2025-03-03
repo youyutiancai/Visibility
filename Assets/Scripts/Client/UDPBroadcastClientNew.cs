@@ -1,8 +1,10 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 
 
@@ -27,6 +29,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
         public int totalChunks;
         public Dictionary<int, byte[]> chunks = new Dictionary<int, byte[]>();
         public DateTime firstChunkTime;
+        public IPEndPoint remoteEP;  // Save the sender's endpoint for retransmission requests.
     }
 
     // Active transmissions mapped by bundleId.
@@ -41,6 +44,9 @@ public class UDPBroadcastClientNew : MonoBehaviour
             udpClient.BeginReceive(new AsyncCallback(ReceiveMessage), null);
 
             Debug.Log($"UDP client listening on port {port1}");
+
+            // Start the coroutine to periodically check for retransmissions.
+            StartCoroutine(CheckRetransmissions());
         }
         catch (Exception ex)
         {
@@ -74,8 +80,13 @@ public class UDPBroadcastClientNew : MonoBehaviour
             // Create or update the transmission record.
             if (!activeTransmissions.ContainsKey(bundleId))
             {
-                activeTransmissions[bundleId] = new BundleTransmission { totalChunks = totalChunks, firstChunkTime = DateTime.UtcNow };
-                Debug.Log($"Started receiving bundleId {bundleId} with {totalChunks} chunks.");
+                activeTransmissions[bundleId] = new BundleTransmission
+                {
+                    totalChunks = totalChunks,
+                    firstChunkTime = DateTime.UtcNow,
+                    remoteEP = remoteEP   // store the sender's endpoint
+                };
+                Debug.Log($"Started receiving bundleId {bundleId} with {totalChunks} chunks from {remoteEP.Address}");
             }
             BundleTransmission transmission = activeTransmissions[bundleId];
 
@@ -94,61 +105,67 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 });
                 activeTransmissions.Remove(bundleId);
             }
-            else
-            {
-                TimeSpan currentTime = DateTime.UtcNow - transmission.firstChunkTime;
-                Debug.Log($"waiting...{currentTime.TotalSeconds}");
-
-                if (currentTime.TotalSeconds < 2f)
-                {
-                    return;
-                }
-                else
-                {
-
-                }
-                    
-
-                while (currentTime.TotalSeconds < 2f)
-                {
-                    
-                    List<int> missingChunks = new List<int>();
-                    for (int i = 0; i < transmission.totalChunks; i++)
-                    {
-                        if (!transmission.chunks.ContainsKey(i))
-                        {
-                            missingChunks.Add(i);
-                        }
-                    }
-
-                    if (missingChunks.Count > 0)
-                    {
-                        RetransmissionRequest req = new RetransmissionRequest
-                        {
-                            bundleId = bundleId,
-                            missingChunks = missingChunks.ToArray()
-                        };
-                        string jsonReq = JsonUtility.ToJson(req);
-                        byte[] reqData = Encoding.UTF8.GetBytes(jsonReq);
-                        // Send request to the server (assuming server IP is the one you received data from)
-                        UdpClient requestClient = new UdpClient();
-                        requestClient.Send(reqData, reqData.Length, remoteEP.Address.ToString(), port2);
-                        requestClient.Close();
-                        Debug.Log("Requested retransmission for missing chunks: " + string.Join(",", missingChunks));
-
-                        // refresh the chunk first send time 
-                        transmission.firstChunkTime = DateTime.UtcNow;
-                    }
-                }
-            }
         }
         catch (Exception ex)
         {
             Debug.LogError("ReceiveMessage error: " + ex.Message);
         }
-        
-        // keep the listening to the server
+
+        // Continue listening for packets.
         udpClient.BeginReceive(new AsyncCallback(ReceiveMessage), null);
+    }
+
+    // Coroutine to periodically check for missing chunks and request retransmissions.
+    private IEnumerator CheckRetransmissions()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(0.5f);
+
+            // Iterate over a copy of the keys so that modifications to activeTransmissions don't throw exceptions.
+            foreach (var kvp in new Dictionary<int, BundleTransmission>(activeTransmissions))
+            {
+                int bundleId = kvp.Key;
+                BundleTransmission transmission = kvp.Value;
+
+                // Only process incomplete transmissions.
+                if (transmission.chunks.Count < transmission.totalChunks)
+                {
+                    TimeSpan elapsed = DateTime.UtcNow - transmission.firstChunkTime;
+                    if (elapsed.TotalSeconds > 2f)
+                    {
+                        List<int> missingChunks = new List<int>();
+                        for (int i = 0; i < transmission.totalChunks; i++)
+                        {
+                            if (!transmission.chunks.ContainsKey(i))
+                            {
+                                missingChunks.Add(i);
+                            }
+                        }
+
+                        if (missingChunks.Count > 0)
+                        {
+                            RetransmissionRequest req = new RetransmissionRequest
+                            {
+                                bundleId = bundleId,
+                                missingChunks = missingChunks.ToArray()
+                            };
+                            string jsonReq = JsonUtility.ToJson(req);
+                            byte[] reqData = Encoding.UTF8.GetBytes(jsonReq);
+
+                            UdpClient requestClient = new UdpClient();
+                            // Use the stored remoteEP address for the retransmission request.
+                            requestClient.Send(reqData, reqData.Length, transmission.remoteEP.Address.ToString(), port2);
+                            requestClient.Close();
+                            Debug.Log("Requested retransmission for bundleId " + bundleId + " for missing chunks: " + string.Join(",", missingChunks));
+
+                            // Reset the timer for retransmission requests.
+                            transmission.firstChunkTime = DateTime.UtcNow;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private void AssembleAndLoadBundle(int bundleId, BundleTransmission transmission)
