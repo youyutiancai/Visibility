@@ -5,9 +5,19 @@ using System.Net.Sockets;
 using System.Text;
 using UnityEngine;
 
+
+
+[Serializable]
+public class RetransmissionRequest
+{
+    public int bundleId;
+    public int[] missingChunks;
+}
+
 public class UDPBroadcastClientNew : MonoBehaviour
 {
-    public int port = 5005;
+    public int port1 = 5005;  // broadcast port
+    public int port2 = 5006;  // retransmit port
     private UdpClient udpClient;
     private const int HEADER_SIZE = 12; // 3 ints: bundleId, totalChunks, chunkIndex.
 
@@ -26,11 +36,11 @@ public class UDPBroadcastClientNew : MonoBehaviour
     {
         try
         {
-            udpClient = new UdpClient(port);
+            udpClient = new UdpClient(port1);
             udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             udpClient.BeginReceive(new AsyncCallback(ReceiveMessage), null);
 
-            Debug.Log($"UDP client listening on port {port}");
+            Debug.Log($"UDP client listening on port {port1}");
         }
         catch (Exception ex)
         {
@@ -42,7 +52,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     {
         try
         {
-            IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, port);
+            IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, port1);
             byte[] packet = udpClient.EndReceive(ar, ref remoteEP);
 
             if (packet.Length < HEADER_SIZE)
@@ -84,17 +94,60 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 });
                 activeTransmissions.Remove(bundleId);
             }
-            //else if (Time.time - transmission.firstChunkTime > 2f)
-            //{
-            //    // Optionally: request retransmission for missing chunks (not implemented in this mock).
-            //}
+            else
+            {
+                TimeSpan currentTime = DateTime.UtcNow - transmission.firstChunkTime;
+                Debug.Log($"waiting...{currentTime.TotalSeconds}");
+
+                if (currentTime.TotalSeconds < 2f)
+                {
+                    return;
+                }
+                else
+                {
+
+                }
+                    
+
+                while (currentTime.TotalSeconds < 2f)
+                {
+                    
+                    List<int> missingChunks = new List<int>();
+                    for (int i = 0; i < transmission.totalChunks; i++)
+                    {
+                        if (!transmission.chunks.ContainsKey(i))
+                        {
+                            missingChunks.Add(i);
+                        }
+                    }
+
+                    if (missingChunks.Count > 0)
+                    {
+                        RetransmissionRequest req = new RetransmissionRequest
+                        {
+                            bundleId = bundleId,
+                            missingChunks = missingChunks.ToArray()
+                        };
+                        string jsonReq = JsonUtility.ToJson(req);
+                        byte[] reqData = Encoding.UTF8.GetBytes(jsonReq);
+                        // Send request to the server (assuming server IP is the one you received data from)
+                        UdpClient requestClient = new UdpClient();
+                        requestClient.Send(reqData, reqData.Length, remoteEP.Address.ToString(), port2);
+                        requestClient.Close();
+                        Debug.Log("Requested retransmission for missing chunks: " + string.Join(",", missingChunks));
+
+                        // refresh the chunk first send time 
+                        transmission.firstChunkTime = DateTime.UtcNow;
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {
             Debug.LogError("ReceiveMessage error: " + ex.Message);
         }
         
-
+        // keep the listening to the server
         udpClient.BeginReceive(new AsyncCallback(ReceiveMessage), null);
     }
 
@@ -144,3 +197,4 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
     }
 }
+

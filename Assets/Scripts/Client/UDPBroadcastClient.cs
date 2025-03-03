@@ -301,13 +301,6 @@ public class UDPBroadcastClient : MonoBehaviour
     //}
 }
 
-[Serializable]
-public class RetransmissionRequest
-{
-    public int bundleId;
-    public int[] missingChunks;
-}
-
 // Serializable class to hold individual object data from the JSON.
 [Serializable]
 public class ObjectData
