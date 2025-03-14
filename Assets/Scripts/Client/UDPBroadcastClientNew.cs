@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -21,9 +22,9 @@ public class UDPBroadcastClientNew : MonoBehaviour
     public int port1 = 5005;  // broadcast port
     public int port2 = 5006;  // retransmit port
     private UdpClient udpClient;
-    private const int HEADER_SIZE = 12; // 3 ints: bundleId, totalChunks, chunkIndex.
+    private const int HEADER_SIZE = 12; // [archived] 3 ints: bundleId, totalChunks, chunkIndex.
 
-    // Represents an in-progress asset bundle transmission.
+    // Represents an in-progress asset BUNDLE transmission.
     private class BundleTransmission
     {
         public int totalChunks;
@@ -35,23 +36,115 @@ public class UDPBroadcastClientNew : MonoBehaviour
     // Active transmissions mapped by bundleId.
     private Dictionary<int, BundleTransmission> activeTransmissions = new Dictionary<int, BundleTransmission>();
 
+    // Represent an Mesh transmission
+    private class MeshTransmission
+    {
+        public int totalMeshChunks;
+        public Dictionary<int, byte[]> chunks = new Dictionary<int, byte[]>();
+        public DateTime firstChunkTime;
+        public IPEndPoint remoteEP;
+    }
+    private Dictionary<int, MeshTransmission> activeMeshTransmissions = new Dictionary<int, MeshTransmission>();
+
     void Start()
     {
         try
         {
             udpClient = new UdpClient(port1);
             udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            udpClient.BeginReceive(new AsyncCallback(ReceiveMessage), null);
+            udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
 
             Debug.Log($"UDP client listening on port {port1}");
 
             // Start the coroutine to periodically check for retransmissions.
-            StartCoroutine(CheckRetransmissions());
+            //StartCoroutine(CheckRetransmissions());   //TODO
         }
         catch (Exception ex)
         {
             Debug.LogError("UDP client initialization failed: " + ex.Message);
         }
+    }
+
+    private void ReceiveMeshChunks(IAsyncResult ar)
+    {
+        try
+        {
+            IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, port1);
+            byte[] packet = udpClient.EndReceive(ar, ref remoteEP);
+
+            if (packet.Length < HEADER_SIZE) // archived
+            {
+                Debug.LogWarning("Received packet too small to contain header.");
+                udpClient.BeginReceive(new AsyncCallback(ReceiveMessage), null);
+                return;
+            }
+
+            // Parse the header.
+            char submeshType = BitConverter.ToChar(packet, 0);
+            int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
+            int totalMeshTrunks = 364; // 89 // TODO: get from the initial user object tables by tcp
+
+            if (submeshType == 'V')
+            {
+                Debug.Log($"Received package type V...");
+                objectId = BitConverter.ToInt32(packet, 2);
+                chunkId = BitConverter.ToInt32(packet, 6);
+                headerSize = 10;
+            }
+            else if (submeshType == 'T')
+            {
+                Debug.Log($"Received package type T...");
+                objectId = BitConverter.ToInt32(packet, 2);
+                chunkId = BitConverter.ToInt32(packet, 6);
+                submeshId = BitConverter.ToInt32(packet, 10);
+                headerSize = 14;
+            }
+            else
+            {
+                Debug.LogError("Err: Please ensure the packet parser is correct");
+            }
+            
+           
+            int dataSize = packet.Length - headerSize;
+            byte[] chunkData = new byte[dataSize];
+            Array.Copy(packet, headerSize, chunkData, 0, dataSize);
+
+            // Create or update the transmission record.
+            if (!activeMeshTransmissions.ContainsKey(objectId))
+            {
+                activeMeshTransmissions[objectId] = new MeshTransmission
+                {
+                    totalMeshChunks = totalMeshTrunks,  // TODO: need to use the table to record
+                    firstChunkTime = DateTime.UtcNow,
+                    remoteEP = remoteEP   // store the sender's endpoint
+                };
+                Debug.Log($"Started receiving objectId {objectId} with {totalMeshTrunks} chunks from {remoteEP.Address}");
+            }
+            MeshTransmission transmission = activeMeshTransmissions[objectId];
+
+            if (!transmission.chunks.ContainsKey(chunkId))
+            {
+                transmission.chunks[chunkId] = chunkData;
+                Debug.Log($"Received chunk {chunkId + 1}/{totalMeshTrunks} for objectId {objectId}");
+            }
+
+            // If all chunks have been received, schedule reassembly and loading on the main thread.
+            if (transmission.chunks.Count == transmission.totalMeshChunks)
+            {
+                UnityDispatcher.Instance.Enqueue(() =>
+                {
+                    AssembleLoadObjectSubMeshes(objectId, transmission);
+                });
+                activeMeshTransmissions.Remove(objectId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError("ReceiveMessage error: " + ex.Message);
+        }
+
+        // Continue listening for packets.
+        udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
     }
 
     private void ReceiveMessage(IAsyncResult ar)
@@ -166,6 +259,12 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 }
             }
         }
+    }
+
+    private void AssembleLoadObjectSubMeshes(int objectId, MeshTransmission transmission)
+    {
+        Debug.Log($"All chunks received for objectId {objectId}. Initializing the object...");
+
     }
 
     private void AssembleAndLoadBundle(int bundleId, BundleTransmission transmission)
