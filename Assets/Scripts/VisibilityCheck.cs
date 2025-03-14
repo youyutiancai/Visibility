@@ -9,11 +9,13 @@ using Random = UnityEngine.Random;
 using UnityTCPClient.Assets.Scripts;
 using UnityEngine.UIElements;
 using System.Collections;
+using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
+using UnityEditor.PackageManager;
 
 public class VisibilityCheck : Singleton<VisibilityCheck>
 {
     public Camera mainCamera;
-    public GameObject sceneRoot, footprintCameras, grids, pathStart, pathEnd;
+    public GameObject sceneRoot, footprintCameras, grids, pathStart, pathEnd, testObject;
     public bool showAll, progBased, autoMove;
     public GridDivide gd;
     [HideInInspector]
@@ -35,9 +37,9 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     private Color color;
     private string meshInfo;
     private GameObject visTarget, preVisTarget;
-    private Dictionary<string, int[]> diffFileRead;
+    private Dictionary<string, int[]> diffInfoAdd, diffInfoRemove, visibleObjectsInGrid;
 
-    public float frameUpdatePace;
+    public float frameUpdatePace, numInUnitX = 10f, numInUnitZ = 10f;
     public Vector3 pathStartPos, pathEndPos;
 
     private RenderTexture reusableRenderTexture;
@@ -96,7 +98,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         preProgBased = progBased;
         visTarget = mainCamera.gameObject;
         preVisTarget = visTarget;
-        diffFileRead = new Dictionary<string, int[]>();
+        diffInfoAdd = new Dictionary<string, int[]>();
+        visibleObjectsInGrid = new Dictionary<string, int[]>();
     }
 
     private void AddAllObjects(Transform child)
@@ -415,15 +418,24 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
         int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
 
-        int[] footprints = ReadFootprintsGrid(xStartIndex, zStartIndex);
-
-        for (int i = 0; i < objectsInScene.Count; i++)
+        //int[] footprints = ReadFootprintsGrid(xStartIndex, zStartIndex);
+        //List<int> visibleObjects = new List<int>();
+        //for (int i = 0; i < objectsInScene.Count; i++)
+        //{
+        //    if (footprints[i] > 0)
+        //    {
+        //        objectVisibility[i] = 1;
+        //        visibleObjects.Add(i);
+        //    }
+        //}
+        //Debug.Log($"old: {string.Join(',', visibleObjects)}");
+        int[] footprints = ReadFootprintGridUnit(xStartIndex, zStartIndex);
+        //Debug.Log($"unit: {string.Join(", ", footprints)}");
+        for (int i = 0; i < footprints.Length; i++)
         {
-            if (footprints[i] > 0)
-            {
-                objectVisibility[i] = 1;
-            }
+            objectVisibility[footprints[i]] = 1;
         }
+
         int gridNumToInclude = Mathf.FloorToInt(radius / gd.gridSize);
         UpdateVisOnLine(xStartIndex, zStartIndex, xStartIndex - gridNumToInclude, zStartIndex, -1, 0, ref objectVisibility);
         UpdateVisOnLine(xStartIndex, zStartIndex, xStartIndex + gridNumToInclude, zStartIndex, 1, 0, ref objectVisibility);
@@ -446,7 +458,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
 
     private void UpdateVis(int fromX, int fromZ, int toX, int toZ, ref int[] visibility)
     {
-        int[] updatedVis = ReadFootprintsDiff(fromX, fromZ, toX, toZ);
+        int[] updatedVis = ReadFootprintsDiffUnit(fromX, fromZ, toX, toZ);
 
         int count = updatedVis[0];
         if (count != 0)
@@ -477,6 +489,9 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             //ResetFootprintCount();
             //WriteFromCornerToGrid();
             //WriteGridDifferences();
+            //StartCoroutine(CombineGridDifferences());
+            //StartCoroutine(ShrinkGridLevelVis());
+            //StartCoroutine(CombineGrids());
         } else if (Input.GetKeyDown(KeyCode.Q))
         {
             UpdateVisibleObjects();
@@ -829,6 +844,148 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         File.WriteAllBytes(fileName, toWrite);
     }
 
+    private IEnumerator ShrinkGridLevelVis()
+    {
+        int numUnitX = Mathf.CeilToInt(gd.numGridX / numInUnitX);
+        int numUnitZ = Mathf.CeilToInt(gd.numGridZ / numInUnitZ);
+        string UnitFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis_Unit\\";
+        for (int i = 8; i < numUnitX; i++)
+        {
+            for (int j = 23; j < numUnitZ; j++)
+            {
+                List<int> infoToWrite = new List<int>();
+                int cursor = 0;
+                for (int k = 0; k < numInUnitX; k++)
+                {
+                    for (int l = 0; l < numInUnitZ; l++)
+                    {
+                        infoToWrite.Add(0);
+                        int gridX = i * (int)numInUnitX + k, gridZ = j * (int)numInUnitZ + l;
+                        int[] visibilityInfo = ReadFootprintsGrid(gridX, gridZ);
+                        for (int t = 0; t < visibilityInfo.Length; t++)
+                        {
+                            if (visibilityInfo[t] > 0)
+                            {
+                                infoToWrite.Add(t);
+                                infoToWrite[cursor]++;
+                            }
+                        }
+                        cursor += infoToWrite[cursor] + 1;
+                    }
+                }
+                cursor = 0;
+                for (int k = 0; k < numInUnitX; k++)
+                {
+                    for (int l = 0; l < numInUnitZ; l++)
+                    {
+                        int gridX = i * (int)numInUnitX + k, gridZ = j * (int)numInUnitZ + l;
+                        int[] visibilityInfo = ReadFootprintsGrid(gridX, gridZ);
+                        List<int> ints = new List<int>();
+                        for (int t = 0; t < visibilityInfo.Length; t++)
+                        {
+                            if (visibilityInfo[t] > 0)
+                            {
+                                ints.Add(t);
+                            }
+                        }
+                        Debug.Log($"old: {string.Join(',', ints)}");
+                        int[] visibleObjects = new int[infoToWrite[cursor]];
+                        Array.Copy(infoToWrite.ToArray(), cursor + 1, visibleObjects, 0, infoToWrite[cursor]);
+                        Debug.Log($"unit: {string.Join(", ", visibleObjects)}");
+                        cursor += infoToWrite[cursor] + 1;
+                    }
+                }
+                string fileName = $"{UnitFilePath}{i}_{j}.bin";
+                byte[] toWrite = ConvertIntArrayToByteArray(infoToWrite.ToArray());
+                File.WriteAllBytes(fileName, toWrite);
+                Debug.Log($"finished {i}_{j}");
+                yield return null;
+            }
+        }
+    }
+
+    //private IEnumerator CombineGrids()
+    //{
+    //    int numUnitX = Mathf.CeilToInt(gd.numGridX / numInUnitX);
+    //    int numUnitZ = Mathf.CeilToInt(gd.numGridZ / numInUnitZ);
+    //    string UnitFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis\\";
+    //    for (int i = 0; i < numUnitX; i++)
+    //    {
+    //        for (int j = 0; j < numUnitZ; j++)
+    //        {
+    //            List<int> infoToWrite = new List<int>();
+    //            for (int k = 0; k < numInUnitX; k++)
+    //            {
+    //                for (int l = 0; l < numInUnitZ; l++)
+    //                {
+    //                    int gridX = i * (int)numInUnitX + k, gridZ = j * (int)numInUnitZ + l;
+    //                    CombineGridDiffSingle(gridX, gridZ, gridX + 1, gridZ, ref infoToWrite);
+    //                    CombineGridDiffSingle(gridX, gridZ, gridX - 1, gridZ, ref infoToWrite);
+    //                    CombineGridDiffSingle(gridX, gridZ, gridX, gridZ + 1, ref infoToWrite);
+    //                    CombineGridDiffSingle(gridX, gridZ, gridX, gridZ - 1, ref infoToWrite);
+    //                }
+    //            }
+    //            string fileName = $"{UnitFilePath}{i}_{j}.bin";
+    //            byte[] toWrite = ConvertIntArrayToByteArray(infoToWrite.ToArray());
+    //            File.WriteAllBytes(fileName, toWrite);
+    //            Debug.Log($"finished {i}_{j}");
+    //            yield return null;
+    //        }
+    //    }
+    //}
+
+    private IEnumerator CombineGridDifferences()
+    {
+        int numUnitX = Mathf.CeilToInt(gd.numGridX / numInUnitX);
+        int numUnitZ = Mathf.CeilToInt(gd.numGridZ / numInUnitZ);
+        string UnitFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff_Unit\\";
+        for (int i = 0; i < numUnitX; i++) {
+            for (int j = 0; j < numUnitZ; j++)
+            {
+                List<int> infoToWrite = new List<int>();
+                for (int k = 0; k < numInUnitX; k++)
+                {
+                    for (int l = 0; l < numInUnitZ; l++)
+                    {
+                        int gridX = i * (int) numInUnitX + k, gridZ = j * (int) numInUnitZ + l;
+                        CombineGridDiffSingle(gridX, gridZ, gridX + 1, gridZ, ref infoToWrite);
+                        CombineGridDiffSingle(gridX, gridZ, gridX - 1, gridZ, ref infoToWrite);
+                        CombineGridDiffSingle(gridX, gridZ, gridX, gridZ + 1, ref infoToWrite);
+                        CombineGridDiffSingle(gridX, gridZ, gridX, gridZ - 1, ref infoToWrite);
+                    }
+                }
+                string fileName = $"{UnitFilePath}{i}_{j}.bin";
+                byte[] toWrite = ConvertIntArrayToByteArray(infoToWrite.ToArray());
+                File.WriteAllBytes(fileName, toWrite);
+                Debug.Log($"finished {i}_{j}");
+                yield return null;
+            }
+        }
+    }
+
+    private void CombineGridDiffSingle(int fromX, int fromZ, int toX, int toZ, ref List<int> infoToWrite)
+    {
+        string diffFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff\\";
+        string fileName = $"{diffFilePath}{fromX}_{fromZ}_{toX}_{toZ}.bin";
+        if (!File.Exists(fileName))
+        {
+            infoToWrite.Add(0);
+            infoToWrite.Add(0);
+            return;
+        }
+        int[] data = ReadFootprintsDiffUnit(fromX, fromZ, toX, toZ);
+        infoToWrite.Add(data[0]);
+        for (int i = 1; i < data[0] + 1; i++)
+        {
+            infoToWrite.Add(data[i]);
+        }
+        infoToWrite.Add(data.Length - 1 - data[0]);
+        for (int i = 1 + data[0]; i < data.Length; i++)
+        {
+            infoToWrite.Add(data[i]);
+        }
+    }
+
     static byte[] ConvertIntArrayToByteArray(int[] array)
     {
         int length = array.Length;
@@ -870,14 +1027,54 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         return ConvertByteArrayToIntArray(bytes_read);
     }
 
+    private int[] ReadFootprintGridUnit(int x, int z)
+    {
+        string indiGrid = $"{x}_{z}";
+        if (visibleObjectsInGrid.ContainsKey(indiGrid))
+        {
+            return visibleObjectsInGrid[indiGrid];
+        }
+        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis_Unit\\";
+        int unitX = x / (int)numInUnitX, unitZ = z / (int)numInUnitZ;
+        string fileName = $"{filePath}{unitX}_{unitZ}.bin";
+        if (!File.Exists(fileName))
+        {
+            Debug.LogError($"{fileName} does not exist");
+            return new int[objectsInScene.Count];
+        }
+        byte[] bytes_read = File.ReadAllBytes(fileName);
+        int[] visInfo = ConvertByteArrayToIntArray(bytes_read);
+        int cursor = 0;
+        for (int k = 0; k < numInUnitX; k++)
+        {
+            for (int l = 0; l < numInUnitZ; l++)
+            {
+                int gridX = unitX * (int)numInUnitX + k, gridZ = unitZ * (int)numInUnitZ + l;
+                int[] visibleObjects = new int[visInfo[cursor]];
+                Array.Copy(visInfo, cursor + 1, visibleObjects, 0, visInfo[cursor]);
+                visibleObjectsInGrid.Add($"{gridX}_{gridZ}", visibleObjects);
+                int[] visibilityInfo = ReadFootprintsGrid(gridX, gridZ);
+                List<int> ints = new List<int>();
+                for (int t = 0; t < visibilityInfo.Length; t++)
+                {
+                    if (visibilityInfo[t] > 0)
+                    {
+                        ints.Add(t);
+                    }
+                }
+                cursor += 1 + visInfo[cursor];
+            }
+        }
+        return visibleObjectsInGrid[indiGrid];
+    }
+
     private int[] ReadFootprintsDiff(int fromX, int fromZ, int toX, int toZ)
     {
-        //return new int[4];
         string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff\\";
         string fileName = $"{filePath}{fromX}_{fromZ}_{toX}_{toZ}.bin";
-        if (diffFileRead.ContainsKey(fileName))
+        if (diffInfoAdd.ContainsKey(fileName))
         {
-            return diffFileRead[fileName];
+            return diffInfoAdd[fileName];
         }
         if (!File.Exists(fileName))
         {
@@ -887,9 +1084,64 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         byte[] bytes_read = File.ReadAllBytes(fileName);
         int[] result = new int[bytes_read.Length / 4];
         Buffer.BlockCopy(bytes_read, 0, result, 0, bytes_read.Length);
-        diffFileRead.Add(fileName, result);
+        diffInfoAdd.Add(fileName, result);
 
         return result;
+    }
+
+    private int[] ReadFootprintsDiffUnit(int fromX, int fromZ, int toX, int toZ)
+    {
+        //int[] indiDiffArray = ReadFootprintsDiff(fromX, fromZ, toX, toZ);
+        //Debug.Log($"indi: {string.Join(", ", indiDiffArray)}");
+        string indiDiff = $"{fromX}_{fromZ}_{toX}_{toZ}";
+        if (diffInfoAdd.ContainsKey(indiDiff))
+        {
+            //Debug.Log($"unit: {string.Join(',', diffInfoAdd[indiDiff])}");
+            return diffInfoAdd[indiDiff];
+        }
+        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff_Unit\\";
+        int unitX = fromX / (int)numInUnitX, unitZ = fromZ / (int)numInUnitZ;
+        string fileName = $"{filePath}{unitX}_{unitZ}.bin";
+        //Debug.Log(fileName);
+        if (!File.Exists(fileName))
+        {
+            Debug.LogError($"{fileName} does not exist");
+            return new int[objectsInScene.Count];
+        }
+        byte[] bytes_read = File.ReadAllBytes(fileName);
+        int[] diffInfo = ConvertByteArrayToIntArray(bytes_read);
+        int cursor = 0;
+        for (int k = 0; k < numInUnitX; k++)
+        {
+            for (int l = 0; l < numInUnitZ; l++)
+            {
+                int gridX = unitX * (int)numInUnitX + k, gridZ = unitZ * (int)numInUnitZ + l;
+                ReadUnit($"{gridX}_{gridZ}_{gridX + 1}_{gridZ}", ref cursor, diffInfo);
+                ReadUnit($"{gridX}_{gridZ}_{gridX - 1}_{gridZ}", ref cursor, diffInfo);
+                ReadUnit($"{gridX}_{gridZ}_{gridX}_{gridZ + 1}", ref cursor, diffInfo);
+                ReadUnit($"{gridX}_{gridZ}_{gridX}_{gridZ - 1}", ref cursor, diffInfo);
+            }
+        }
+        indiDiff = $"{fromX}_{fromZ}_{toX}_{toZ}";
+        //Debug.Log($"unit: {string.Join(',', diffInfoAdd[indiDiff])}");
+        return diffInfoAdd[indiDiff];
+    }
+
+    private void ReadUnit(string indiDiff, ref int cursor, int[] diffInfo)
+    {
+        int numToAdd = diffInfo[cursor];
+        int[] objectsAdd = new int[1 + numToAdd];
+        cursor++;
+        objectsAdd[0] = numToAdd;
+        if (numToAdd != 0)
+        {
+            Array.Copy(diffInfo, cursor, objectsAdd, 1, numToAdd);
+        }
+        diffInfoAdd.Add(indiDiff, objectsAdd);
+        cursor += numToAdd;
+        int numToRemove = diffInfo[cursor];
+        cursor++;
+        cursor += numToRemove;
     }
 
     static int[] ConvertByteArrayToIntArray(byte[] byteArray)
