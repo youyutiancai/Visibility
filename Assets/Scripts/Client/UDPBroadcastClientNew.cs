@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Text;
 using UnityEditor.Experimental.GraphView;
 using UnityEngine;
+using UnityEngine.AI;
 
 
 
@@ -19,10 +20,24 @@ public class RetransmissionRequest
 
 public class UDPBroadcastClientNew : MonoBehaviour
 {
+    // TODO: will change later
+    public GameObject m_TestObject;
+
+
     public int port1 = 5005;  // broadcast port
     public int port2 = 5006;  // retransmit port
     private UdpClient udpClient;
     private const int HEADER_SIZE = 12; // [archived] 3 ints: bundleId, totalChunks, chunkIndex.
+
+    // an gameObject triangle mesh data
+    GameObject recGameObject;
+    int numVerticesPerChunk = 57; //TODO: might change later
+    int totalVertexNum = 20706; // TODO: will change later
+    int subMeshCount = 12;  // TODO: will change later 
+    List<List<int>> triangles;
+    Vector3[] vertices;
+    Vector3[] normals;
+
 
     // Represents an in-progress asset BUNDLE transmission.
     private class BundleTransmission
@@ -36,11 +51,24 @@ public class UDPBroadcastClientNew : MonoBehaviour
     // Active transmissions mapped by bundleId.
     private Dictionary<int, BundleTransmission> activeTransmissions = new Dictionary<int, BundleTransmission>();
 
+
     // Represent an Mesh transmission
+    // Chunk format
+    //char vorT = BitConverter.ToChar(chunk, cursor);
+    //int objectID = BitConverter.ToInt32(chunk, cursor += sizeof(char));
+    //int chunkID = BitConverter.ToInt32(chunk, cursor += sizeof(int));
+    private class Chunk  // Noted: chunk id is set as the index in dictionary
+    {
+        public int id;
+        public char type;
+        public int objectID;
+        public int subMeshIdx;  // only has when the chunk type is triangle
+        public byte[] data;
+    }
     private class MeshTransmission
     {
         public int totalMeshChunks;
-        public Dictionary<int, byte[]> chunks = new Dictionary<int, byte[]>();
+        public Dictionary<int, Chunk> chunks = new Dictionary<int, Chunk>();
         public DateTime firstChunkTime;
         public IPEndPoint remoteEP;
     }
@@ -48,6 +76,16 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     void Start()
     {
+        // init the mesh list
+        triangles = new List<List<int>>();
+        for (int i = 0; i < subMeshCount; i++)
+        {
+            triangles.Add(new List<int>());
+        }
+        vertices = new Vector3[totalVertexNum];
+        normals = new Vector3[totalVertexNum];
+
+
         try
         {
             udpClient = new UdpClient(port1);
@@ -79,10 +117,10 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 return;
             }
 
-            // Parse the header.
+            // Parse the header. (Object ID to determine whether continue the logic)
             char submeshType = BitConverter.ToChar(packet, 0);
             int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
-            int totalMeshTrunks = 364; // 89 // TODO: get from the initial user object tables by tcp
+            int totalMeshTrunks = 364; // TODO: get from the initial user object tables by tcp
 
             if (submeshType == 'V')
             {
@@ -124,19 +162,32 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
             if (!transmission.chunks.ContainsKey(chunkId))
             {
-                transmission.chunks[chunkId] = chunkData;
-                Debug.Log($"Received chunk {chunkId + 1}/{totalMeshTrunks} for objectId {objectId}");
+                transmission.chunks[chunkId] = new Chunk
+                {
+                    id = chunkId,
+                    type = submeshType,
+                    objectID = objectId,
+                    subMeshIdx = submeshId,
+                    data = chunkData
+                };
+                Debug.Log($"Received chunk {chunkId + 1}/{totalMeshTrunks} of {transmission.chunks[chunkId].type} for objectId {objectId}");
+
+                // update the triangles, vertices and normals list
+                UnityDispatcher.Instance.Enqueue(() =>
+                {
+                    UpdateObjectSubMeshes(transmission.chunks[chunkId]);
+                });
             }
 
             // If all chunks have been received, schedule reassembly and loading on the main thread.
-            if (transmission.chunks.Count == transmission.totalMeshChunks)
-            {
-                UnityDispatcher.Instance.Enqueue(() =>
-                {
-                    AssembleLoadObjectSubMeshes(objectId, transmission);
-                });
-                activeMeshTransmissions.Remove(objectId);
-            }
+            //if (transmission.chunks.Count == transmission.totalMeshChunks)
+            //{
+            //    UnityDispatcher.Instance.Enqueue(() =>
+            //    {
+            //        AssembleLoadObjectSubMeshes(objectId, transmission);
+            //    });
+            //    activeMeshTransmissions.Remove(objectId);
+            //}
         }
         catch (Exception ex)
         {
@@ -261,9 +312,120 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
     }
 
+    private void UpdateObjectSubMeshes(Chunk chunk)
+    {
+        int chunkID = chunk.id;
+        char vorT = chunk.type;
+        int objectID = chunk.objectID;
+        byte[] chunk_data = chunk.data;
+
+        if (vorT == 'V')
+        {
+            int numVerticesInChunk = chunk_data.Length / (sizeof(float) * 6);  // 6: pos and normal
+            float[] floatArray = new float[numVerticesInChunk * 6];
+            Buffer.BlockCopy(chunk_data, 0, floatArray, 0, floatArray.Length * sizeof(float));
+            for (int j = 0; j < numVerticesInChunk; j++)
+            {
+                vertices[chunkID * numVerticesPerChunk + j] = new Vector3(floatArray[j * 6], floatArray[j * 6 + 1], floatArray[j * 6 + 2]);
+                normals[chunkID * numVerticesPerChunk + j] = new Vector3(floatArray[j * 6 + 3], floatArray[j * 6 + 4], floatArray[j * 6 + 5]);
+            }
+        }
+        else if (vorT == 'T')
+        {
+            int subMeshIdx = chunk.subMeshIdx;
+            int numVerticesInChunk = (chunk_data.Length) / sizeof(int);
+            int[] intArray = new int[numVerticesInChunk];
+            Buffer.BlockCopy(chunk_data, 0, intArray, 0, intArray.Length * sizeof(int));
+            triangles[subMeshIdx].AddRange(intArray);
+        }
+
+        if (recGameObject == null)
+        {
+            recGameObject = new GameObject();
+            recGameObject.AddComponent<MeshFilter>();
+
+            Mesh newMesh = new Mesh();
+            newMesh.vertices = vertices;
+            newMesh.normals = normals;
+            newMesh.subMeshCount = subMeshCount;
+            for (int i = 0; i < subMeshCount; i++)
+            {
+                newMesh.SetTriangles(triangles[i].ToArray(), i);
+            }
+            recGameObject.GetComponent<MeshFilter>().mesh = newMesh;
+            recGameObject.AddComponent<MeshRenderer>();
+            recGameObject.GetComponent<MeshRenderer>().materials = m_TestObject.GetComponent<MeshRenderer>().materials;
+        }
+        else
+        {
+            recGameObject.GetComponent<MeshFilter>().mesh.vertices = vertices;
+            recGameObject.GetComponent<MeshFilter>().mesh.normals = normals;
+            for (int i = 0; i < subMeshCount; i++)
+            {
+                recGameObject.GetComponent<MeshFilter>().mesh.SetTriangles(triangles[i].ToArray(), i);
+            }
+        }
+    }
+
     private void AssembleLoadObjectSubMeshes(int objectId, MeshTransmission transmission)
     {
         Debug.Log($"All chunks received for objectId {objectId}. Initializing the object...");
+
+        List<List<int>> triangles = new List<List<int>>();
+        int subMeshCount = 12;  // TODO: will change later 
+        for (int i = 0; i < subMeshCount; i++)
+        {
+            triangles.Add(new List<int>());
+        }
+
+        int numVerticesPerChunk = 57; //TODO: might change later
+        int totalVertexNum = 20706; // TODO: will change later
+        Vector3[] vertices = new Vector3[totalVertexNum];
+        Vector3[] normals = new Vector3[totalVertexNum];
+
+        for (int i = 0; i < transmission.totalMeshChunks; i++)
+        {
+            Chunk chunk = transmission.chunks[i];
+            byte[] chunk_data = chunk.data;
+            char vorT = chunk.type;
+            int objectID = chunk.objectID;
+            int chunkID = i;
+            
+            if (vorT == 'V')
+            {
+                int numVerticesInChunk = chunk_data.Length / (sizeof(float) * 6);  // 6: pos and rot
+                float[] floatArray = new float[numVerticesInChunk * 6];
+                Buffer.BlockCopy(chunk_data, 0, floatArray, 0, floatArray.Length * sizeof(float));
+                for (int j = 0; j < numVerticesInChunk; j++)
+                {
+                    vertices[chunkID * numVerticesPerChunk + j] = new Vector3(floatArray[j * 6], floatArray[j * 6 + 1], floatArray[j * 6 + 2]);
+                    normals[chunkID * numVerticesPerChunk + j] = new Vector3(floatArray[j * 6 + 3], floatArray[j * 6 + 4], floatArray[j * 6 + 5]);
+                }
+            }
+            else if (vorT == 'T')
+            {
+                int subMeshIdx = chunk.subMeshIdx;
+                int numVerticesInChunk = (chunk_data.Length) / sizeof(int);
+                int[] intArray = new int[numVerticesInChunk];
+                Buffer.BlockCopy(chunk_data, 0, intArray, 0, intArray.Length * sizeof(int));
+                triangles[subMeshIdx].AddRange(intArray);
+            }
+        }
+
+        GameObject newObject = new GameObject();
+        newObject.AddComponent<MeshFilter>();
+
+        Mesh newMesh = new Mesh();
+        newMesh.vertices = vertices;
+        newMesh.normals = normals;
+        newMesh.subMeshCount = subMeshCount;
+        for (int i = 0; i < subMeshCount; i++)
+        {
+            newMesh.SetTriangles(triangles[i].ToArray(), i);
+        }
+        newObject.GetComponent<MeshFilter>().mesh = newMesh;
+        newObject.AddComponent<MeshRenderer>();
+        newObject.GetComponent<MeshRenderer>().materials = VisibilityCheck.Instance.testObject.GetComponent<MeshRenderer>().materials;
 
     }
 
