@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.AI;
 
 public class RandomizedMesh : MeshVariant
 {
@@ -9,7 +11,7 @@ public class RandomizedMesh : MeshVariant
     {
         List<byte[]> chunks = new List<byte[]>();
         GameObject testObject = VisibilityCheck.Instance.testObject;
-        RandomizeMesh(testObject);
+        //RandomizeMesh(testObject);
         GetChunks(testObject, chunkSize, ref chunks);
         Debug.Log($"number of chunks {chunks.Count}");
         return chunks;
@@ -114,6 +116,21 @@ public class RandomizedMesh : MeshVariant
         Vector3[] vertices = mesh.vertices;
         Vector3[] normals = mesh.normals;
         int subMeshCount = mesh.subMeshCount;
+
+        //GameObject newObject = new GameObject();
+        //newObject.AddComponent<MeshFilter>();
+
+        //Mesh newMesh = new Mesh();
+        //newMesh.vertices = vertices.ToArray();
+        //newMesh.normals = normals.ToArray();
+        //newMesh.subMeshCount = subMeshCount;
+        //for (int i = 0; i < subMeshCount; i++)
+        //{
+        //    newMesh.SetTriangles(mesh.GetTriangles(i), i);
+        //}
+        //newObject.GetComponent<MeshFilter>().mesh = newMesh;
+        //newObject.AddComponent<MeshRenderer>();
+        //newObject.GetComponent<MeshRenderer>().materials = testObject.GetComponent<MeshRenderer>().materials;
 
         int objectID = 1; // Currently hardcoded to 1
 

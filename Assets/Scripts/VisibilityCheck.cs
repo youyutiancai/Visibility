@@ -124,21 +124,52 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     private void CreateObjectTable()
     {
         objectTable = new byte[sizeof(int) + sizeof(float) * 3 * 3 * objectsInScene.Count];
+        int numVerticesPerChunk = 57;
+
         int cursor = 0;
         Array.Copy(BitConverter.GetBytes((int) TCPMessageType.TABLE), 0, objectTable, cursor, sizeof(int));
         for (int i = 0; i < objectsInScene.Count; i++)
         {
+            List<byte> info = new List<byte>();
             Transform transform = objectsInScene[i].transform;
-            Array.Copy(BitConverter.GetBytes(transform.position.x), 0, objectTable, cursor += sizeof(float), sizeof(float));
-            Array.Copy(BitConverter.GetBytes(transform.position.y), 0, objectTable, cursor += sizeof(float), sizeof(float));
-            Array.Copy(BitConverter.GetBytes(transform.position.z), 0, objectTable, cursor += sizeof(float), sizeof(float));
-            Array.Copy(BitConverter.GetBytes(transform.eulerAngles.x), 0, objectTable, cursor += sizeof(float), sizeof(float));
-            Array.Copy(BitConverter.GetBytes(transform.eulerAngles.y), 0, objectTable, cursor += sizeof(float), sizeof(float));
-            Array.Copy(BitConverter.GetBytes(transform.eulerAngles.z), 0, objectTable, cursor += sizeof(float), sizeof(float));
-            Array.Copy(BitConverter.GetBytes(transform.lossyScale.x), 0, objectTable, cursor += sizeof(float), sizeof(float));
-            Array.Copy(BitConverter.GetBytes(transform.lossyScale.y), 0, objectTable, cursor += sizeof(float), sizeof(float));
-            Array.Copy(BitConverter.GetBytes(transform.lossyScale.z), 0, objectTable, cursor += sizeof(float), sizeof(float));
+            Mesh mesh = transform.gameObject.GetComponent<MeshFilter>().mesh;
+            Vector3[] vertices = mesh.vertices;
+
+            // pose
+            info.AddRange(BitConverter.GetBytes(transform.position.x));
+            info.AddRange(BitConverter.GetBytes(transform.position.y));
+            info.AddRange(BitConverter.GetBytes(transform.position.z));
+            info.AddRange(BitConverter.GetBytes(transform.eulerAngles.x));
+            info.AddRange(BitConverter.GetBytes(transform.eulerAngles.y));
+            info.AddRange(BitConverter.GetBytes(transform.eulerAngles.z));
+            info.AddRange(BitConverter.GetBytes(transform.lossyScale.x));
+            info.AddRange(BitConverter.GetBytes(transform.lossyScale.y));
+            info.AddRange(BitConverter.GetBytes(transform.lossyScale.z));
+
+            // chunk info
+            int numVertexChunks = Mathf.CeilToInt((float)vertices.Length / numVerticesPerChunk);
+            info.AddRange(BitConverter.GetBytes(numVertexChunks));
+            info.AddRange(BitConverter.GetBytes(CalculateTriChunks(mesh)));
+
+            // put together the materials;
+            List<byte> materialNameLengths = new List<byte>();
+            List<byte> materials = new List<byte>();
         }
+    }
+
+    public int CalculateTriChunks(Mesh mesh)
+    {
+        int totalTriangleChunks = 0;
+        int subMeshCount = mesh.subMeshCount;
+        for (int subMeshID = 0; subMeshID < subMeshCount; subMeshID++)
+        {
+            int[] triangles = mesh.GetTriangles(subMeshID);
+
+            int numTrianglesPerChunk = (1400 - sizeof(char) - sizeof(int) * 3) / (sizeof(int) * 3);
+            int numTriangleChunks = Mathf.CeilToInt((float)triangles.Length / (numTrianglesPerChunk * 3));
+            totalTriangleChunks += numTriangleChunks;
+        }
+        return totalTriangleChunks;
     }
 
     //private void TestObjectTable()
@@ -1053,15 +1084,15 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 int[] visibleObjects = new int[visInfo[cursor]];
                 Array.Copy(visInfo, cursor + 1, visibleObjects, 0, visInfo[cursor]);
                 visibleObjectsInGrid.Add($"{gridX}_{gridZ}", visibleObjects);
-                int[] visibilityInfo = ReadFootprintsGrid(gridX, gridZ);
-                List<int> ints = new List<int>();
-                for (int t = 0; t < visibilityInfo.Length; t++)
-                {
-                    if (visibilityInfo[t] > 0)
-                    {
-                        ints.Add(t);
-                    }
-                }
+                //int[] visibilityInfo = ReadFootprintsGrid(gridX, gridZ);
+                //List<int> ints = new List<int>();
+                //for (int t = 0; t < visibilityInfo.Length; t++)
+                //{
+                //    if (visibilityInfo[t] > 0)
+                //    {
+                //        ints.Add(t);
+                //    }
+                //}
                 cursor += 1 + visInfo[cursor];
             }
         }
@@ -1151,4 +1182,13 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         Buffer.BlockCopy(byteArray, 4, array, 0, length * 4);
         return array;
     }
+}
+
+public class objectHolder
+{
+    public Vector3 position, eulerAngles, scale;
+    public string prefabName;
+    public string[] materials;
+    public int totalNumVerts, totalNumTris, numSubmeshes;
+    public bool ifVisible, ifOwned;
 }

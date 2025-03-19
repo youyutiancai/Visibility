@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using Unity.VisualScripting;
 using UnityEngine;
 
 
@@ -74,12 +75,69 @@ public class BroadcastControl : MonoBehaviour
     private void BroadcastChunks()
     {
         List<byte[]> chunks = mv.RequestChunks(1, CHUNK_SIZE);
+        //DecodeMesh(chunks);
+        //for (int i = 0; i < chunks.Count; i++)
+        //{
+        //    Broadcast(chunks[i]);
+        //    Debug.Log($"Sent chunk {i + 1}/{chunks.Count}, size: {chunks[i].Length} bytes, {BitConverter.ToChar(chunks[i], 0)}");
+        //    Thread.Sleep(10); // Brief pause to reduce network congestion.
+        //}
+    }
+
+    private void DecodeMesh(List<byte[]> chunks)
+    {
+        List<List<int>> triangles = new List<List<int>>();
+        int subMeshCount = VisibilityCheck.Instance.testObject.GetComponent<MeshFilter>().mesh.subMeshCount;
+        for (int i = 0; i < subMeshCount; i++) { 
+            triangles.Add(new List<int>());
+        }
+        int numVerticesPerChunk = 57;
+        int totalVertexNum = 20706;
+        Vector3[] vertices = new Vector3[totalVertexNum];
+        Vector3[] normals = new Vector3[totalVertexNum];
         for (int i = 0; i < chunks.Count; i++)
         {
-            Broadcast(chunks[i]);
-            Debug.Log($"Sent chunk {i + 1}/{chunks.Count}, size: {chunks[i].Length} bytes, {BitConverter.ToChar(chunks[i], 0)}");
-            Thread.Sleep(10); // Brief pause to reduce network congestion.
+            byte[] chunk = chunks[i];
+            int cursor = 0;
+            char vorT = BitConverter.ToChar(chunk, cursor);
+            int objectID = BitConverter.ToInt32(chunk, cursor += sizeof(char));
+            int chunkID = BitConverter.ToInt32(chunk, cursor += sizeof(int));
+            if (vorT == 'V')
+            {
+                cursor += sizeof(int);
+                int numVerticesInChunk = (chunk.Length - cursor) / (sizeof(float) * 6);
+                float[] floatArray = new float[numVerticesInChunk * 6];
+                Buffer.BlockCopy(chunk, cursor, floatArray, 0, floatArray.Length * sizeof(float));
+                for (int j = 0; j < numVerticesInChunk; j++)
+                {
+                    vertices[chunkID * numVerticesPerChunk + j] = new Vector3(floatArray[j * 6], floatArray[j * 6 + 1], floatArray[j * 6 + 2]);
+                    normals[chunkID * numVerticesPerChunk + j] = new Vector3(floatArray[j * 6 + 3], floatArray[j * 6 + 4], floatArray[j * 6 + 5]);
+                }
+            } else if (vorT == 'T')
+            {
+                int subMeshIdx = BitConverter.ToInt32(chunk, cursor += sizeof(int));
+                cursor += sizeof(int);
+                int numVerticesInChunk = (chunk.Length - cursor) / sizeof(int);
+                int[] intArray = new int[numVerticesInChunk];
+                Buffer.BlockCopy(chunk, cursor, intArray, 0, intArray.Length * sizeof(int));
+                triangles[subMeshIdx].AddRange(intArray);
+            }
         }
+
+        GameObject newObject = new GameObject();
+        newObject.AddComponent<MeshFilter>();
+
+        Mesh newMesh = new Mesh();
+        newMesh.vertices = vertices;
+        newMesh.normals = normals;
+        newMesh.subMeshCount = subMeshCount;
+        for (int i = 0; i < subMeshCount; i++)
+        {
+            newMesh.SetTriangles(triangles[i].ToArray(), i);
+        }
+        newObject.GetComponent<MeshFilter>().mesh = newMesh;
+        newObject.AddComponent<MeshRenderer>();
+        newObject.GetComponent<MeshRenderer>().materials = VisibilityCheck.Instance.testObject.GetComponent<MeshRenderer>().materials;
     }
 
     private void SendBroadcastMessage(string message)
