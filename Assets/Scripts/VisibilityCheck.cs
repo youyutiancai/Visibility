@@ -11,6 +11,7 @@ using UnityEngine.UIElements;
 using System.Collections;
 using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
 using UnityEditor.PackageManager;
+using System.Text;
 
 public class VisibilityCheck : Singleton<VisibilityCheck>
 {
@@ -49,7 +50,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     {
         InitialValues();
         AddAllObjects(sceneRoot.transform);
-        CreateObjectTable();
+        //objectTable = CreateObjectTable();
+        //TestObjectTable();
         Debug.Log(objectsInScene.Count);
         //GenerateMeshInfo();
         //ColorObjects();
@@ -121,40 +123,51 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         }
     }
 
-    private void CreateObjectTable()
+    private byte[] CreateObjectTable()
     {
-        objectTable = new byte[sizeof(int) + sizeof(float) * 3 * 3 * objectsInScene.Count];
         int numVerticesPerChunk = 57;
-
-        int cursor = 0;
-        Array.Copy(BitConverter.GetBytes((int) TCPMessageType.TABLE), 0, objectTable, cursor, sizeof(int));
+        List<byte> objectTable = new List<byte>();
+        objectTable.AddRange(BitConverter.GetBytes((int)TCPMessageType.TABLE));
+        objectTable.AddRange(BitConverter.GetBytes(objectsInScene.Count));
+        
         for (int i = 0; i < objectsInScene.Count; i++)
         {
-            List<byte> info = new List<byte>();
             Transform transform = objectsInScene[i].transform;
             Mesh mesh = transform.gameObject.GetComponent<MeshFilter>().mesh;
+            MeshRenderer mf = transform.gameObject.GetComponent<MeshRenderer>();
             Vector3[] vertices = mesh.vertices;
 
             // pose
-            info.AddRange(BitConverter.GetBytes(transform.position.x));
-            info.AddRange(BitConverter.GetBytes(transform.position.y));
-            info.AddRange(BitConverter.GetBytes(transform.position.z));
-            info.AddRange(BitConverter.GetBytes(transform.eulerAngles.x));
-            info.AddRange(BitConverter.GetBytes(transform.eulerAngles.y));
-            info.AddRange(BitConverter.GetBytes(transform.eulerAngles.z));
-            info.AddRange(BitConverter.GetBytes(transform.lossyScale.x));
-            info.AddRange(BitConverter.GetBytes(transform.lossyScale.y));
-            info.AddRange(BitConverter.GetBytes(transform.lossyScale.z));
+            objectTable.AddRange(BitConverter.GetBytes(transform.position.x));
+            objectTable.AddRange(BitConverter.GetBytes(transform.position.y));
+            objectTable.AddRange(BitConverter.GetBytes(transform.position.z));
+            objectTable.AddRange(BitConverter.GetBytes(transform.eulerAngles.x));
+            objectTable.AddRange(BitConverter.GetBytes(transform.eulerAngles.y));
+            objectTable.AddRange(BitConverter.GetBytes(transform.eulerAngles.z));
+            objectTable.AddRange(BitConverter.GetBytes(transform.lossyScale.x));
+            objectTable.AddRange(BitConverter.GetBytes(transform.lossyScale.y));
+            objectTable.AddRange(BitConverter.GetBytes(transform.lossyScale.z));
 
-            // chunk info
+            // chunk objectTable
             int numVertexChunks = Mathf.CeilToInt((float)vertices.Length / numVerticesPerChunk);
-            info.AddRange(BitConverter.GetBytes(numVertexChunks));
-            info.AddRange(BitConverter.GetBytes(CalculateTriChunks(mesh)));
+            objectTable.AddRange(BitConverter.GetBytes(numVertexChunks));
+            objectTable.AddRange(BitConverter.GetBytes(CalculateTriChunks(mesh)));
+
+            // mesh objectTable
+            objectTable.AddRange(BitConverter.GetBytes(mesh.vertices.Length));
+            objectTable.AddRange(BitConverter.GetBytes(mesh.subMeshCount));
 
             // put together the materials;
-            List<byte> materialNameLengths = new List<byte>();
-            List<byte> materials = new List<byte>();
+            for (int j = 0; j < mesh.subMeshCount; j++)
+            {
+                Material material = mf.materials[j];
+                byte[] materialNameBytes = Encoding.ASCII.GetBytes(material.name);
+                objectTable.AddRange(BitConverter.GetBytes(materialNameBytes.Length));
+                objectTable.AddRange(materialNameBytes);
+            }
+            Debug.Log($"total number of bytes {objectTable.Count}");
         }
+        return objectTable.ToArray();
     }
 
     public int CalculateTriChunks(Mesh mesh)
@@ -172,26 +185,41 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         return totalTriangleChunks;
     }
 
-    //private void TestObjectTable()
-    //{
-    //    int cursor = 0;
-    //    for (int i = 0; i < objectsInScene.Count; i++)
-    //    {
-    //        float posX = BitConverter.ToSingle(objectTable, cursor += sizeof(float));
-    //        float posY = BitConverter.ToSingle(objectTable, cursor += sizeof(float));
-    //        float posZ = BitConverter.ToSingle(objectTable, cursor += sizeof(float));
-    //        float oriX = BitConverter.ToSingle(objectTable, cursor += sizeof(float));
-    //        float oriY = BitConverter.ToSingle(objectTable, cursor += sizeof(float));
-    //        float oriZ = BitConverter.ToSingle(objectTable, cursor += sizeof(float));
-    //        float scaleX = BitConverter.ToSingle(objectTable, cursor += sizeof(float));
-    //        float scaleY = BitConverter.ToSingle(objectTable, cursor += sizeof(float));
-    //        float scaleZ = BitConverter.ToSingle(objectTable, cursor += sizeof(float));
-    //        Transform transform = objectsInScene[i].transform;
-    //        Debug.Log($"{transform.position.x}, {posX}, {transform.position.y}, {posY}, {transform.position.z}, {posZ}, " +
-    //            $"{transform.eulerAngles.x}, {oriX}, {transform.eulerAngles.y}, {oriY}, {transform.eulerAngles.z}, {oriZ}, " +
-    //            $"{transform.lossyScale.x}, {scaleX}, {transform.lossyScale.y}, {scaleY}, {transform.lossyScale.z}, {scaleZ}");
-    //    }
-    //}
+    private void TestObjectTable()
+    {
+        int totalObjectNum = BitConverter.ToInt32(objectTable, sizeof(int));
+        objectHolder[] objectHolders = new objectHolder[totalObjectNum];
+        int cursor = sizeof(int) * 2;
+        for (int i = 0; i < totalObjectNum; i++)
+        {
+            objectHolders[i].position = new Vector3(BitConverter.ToSingle(objectTable, cursor), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
+                BitConverter.ToSingle(objectTable, cursor += sizeof(float)));
+            objectHolders[i].eulerAngles = new Vector3(BitConverter.ToSingle(objectTable, cursor += sizeof(float)), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
+                BitConverter.ToSingle(objectTable, cursor += sizeof(float)));
+            objectHolders[i].scale = new Vector3(BitConverter.ToSingle(objectTable, cursor += sizeof(float)), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
+                BitConverter.ToSingle(objectTable, cursor += sizeof(float)));
+            objectHolders[i].totalVertChunkNum = BitConverter.ToInt32(objectTable, cursor += sizeof(float));
+            objectHolders[i].totalTriChunkNum = BitConverter.ToInt32(objectTable, cursor += sizeof(int));
+            objectHolders[i].totalVertNum = BitConverter.ToInt32(objectTable, cursor += sizeof(int));
+            objectHolders[i].submeshCount = BitConverter.ToInt32(objectTable, cursor += sizeof(int));
+            cursor += sizeof(int);
+
+            objectHolders[i].materialNames = new string[objectHolders[i].submeshCount];
+            Transform transform = objectsInScene[i].transform;
+            for (int j = 0; j < objectHolders[i].submeshCount; j++)
+            {
+                int materialNameLength = BitConverter.ToInt32(objectTable, cursor);
+                objectHolders[i].materialNames[j] = Encoding.ASCII.GetString(objectTable, cursor += sizeof(int), materialNameLength);
+                cursor += materialNameLength;
+                Debug.Log($"{j}, {materialNameLength}, {objectHolders[i].materialNames[j]}");
+            }
+
+
+            Debug.Log($"{cursor}, {transform.position}, {objectHolders[i].position}, " +
+                $"{transform.eulerAngles}, {objectHolders[i].eulerAngles}, " +
+                $"{transform.lossyScale}, {objectHolders[i].scale}");
+        }
+    }
 
     public static float EstimateGameObjectSizeMB(GameObject obj)
     {
@@ -1188,7 +1216,7 @@ public class objectHolder
 {
     public Vector3 position, eulerAngles, scale;
     public string prefabName;
-    public string[] materials;
-    public int totalNumVerts, totalNumTris, numSubmeshes;
+    public string[] materialNames;
+    public int totalVertChunkNum, totalTriChunkNum, totalVertNum, submeshCount;
     public bool ifVisible, ifOwned;
 }

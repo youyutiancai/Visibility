@@ -76,12 +76,13 @@ public class BroadcastControl : MonoBehaviour
     {
         List<byte[]> chunks = mv.RequestChunks(1, CHUNK_SIZE);
         //DecodeMesh(chunks);
-        //for (int i = 0; i < chunks.Count; i++)
-        //{
-        //    Broadcast(chunks[i]);
-        //    Debug.Log($"Sent chunk {i + 1}/{chunks.Count}, size: {chunks[i].Length} bytes, {BitConverter.ToChar(chunks[i], 0)}");
-        //    Thread.Sleep(10); // Brief pause to reduce network congestion.
-        //}
+        for (int i = 0; i < chunks.Count; i++)
+        {
+            Broadcast(chunks[i]);
+            Debug.Log($"Sent chunk {BitConverter.ToInt32(chunks[i], sizeof(char) + sizeof(int)) + 1}/{chunks.Count}, size: {chunks[i].Length} bytes, {BitConverter.ToChar(chunks[i], 0)}");
+            //yield return null;
+            //Thread.Sleep(10);
+        }
     }
 
     private void DecodeMesh(List<byte[]> chunks)

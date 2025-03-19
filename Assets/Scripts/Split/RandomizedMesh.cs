@@ -178,7 +178,7 @@ public class RandomizedMesh : MeshVariant
 
             int numTrianglesPerChunk = (chunkSize - sizeof(char) - sizeof(int) * 3) / (sizeof(int) * 3);
             int numTriangleChunks = Mathf.CeilToInt((float)triangles.Length / (numTrianglesPerChunk * 3));
-            totalTriangleChunks += numTriangleChunks;
+            
 
             for (int i = 0; i < numTriangleChunks; i++)
             {
@@ -190,7 +190,7 @@ public class RandomizedMesh : MeshVariant
                 // Header: [char('T'), int(objectID), int(chunkID), int(subMeshID)]
                 chunkData.AddRange(BitConverter.GetBytes('T'));
                 chunkData.AddRange(BitConverter.GetBytes(objectID));
-                chunkData.AddRange(BitConverter.GetBytes(i));
+                chunkData.AddRange(BitConverter.GetBytes(i + numVertexChunks + totalTriangleChunks));
                 chunkData.AddRange(BitConverter.GetBytes(subMeshID));
 
                 // Encode triangle data
@@ -203,6 +203,7 @@ public class RandomizedMesh : MeshVariant
 
                 chunks.Add(chunkData.ToArray());
             }
+            totalTriangleChunks += numTriangleChunks;
         }
         Debug.Log($"# of vertex chunks: {numVertexChunks}, # of triangle chunks: {totalTriangleChunks}");
     }
