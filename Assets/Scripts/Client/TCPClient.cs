@@ -13,7 +13,7 @@ public class TCPClient : MonoBehaviour
     public static TCPClient instance;
 
     //[HideInInspector]
-    private string serverIPAddress = "192.168.137.1";
+    private string serverIPAddress = "192.168.0.82";
     //private string serverIPAddress = "10.161.33.74";
     //private string serverIPAddress = "10.0.0.28";
     //public string serverIPAddress;

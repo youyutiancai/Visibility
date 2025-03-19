@@ -50,7 +50,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     {
         InitialValues();
         AddAllObjects(sceneRoot.transform);
-        //objectTable = CreateObjectTable();
+        objectTable = CreateObjectTable();
         //TestObjectTable();
         Debug.Log(objectsInScene.Count);
         //GenerateMeshInfo();
@@ -128,6 +128,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         int numVerticesPerChunk = 57;
         List<byte> objectTable = new List<byte>();
         objectTable.AddRange(BitConverter.GetBytes((int)TCPMessageType.TABLE));
+        objectTable.AddRange(BitConverter.GetBytes(0));
         objectTable.AddRange(BitConverter.GetBytes(objectsInScene.Count));
         
         for (int i = 0; i < objectsInScene.Count; i++)
@@ -165,9 +166,11 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 objectTable.AddRange(BitConverter.GetBytes(materialNameBytes.Length));
                 objectTable.AddRange(materialNameBytes);
             }
-            Debug.Log($"total number of bytes {objectTable.Count}");
+            //Debug.Log($"total number of bytes {objectTable.Count}");
         }
-        return objectTable.ToArray();
+        byte[] result = objectTable.ToArray();
+        Buffer.BlockCopy(BitConverter.GetBytes(objectTable.Count), 0, result, sizeof(int), sizeof(int));
+        return result;
     }
 
     public int CalculateTriChunks(Mesh mesh)
@@ -187,11 +190,14 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
 
     private void TestObjectTable()
     {
-        int totalObjectNum = BitConverter.ToInt32(objectTable, sizeof(int));
+        int totalObjectNum = BitConverter.ToInt32(objectTable, sizeof(int) * 2);
         objectHolder[] objectHolders = new objectHolder[totalObjectNum];
-        int cursor = sizeof(int) * 2;
+        Debug.Log($"total bytes num: {BitConverter.ToInt32(objectTable, sizeof(int))}, {totalObjectNum}");
+        int cursor = sizeof(int) * 3;
+        Debug.Log(objectHolders[0]);
         for (int i = 0; i < totalObjectNum; i++)
         {
+            objectHolders[i] = new objectHolder();
             objectHolders[i].position = new Vector3(BitConverter.ToSingle(objectTable, cursor), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
                 BitConverter.ToSingle(objectTable, cursor += sizeof(float)));
             objectHolders[i].eulerAngles = new Vector3(BitConverter.ToSingle(objectTable, cursor += sizeof(float)), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),

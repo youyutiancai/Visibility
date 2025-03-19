@@ -11,8 +11,8 @@ public class RandomizedMesh : MeshVariant
     {
         List<byte[]> chunks = new List<byte[]>();
         GameObject testObject = VisibilityCheck.Instance.testObject;
-        //RandomizeMesh(testObject);
-        GetChunks(testObject, chunkSize, ref chunks);
+        RandomizeMesh(testObject);
+        GetChunks(testObject, objectID, chunkSize, ref chunks);
         Debug.Log($"number of chunks {chunks.Count}");
         return chunks;
     }
@@ -103,7 +103,7 @@ public class RandomizedMesh : MeshVariant
         meshFilter.mesh = mesh;
     }
 
-    private void GetChunks(GameObject testObject, int chunkSize, ref List<byte[]> chunks)
+    private void GetChunks(GameObject testObject, int objectID, int chunkSize, ref List<byte[]> chunks)
     {
         MeshFilter meshFilter = testObject.GetComponent<MeshFilter>();
         if (meshFilter == null || meshFilter.mesh == null)
@@ -116,23 +116,6 @@ public class RandomizedMesh : MeshVariant
         Vector3[] vertices = mesh.vertices;
         Vector3[] normals = mesh.normals;
         int subMeshCount = mesh.subMeshCount;
-
-        //GameObject newObject = new GameObject();
-        //newObject.AddComponent<MeshFilter>();
-
-        //Mesh newMesh = new Mesh();
-        //newMesh.vertices = vertices.ToArray();
-        //newMesh.normals = normals.ToArray();
-        //newMesh.subMeshCount = subMeshCount;
-        //for (int i = 0; i < subMeshCount; i++)
-        //{
-        //    newMesh.SetTriangles(mesh.GetTriangles(i), i);
-        //}
-        //newObject.GetComponent<MeshFilter>().mesh = newMesh;
-        //newObject.AddComponent<MeshRenderer>();
-        //newObject.GetComponent<MeshRenderer>().materials = testObject.GetComponent<MeshRenderer>().materials;
-
-        int objectID = 1; // Currently hardcoded to 1
 
         System.Random rng = new System.Random();
 

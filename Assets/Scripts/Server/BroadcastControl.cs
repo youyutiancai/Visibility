@@ -67,7 +67,7 @@ public class BroadcastControl : MonoBehaviour
     // Entry point for broadcasting object data.
     private void BroadcastObjectData()
     {
-        Dispatcher.Instance.Enqueue(() => BroadcastChunks());
+        //Dispatcher.Instance.Enqueue(() => BroadcastChunks());
         // For demonstration, we broadcast a prefab named "balcony_1".
         //BroadcastPrefab("balcony_1");
     }

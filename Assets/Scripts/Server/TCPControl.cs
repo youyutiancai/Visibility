@@ -8,7 +8,7 @@ using UnityEngine;
 public class TCPControl : MonoBehaviour
 {
     private IPAddress iP4Address;
-    private int listenerport = 5005;
+    private int listenerport = 13000;
     private Thread tcpThread;
     private TcpListener tcpListener;
     private CancellationToken ct;
@@ -44,8 +44,8 @@ public class TCPControl : MonoBehaviour
                 {
                     clients.Add(ep, newClient);
                 }
-                Debug.Log($"ClientID {ep} is connected and added to our clients...");
                 Thread thread = new Thread(() => HandleClientConnection(ep, ct));
+                thread.Start();
             }
             tcpListener.Stop();
         } catch (SocketException e)
@@ -62,7 +62,8 @@ public class TCPControl : MonoBehaviour
         {
             client = clients[ep];
         }
-
+        SendTable(client);
+        Debug.Log($"ClientID {ep} is connected and added to our clients...");
         while (!ct.IsCancellationRequested)
         {
             NetworkStream stream = client.GetStream();
@@ -92,7 +93,6 @@ public class TCPControl : MonoBehaviour
             clients.Remove(ep);
             Debug.Log($"Client {ep} has been removed");
         }
-
         client.Close();
     }
 
