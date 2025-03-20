@@ -10,20 +10,24 @@ using Random = UnityEngine.Random;
 
 public class ClusterControl : Singleton<ClusterControl>
 {
-    public GameObject randomMovingUserPrefab, followUserPrefab, clusterPrefab, initialClusterCenter;  // clusterPrefab is used to represent a cluster visually
+    public GameObject randomMovingUserPrefab, followUserPrefab, realUserPrefab, clusterPrefab, initialClusterCenter;  // clusterPrefab is used to represent a cluster visually
     //public SyntheticPathNode[] clusterInitPoses;
     //public SyntheticPathNode[] paths;
     public TextMeshProUGUI displayText;
 
     public float epsilon = 10;  // Radius for clustering
     public int minPts = 2;      // Minimum points to form a cluster
-    public float updateInterval = 1.0f, timegapForSwapUsers;  // How often to update (in seconds)
+    public float updateInterval = 0.1f, timegapForSwapUsers;  // How often to update (in seconds)
     public bool regularlySwapUsers, regularlySwapLeader, writeToData;
 
-    [HideInInspector]
+    //[HideInInspector]
     public List<User> users = new List<User>();
     [HideInInspector]
     public List<List<SyntheticPathNode>> allPathNodes;
+    [HideInInspector]
+    public Vector3 initialClusterCenterPos;
+    [HideInInspector]
+    public List<int> objectsWaitToBeSent;
     private float timeSinceLastUpdate = 0f;
     public SimulationStrategyDropDown SimulationStrategy;
     private SimulationStrategy ss;
@@ -34,6 +38,8 @@ public class ClusterControl : Singleton<ClusterControl>
     private GridDivide gd;
     private int objectSentCluster, objectSentIndi;
     private GameObject pathNodesRoot;
+    private NetworkControl nc;
+    private bool canSendObjects;
 
     private StreamWriter writer;
     private string filePath;
@@ -51,12 +57,15 @@ public class ClusterControl : Singleton<ClusterControl>
     private void InitialValues()
     {
         vc = VisibilityCheck.Instance;
+        nc = NetworkControl.Instance;
         gd = GridDivide.Instance;
         visibleObjectsInRegion = new int[vc.objectsInScene.Count];
         objectSentCluster = 0;
         objectSentIndi = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
-        
+        initialClusterCenterPos = initialClusterCenter.transform.position;
+        objectsWaitToBeSent = new List<int>();
+        canSendObjects = false;
     }
 
     private void InitializeIndividualUserDataWriter()
@@ -93,10 +102,11 @@ public class ClusterControl : Singleton<ClusterControl>
 
             case SimulationStrategyDropDown.IndiUserRandomSpawn:
                 ss = new IndiUserRandomSpawn();
-                ss.CreateUsers(100, randomMovingUserPrefab);
+                ss.CreateUsers(1, randomMovingUserPrefab);
                 break;
 
             case SimulationStrategyDropDown.RealUser:
+                ss = new RealUserStrategy();
                 break;
         }    
     }
@@ -105,9 +115,41 @@ public class ClusterControl : Singleton<ClusterControl>
     {
         timeSinceLastUpdate += Time.deltaTime;
 
+        if (SimulationStrategy == SimulationStrategyDropDown.RealUser && Input.GetKeyDown(KeyCode.B))
+        {
+            canSendObjects = !canSendObjects;
+            nc.BroadcastObjectData(1);
+        }
+
         if (timeSinceLastUpdate >= updateInterval)
         {
             timeSinceLastUpdate = 0f;
+            if (canSendObjects && objectsWaitToBeSent.Count != 0)
+            {
+                int sendingObjectIdx = objectsWaitToBeSent[0];
+                nc.BroadcastObjectData(sendingObjectIdx);
+                objectsWaitToBeSent.RemoveAt(0);
+                Debug.Log($"finished {sendingObjectIdx}, {objectsWaitToBeSent.Count} is left");
+            }
+
+            //int missing = 0;
+            //int notDisplayed = 0;
+            //for (int i = 0; i < vc.objectsInScene.Count; i++)
+            //{
+            //    if (vc.objectsInScene[i].activeSelf && !objectsWaitToBeSent.Contains(i))
+            //    {
+            //        if (vc.objectsInScene[i].tag != "Terrain")
+            //        {
+            //            Debug.Log($"{vc.objectsInScene[i].name} not waiting to be sent");
+            //        }
+            //        missing++;
+            //    }
+            //    else if (!vc.objectsInScene[i].activeSelf && objectsWaitToBeSent.Contains(i))
+            //    {
+            //        notDisplayed++;
+            //    }
+            //}
+            //Debug.Log($"total waiting: {objectsWaitToBeSent.Count}, missing: {missing}, not displayed: {notDisplayed}");
 
             if (users.Count == 0)
                 return;
@@ -128,6 +170,20 @@ public class ClusterControl : Singleton<ClusterControl>
                     ApplyClusterColors(); // Apply colors based on clustering
                     UpdateClusterParents(); // Update parents and scale clusters
                     int[] newObjectsToSend = SendObjectsToClusters();
+                    for (int i = 0; i < users.Count; i++)
+                    {
+                        users[i].UpdateVisibleObjectsIndi(newObjectsToSend, ref objectSentIndi, null);
+                    }
+
+                    for (int i = 0; i < newObjectsToSend.Length; i++)
+                    {
+                        if (newObjectsToSend[i] > 0 && !objectsWaitToBeSent.Contains(i))
+                        {
+                            objectsWaitToBeSent.Add(i);
+                        }
+                    }
+                    //SendObjectsToUsers();
+                    
                     break;
             }
 
@@ -372,7 +428,6 @@ public class ClusterControl : Singleton<ClusterControl>
                     child.GetChild(j).GetComponent<User>().UpdateVisibleObjects(visibleObjectsInRegion, ref newObjectCount);
                 }
                 objectSentCluster += newObjectCount.Sum();
-
             }
 
             if (transform.GetChild(i).tag == "User")

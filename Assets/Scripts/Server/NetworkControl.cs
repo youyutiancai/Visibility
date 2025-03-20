@@ -6,8 +6,9 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
+using UnityTCPClient.Assets.Scripts;
 
-public class NetworkControl : MonoBehaviour
+public class NetworkControl : Singleton<NetworkControl>
 {
     BroadcastControl bcc;
     TCPControl tc;
@@ -33,7 +34,16 @@ public class NetworkControl : MonoBehaviour
         if (cc.SimulationStrategy == SimulationStrategyDropDown.RealUser)
         {
             bcc.UpdateTime();
+            //if (Input.GetKeyDown(KeyCode.B))
+            //{
+            //    bcc.BroadcastObjectData(1);
+            //}
         }
+    }
+
+    public void BroadcastObjectData(int objectID)
+    {
+        bcc.BroadcastObjectData(objectID);
     }
 
     private void OnApplicationQuit()

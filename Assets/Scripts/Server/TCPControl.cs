@@ -64,12 +64,8 @@ public class TCPControl : MonoBehaviour
         lock (_lock)
         {
             client = clients[ep];
-            Vector3 newUserPos = ClusterControl.Instance.initialClusterCenter.transform.position +
-                new Vector3(Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f), 1.3f,
-                Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f));
-            ClusterControl.Instance.users.Add(new RealUser(newUserPos));
         }
-        SendTable(client);
+        dispatcher.Enqueue(() => SendTable(client));
         Debug.Log($"ClientID {ep} is connected and added to our clients...");
         while (!ct.IsCancellationRequested)
         {
@@ -120,6 +116,20 @@ public class TCPControl : MonoBehaviour
 
     private void SendTable(TcpClient client)
     {
-        client.GetStream().Write(visibilityCheck.objectTable);
+        if (cc.SimulationStrategy != SimulationStrategyDropDown.RealUser)
+            Debug.LogError($"The current simulation strategy is not real user!");
+        lock (_lock)
+        {
+            GameObject newUser = Instantiate(cc.realUserPrefab);
+            newUser.transform.position = cc.initialClusterCenterPos +
+                new Vector3(Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f), 1.3f,
+                Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f));
+            newUser.transform.parent = cc.transform;
+            cc.users.Add(newUser.GetComponent<RealUser>());
+            //Buffer.BlockCopy(BitConverter.GetBytes(newUser.transform.position.x), 0, visibilityCheck.objectTable, sizeof(int) * 3, sizeof(float));
+            //Buffer.BlockCopy(BitConverter.GetBytes(newUser.transform.position.y), 0, visibilityCheck.objectTable, sizeof(int) * 3 + sizeof(float), sizeof(float));
+            //Buffer.BlockCopy(BitConverter.GetBytes(newUser.transform.position.y), 0, visibilityCheck.objectTable, sizeof(int) * 3 + sizeof(float) * 2, sizeof(float));
+            client.GetStream().Write(visibilityCheck.objectTable);
+        }
     }
 }

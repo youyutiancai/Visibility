@@ -130,7 +130,10 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         objectTable.AddRange(BitConverter.GetBytes((int)TCPMessageType.TABLE));
         objectTable.AddRange(BitConverter.GetBytes(0));
         objectTable.AddRange(BitConverter.GetBytes(objectsInScene.Count));
-        
+        //objectTable.AddRange(BitConverter.GetBytes(0.1f));
+        //objectTable.AddRange(BitConverter.GetBytes(0.1f));
+        //objectTable.AddRange(BitConverter.GetBytes(0.1f));
+
         for (int i = 0; i < objectsInScene.Count; i++)
         {
             Transform transform = objectsInScene[i].transform;
@@ -161,8 +164,13 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             // put together the materials;
             for (int j = 0; j < mesh.subMeshCount; j++)
             {
-                Material material = mf.materials[j];
-                byte[] materialNameBytes = Encoding.ASCII.GetBytes(material.name);
+                Material material = mf.sharedMaterials[j];
+                string materialName = "null";
+                if (material != null)
+                {
+                    materialName = material.name;
+                }
+                byte[] materialNameBytes = Encoding.ASCII.GetBytes(materialName);
                 objectTable.AddRange(BitConverter.GetBytes(materialNameBytes.Length));
                 objectTable.AddRange(materialNameBytes);
             }
@@ -193,7 +201,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         int totalObjectNum = BitConverter.ToInt32(objectTable, sizeof(int) * 2);
         ObjectHolder[] objectHolders = new ObjectHolder[totalObjectNum];
         Debug.Log($"total bytes num: {BitConverter.ToInt32(objectTable, sizeof(int))}, {totalObjectNum}");
-        int cursor = sizeof(int) * 3;
+        int cursor = sizeof(int) * 3 + sizeof(float) * 3;
         Debug.Log(objectHolders[0]);
         for (int i = 0; i < totalObjectNum; i++)
         {

@@ -10,10 +10,11 @@ public class RandomizedMesh : MeshVariant
     public override List<byte[]> RequestChunks(int objectID, int chunkSize)
     {
         List<byte[]> chunks = new List<byte[]>();
-        GameObject testObject = VisibilityCheck.Instance.testObject;
-        RandomizeMesh(testObject);
+        //GameObject testObject = VisibilityCheck.Instance.testObject;
+        GameObject testObject = VisibilityCheck.Instance.objectsInScene[objectID];
+        //RandomizeMesh(testObject);
         GetChunks(testObject, objectID, chunkSize, ref chunks);
-        Debug.Log($"number of chunks {chunks.Count}");
+        //Debug.Log($"number of chunks {chunks.Count}");
         return chunks;
     }
 
@@ -188,6 +189,6 @@ public class RandomizedMesh : MeshVariant
             }
             totalTriangleChunks += numTriangleChunks;
         }
-        Debug.Log($"# of vertex chunks: {numVertexChunks}, # of triangle chunks: {totalTriangleChunks}");
+        //Debug.Log($"# of vertex chunks: {numVertexChunks}, # of triangle chunks: {totalTriangleChunks}");
     }
 }

@@ -51,8 +51,8 @@ public class BroadcastControl : MonoBehaviour
         mv = new RandomizedMesh();
 
         // Start the thread to broadcast the asset bundle.
-        broadcastThread = new Thread(() => BroadcastObjectData());
-        broadcastThread.Start();
+        //broadcastThread = new Thread(() => BroadcastObjectData());
+        //broadcastThread.Start();
 
         // Start the thread that listens for retransmission requests.
         retransmissionThread = new Thread(() => ListenForRetransmissionRequests());
@@ -65,21 +65,21 @@ public class BroadcastControl : MonoBehaviour
     }
 
     // Entry point for broadcasting object data.
-    private void BroadcastObjectData()
+    public void BroadcastObjectData(int objectID)
     {
-        //Dispatcher.Instance.Enqueue(() => BroadcastChunks());
+        Dispatcher.Instance.Enqueue(() => BroadcastChunks(objectID));
         // For demonstration, we broadcast a prefab named "balcony_1".
         //BroadcastPrefab("balcony_1");
     }
 
-    private void BroadcastChunks()
+    private void BroadcastChunks(int objectID)
     {
-        List<byte[]> chunks = mv.RequestChunks(1, CHUNK_SIZE);
+        List<byte[]> chunks = mv.RequestChunks(objectID, CHUNK_SIZE);
         //DecodeMesh(chunks);
         for (int i = 0; i < chunks.Count; i++)
         {
             Broadcast(chunks[i]);
-            Debug.Log($"Sent chunk {BitConverter.ToInt32(chunks[i], sizeof(char) + sizeof(int)) + 1}/{chunks.Count}, size: {chunks[i].Length} bytes, {BitConverter.ToChar(chunks[i], 0)}");
+            //Debug.Log($"Sent chunk {BitConverter.ToInt32(chunks[i], sizeof(char) + sizeof(int)) + 1}/{chunks.Count}, size: {chunks[i].Length} bytes, {BitConverter.ToChar(chunks[i], 0)}");
             //yield return null;
             //Thread.Sleep(10);
         }

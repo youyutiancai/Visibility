@@ -44,6 +44,7 @@ public abstract class User : MonoBehaviour
             {
                 clusterReceived[i] = 1;
                 newObjectsCount[i] = 1;
+                //Debug.Log(i);
             }
         }
     }
@@ -54,15 +55,20 @@ public abstract class User : MonoBehaviour
             : value.ToString("F6", System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    public void UpdateVisibleObjectsIndi(int[] visibleObjects, ref int objectSentIndi, StreamWriter writer)
+    public List<int> UpdateVisibleObjectsIndi(int[] visibleObjects, ref int objectSentIndi, StreamWriter writer)
     {
+        List<int> newObjects = new List<int>();
         for (int i = 0; i < visibleObjects.Length; i++)
         {
-            if (visibleObjects[i] == 1 && preindiReceived[i] == 0)
-            //if (visibleObjects[i] == 1 && indiReceived[i] == 0)
+            if (visibleObjects[i] == 1 && indiReceived[i] == 0)
+            {
+                indiReceived[i] = 1;
+                newObjects.Add(i);
+            }
+
+            if (writer != null && visibleObjects[i] == 1 && preindiReceived[i] == 0)
             {
                 objectSentIndi++;
-                indiReceived[i] = 1;
                 Vector3 selfPos = transform.position;
                 Vector3 objectPos = vc.objectsInScene[i].transform.position;
                 float datasize = vc.objectDataSize[i];
@@ -73,17 +79,15 @@ public abstract class User : MonoBehaviour
                 {
                     datasize /= 2;
                 }
-                if (writer != null)
-                {
-                    writer.WriteLine($"{Time.time},{name},{i}," +
-                        $"{FormatValue(selfPos.x)},{FormatValue(selfPos.y)},{FormatValue(selfPos.z)}," +
-                        $"{FormatValue(objectPos.x)},{FormatValue(objectPos.y)},{FormatValue(objectPos.z)}," +
-                        $"{FormatValue(Vector3.Distance(selfPos, objectPos))},{FormatValue(datasize)}");
-                    writer.Flush();
-                }
+                writer.WriteLine($"{Time.time},{name},{i}," +
+                    $"{FormatValue(selfPos.x)},{FormatValue(selfPos.y)},{FormatValue(selfPos.z)}," +
+                    $"{FormatValue(objectPos.x)},{FormatValue(objectPos.y)},{FormatValue(objectPos.z)}," +
+                    $"{FormatValue(Vector3.Distance(selfPos, objectPos))},{FormatValue(datasize)}");
+                writer.Flush();
             }
         }
         preindiReceived = visibleObjects;
+        return newObjects;
     }
 
     public void GenerateInitialPath(SyntheticPathNode initialNode)
