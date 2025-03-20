@@ -35,6 +35,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     int numVerticesPerChunk = 57; // constant for all the chunk
     int totalVertexNum; // ObjectHolder -> totalVertNum
     int subMeshCount;  // ObjectHolder -> submeshCount
+    Vector3 position, eulerAngles, scale;
     string[] materialNames;  // per object
     List<Material> materials;
     List<List<int>> triangles;
@@ -80,17 +81,19 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     private void OnEnable()
     {
-        
+        m_TCPClient.OnReceivedServerTable += OnRecevTable;
     }
 
     private void OnDisable()
     {
-        
+        m_TCPClient.OnReceivedServerTable -= OnRecevTable;
     }
 
-    private void StartRecevBroadcast()
+    private void OnRecevTable()
     {
-        Debug.Log($"Get first{m_TCPClient.objectHolders[0].prefabName}");
+        Debug.Log($"[The first object info]: name-{m_TCPClient.objectHolders[0].prefabName}, vertN-{m_TCPClient.objectHolders[0].totalVertNum}, submeshN-{m_TCPClient.objectHolders[0].submeshCount}");
+
+        StartListenToBroadcast();
     }
 
 
@@ -98,7 +101,11 @@ public class UDPBroadcastClientNew : MonoBehaviour
     {
         // init the mesh list
         triangles = new List<List<int>>();
+        materials = new List<Material>();
+    }
 
+    private void StartListenToBroadcast()
+    {
         try
         {
             udpClient = new UdpClient(port1);
@@ -332,6 +339,28 @@ public class UDPBroadcastClientNew : MonoBehaviour
         int objectID = chunk.objectID;
         byte[] chunk_data = chunk.data;
 
+        if (vertices == null || vertices.Length == 0)
+        {
+            // get the table information
+            totalVertexNum = m_TCPClient.objectHolders[objectID].totalVertNum;
+            subMeshCount = m_TCPClient.objectHolders[objectID].submeshCount;
+            materialNames = m_TCPClient.objectHolders[objectID].materialNames;
+            position = m_TCPClient.objectHolders[objectID].position;
+            eulerAngles = m_TCPClient.objectHolders[objectID].eulerAngles;
+            scale = m_TCPClient.objectHolders[objectID].scale;
+            
+            Debug.Log($"vertexNum: {totalVertexNum}, SubMeshCount: {subMeshCount}, MatNum: {materialNames.Length}");
+
+            // init the mesh arrays
+            vertices = new Vector3[totalVertexNum];
+            normals = new Vector3[totalVertexNum];
+
+            for (int i = 0; i < subMeshCount; i++)
+            {
+                triangles.Add(new List<int>());
+            }
+        }
+
         if (vorT == 'V')
         {
             int numVerticesInChunk = chunk_data.Length / (sizeof(float) * 6);  // 6: pos and normal
@@ -354,20 +383,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
         if (recGameObject == null)
         {
-            // get information from the table
-            totalVertexNum = m_TCPClient.objectHolders[objectID].totalVertNum;
-            subMeshCount = m_TCPClient.objectHolders[objectID].submeshCount;
-            materialNames = m_TCPClient.objectHolders[objectID].materialNames;
-
-            // init the mesh arrays
-            vertices = new Vector3[totalVertexNum];
-            normals = new Vector3[totalVertexNum];
-
-            for (int i = 0; i < subMeshCount; i++)
-            {
-                triangles.Add(new List<int>());
-            }
-
             recGameObject = new GameObject();
             recGameObject.AddComponent<MeshFilter>();
 
@@ -385,10 +400,16 @@ public class UDPBroadcastClientNew : MonoBehaviour
             // set up the material list
             foreach (string matName in materialNames)
             {
+                Debug.Log(matName);
                 Material mat = m_ResourceLoader.LoadMaterialByName(matName);
                 materials.Add(mat);
             }
             recGameObject.GetComponent<MeshRenderer>().materials = materials.ToArray();
+
+            // set up the pos, rot, scale
+            recGameObject.transform.position = position;
+            recGameObject.transform.eulerAngles = eulerAngles;
+            recGameObject.transform.localScale = scale;
         }
         else
         {

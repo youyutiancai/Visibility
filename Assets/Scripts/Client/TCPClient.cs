@@ -40,6 +40,12 @@ public class TCPClient : MonoBehaviour
     private int totalBytes;
     private int totalObjectNum;
 
+    #region
+
+    public event Action OnReceivedServerTable;
+
+    #endregion
+
     // create Singleton object before threads are created. 
     void Awake() {
         
@@ -177,8 +183,12 @@ public class TCPClient : MonoBehaviour
                     int materialNameLength = BitConverter.ToInt32(message, cursor);
                     objectHolders[i].materialNames[j] = Encoding.ASCII.GetString(message, cursor += sizeof(int), materialNameLength);
                     cursor += materialNameLength;
+
+                    //Debug.Log($"ObjectID{i} - {objectHolders[i].materialNames[j]}");
                 }
             }
+
+            OnReceivedServerTable?.Invoke();
         }
 
         
