@@ -10,7 +10,7 @@ using Random = UnityEngine.Random;
 
 public class ClusterControl : Singleton<ClusterControl>
 {
-    public GameObject randomMovingUserPrefab, followUserPrefab, clusterPrefab;  // clusterPrefab is used to represent a cluster visually
+    public GameObject randomMovingUserPrefab, followUserPrefab, clusterPrefab, initialClusterCenter;  // clusterPrefab is used to represent a cluster visually
     //public SyntheticPathNode[] clusterInitPoses;
     //public SyntheticPathNode[] paths;
     public TextMeshProUGUI displayText;
@@ -108,13 +108,27 @@ public class ClusterControl : Singleton<ClusterControl>
         if (timeSinceLastUpdate >= updateInterval)
         {
             timeSinceLastUpdate = 0f;
-                       
-            if (ss is IndiUserRandomSpawn)
+
+            if (users.Count == 0)
+                return;
+
+            switch (ss)
             {
-                RunDBSCAN(); // Re-run DBSCAN clustering
-                ApplyClusterColors(); // Apply colors based on clustering
-                UpdateClusterParents(); // Update parents and scale clusters
-                SendObjectsToClusters();
+                case IndiUserRandomSpawn:
+                    RunDBSCAN(); // Re-run DBSCAN clustering
+                    ApplyClusterColors(); // Apply colors based on clustering
+                    UpdateClusterParents(); // Update parents and scale clusters
+                    SendObjectsToClusters();
+                    SendObjectsToUsers();
+                    UpdateMethodComparison();
+                    break;
+
+                case RealUserStrategy:
+                    RunDBSCAN(); // Re-run DBSCAN clustering
+                    ApplyClusterColors(); // Apply colors based on clustering
+                    UpdateClusterParents(); // Update parents and scale clusters
+                    int[] newObjectsToSend = SendObjectsToClusters();
+                    break;
             }
 
             if (regularlySwapUsers || regularlySwapLeader)
@@ -122,8 +136,7 @@ public class ClusterControl : Singleton<ClusterControl>
                 ss.UpdateRegularly();
             }
         }
-        SendObjectsToUsers();
-        UpdateMethodComparison();
+        
         //long totalAllocatedMemory = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
         //Debug.Log(totalAllocatedMemory);
     }
@@ -345,7 +358,7 @@ public class ClusterControl : Singleton<ClusterControl>
         return new Color(Random.value, Random.value, Random.value);
     }
 
-    private void SendObjectsToClusters()
+    private int[] SendObjectsToClusters()
     {
         int[] newObjectCount = new int[vc.objectsInScene.Count];
         for (int i = 0; i < transform.childCount; i++) {
@@ -368,12 +381,13 @@ public class ClusterControl : Singleton<ClusterControl>
                 Vector3 position = user.transform.position;
                 int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
                 int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-                if (xStartIndex == user.preX && zStartIndex == user.preZ) { return; }
+                if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
                 visibleObjectsInRegion = new int[vc.objectsInScene.Count];
                 vc.GetVisibleObjectsInRegion(user.transform.position, epsilon / 2, ref visibleObjectsInRegion);
                 user.UpdateVisibleObjects(visibleObjectsInRegion, ref newObjectCount);
             }
         }
+        return newObjectCount;
     }
 
     private void SendObjectsToUsers()

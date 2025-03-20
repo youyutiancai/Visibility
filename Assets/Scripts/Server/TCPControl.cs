@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public class TCPControl : MonoBehaviour
 {
@@ -16,8 +17,9 @@ public class TCPControl : MonoBehaviour
     private static Dictionary<IPEndPoint, TcpClient> clients;
     private Dispatcher dispatcher;
     private VisibilityCheck visibilityCheck;
+    private ClusterControl cc;
 
-    public TCPControl(CancellationToken _ct, Dispatcher _dispatcher, VisibilityCheck _visibilityCheck)
+    public TCPControl(CancellationToken _ct, Dispatcher _dispatcher, VisibilityCheck _visibilityCheck, ClusterControl _clusterControl)
     {
         ct = _ct;
         dispatcher = _dispatcher;
@@ -26,6 +28,7 @@ public class TCPControl : MonoBehaviour
         tcpThread = new Thread(() => ListenTCP());
         tcpThread.Start();
         visibilityCheck = _visibilityCheck;
+        cc = _clusterControl;
     }
 
     private void ListenTCP()
@@ -61,6 +64,10 @@ public class TCPControl : MonoBehaviour
         lock (_lock)
         {
             client = clients[ep];
+            Vector3 newUserPos = ClusterControl.Instance.initialClusterCenter.transform.position +
+                new Vector3(Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f), 1.3f,
+                Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f));
+            ClusterControl.Instance.users.Add(new RealUser(newUserPos));
         }
         SendTable(client);
         Debug.Log($"ClientID {ep} is connected and added to our clients...");

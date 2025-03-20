@@ -23,7 +23,7 @@ public class NetworkControl : MonoBehaviour
             VisibilityCheck visibilityCheck = VisibilityCheck.Instance;
             cts = new CancellationTokenSource();
             bcc = new BroadcastControl(cts.Token);
-            tc = new TCPControl(cts.Token, dispatcher, visibilityCheck);
+            tc = new TCPControl(cts.Token, dispatcher, visibilityCheck, cc);
         }
         
     }
