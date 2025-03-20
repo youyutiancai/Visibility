@@ -5,9 +5,7 @@ using System.Data;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using UnityEditor.Experimental.GraphView;
 using UnityEngine;
-using UnityEngine.AI;
 
 
 
@@ -23,6 +21,9 @@ public class UDPBroadcastClientNew : MonoBehaviour
     // TODO: will change later
     public GameObject m_TestObject;
 
+    [SerializeField] private TCPClient m_TCPClient;
+    [SerializeField] private ResourceLoader m_ResourceLoader;
+
 
     public int port1 = 5005;  // broadcast port
     public int port2 = 5006;  // retransmit port
@@ -31,9 +32,11 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     // an gameObject triangle mesh data
     GameObject recGameObject;
-    int numVerticesPerChunk = 57; //TODO: might change later
-    int totalVertexNum = 20706; // TODO: will change later
-    int subMeshCount = 12;  // TODO: will change later 
+    int numVerticesPerChunk = 57; // constant for all the chunk
+    int totalVertexNum; // ObjectHolder -> totalVertNum
+    int subMeshCount;  // ObjectHolder -> submeshCount
+    string[] materialNames;  // per object
+    List<Material> materials;
     List<List<int>> triangles;
     Vector3[] vertices;
     Vector3[] normals;
@@ -74,17 +77,30 @@ public class UDPBroadcastClientNew : MonoBehaviour
     }
     private Dictionary<int, MeshTransmission> activeMeshTransmissions = new Dictionary<int, MeshTransmission>();
 
+    #region
+
+
+
+    private void OnEnable()
+    {
+        
+    }
+
+    private void OnDisable()
+    {
+        
+    }
+
+    //private void StartRecevBroadcast()
+    //{
+    //    Debug.Log($"{objecit}, {materialNameLength}, {objectHolders[i].materialNames[j]}");
+    //}
+
+
     void Start()
     {
         // init the mesh list
         triangles = new List<List<int>>();
-        for (int i = 0; i < subMeshCount; i++)
-        {
-            triangles.Add(new List<int>());
-        }
-        vertices = new Vector3[totalVertexNum];
-        normals = new Vector3[totalVertexNum];
-
 
         try
         {
@@ -341,6 +357,20 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
         if (recGameObject == null)
         {
+            // get information from the table
+            totalVertexNum = m_TCPClient.objectHolders[objectID].totalVertNum;
+            subMeshCount = m_TCPClient.objectHolders[objectID].submeshCount;
+            materialNames = m_TCPClient.objectHolders[objectID].materialNames;
+
+            // init the mesh arrays
+            vertices = new Vector3[totalVertexNum];
+            normals = new Vector3[totalVertexNum];
+
+            for (int i = 0; i < subMeshCount; i++)
+            {
+                triangles.Add(new List<int>());
+            }
+
             recGameObject = new GameObject();
             recGameObject.AddComponent<MeshFilter>();
 
@@ -354,7 +384,14 @@ public class UDPBroadcastClientNew : MonoBehaviour
             }
             recGameObject.GetComponent<MeshFilter>().mesh = newMesh;
             recGameObject.AddComponent<MeshRenderer>();
-            recGameObject.GetComponent<MeshRenderer>().materials = m_TestObject.GetComponent<MeshRenderer>().materials;
+            
+            // set up the material list
+            foreach (string matName in materialNames)
+            {
+                Material mat = m_ResourceLoader.LoadMaterialByName(matName);
+                materials.Add(mat);
+            }
+            recGameObject.GetComponent<MeshRenderer>().materials = materials.ToArray();
         }
         else
         {

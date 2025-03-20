@@ -32,6 +32,8 @@ public class TCPClient : MonoBehaviour
     //private byte[] data;
 
     // global variables for the table
+    [HideInInspector]
+    public ObjectHolder[] objectHolders;
     private int currentBytes = 0;
     private List<byte> table_data; // the initial length is 0
     private int tcpType;
@@ -147,11 +149,11 @@ public class TCPClient : MonoBehaviour
         {
             cursor = sizeof(int) * 3;
 
-            objectHolder[] objectHolders = new objectHolder[totalObjectNum];
+            objectHolders = new ObjectHolder[totalObjectNum];
 
             for (int i = 0; i < totalObjectNum; i++)
             {
-                objectHolders[i] = new objectHolder();
+                objectHolders[i] = new ObjectHolder();
                 objectHolders[i].position = new Vector3(BitConverter.ToSingle(message, cursor), BitConverter.ToSingle(message, cursor += sizeof(float)),
                     BitConverter.ToSingle(message, cursor += sizeof(float)));
                 objectHolders[i].eulerAngles = new Vector3(BitConverter.ToSingle(message, cursor += sizeof(float)), BitConverter.ToSingle(message, cursor += sizeof(float)),
@@ -164,7 +166,9 @@ public class TCPClient : MonoBehaviour
                 objectHolders[i].submeshCount = BitConverter.ToInt32(message, cursor += sizeof(int));
                 cursor += sizeof(int);
 
-                Debug.Log($"{objectHolders[i].position} - {objectHolders[i].eulerAngles} - {objectHolders[i].scale}");
+                // TODO: Currently not used for the isvisible and isowned
+
+                // Debug.Log($"{objectHolders[i].position} - {objectHolders[i].eulerAngles} - {objectHolders[i].scale}");
 
                 objectHolders[i].materialNames = new string[objectHolders[i].submeshCount];
                 //Transform transform = objectsInScene[i].transform;
@@ -173,13 +177,7 @@ public class TCPClient : MonoBehaviour
                     int materialNameLength = BitConverter.ToInt32(message, cursor);
                     objectHolders[i].materialNames[j] = Encoding.ASCII.GetString(message, cursor += sizeof(int), materialNameLength);
                     cursor += materialNameLength;
-                    Debug.Log($"{j}, {materialNameLength}, {objectHolders[i].materialNames[j]}");
                 }
-
-
-                //Debug.Log($"{cursor}, {transform.position}, {objectHolders[i].position}, " +
-                //    $"{transform.eulerAngles}, {objectHolders[i].eulerAngles}, " +
-                //    $"{transform.lossyScale}, {objectHolders[i].scale}");
             }
         }
 

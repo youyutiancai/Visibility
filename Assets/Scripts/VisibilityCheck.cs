@@ -191,13 +191,13 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     private void TestObjectTable()
     {
         int totalObjectNum = BitConverter.ToInt32(objectTable, sizeof(int) * 2);
-        objectHolder[] objectHolders = new objectHolder[totalObjectNum];
+        ObjectHolder[] objectHolders = new ObjectHolder[totalObjectNum];
         Debug.Log($"total bytes num: {BitConverter.ToInt32(objectTable, sizeof(int))}, {totalObjectNum}");
         int cursor = sizeof(int) * 3;
         Debug.Log(objectHolders[0]);
         for (int i = 0; i < totalObjectNum; i++)
         {
-            objectHolders[i] = new objectHolder();
+            objectHolders[i] = new ObjectHolder();
             objectHolders[i].position = new Vector3(BitConverter.ToSingle(objectTable, cursor), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
                 BitConverter.ToSingle(objectTable, cursor += sizeof(float)));
             objectHolders[i].eulerAngles = new Vector3(BitConverter.ToSingle(objectTable, cursor += sizeof(float)), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
@@ -1218,7 +1218,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     }
 }
 
-public class objectHolder
+public class ObjectHolder
 {
     public Vector3 position, eulerAngles, scale;
     public string prefabName;
