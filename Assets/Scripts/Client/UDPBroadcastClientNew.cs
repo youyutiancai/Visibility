@@ -77,9 +77,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
     }
     private Dictionary<int, MeshTransmission> activeMeshTransmissions = new Dictionary<int, MeshTransmission>();
 
-    #region
-
-
 
     private void OnEnable()
     {
@@ -91,10 +88,10 @@ public class UDPBroadcastClientNew : MonoBehaviour
         
     }
 
-    //private void StartRecevBroadcast()
-    //{
-    //    Debug.Log($"{objecit}, {materialNameLength}, {objectHolders[i].materialNames[j]}");
-    //}
+    private void StartRecevBroadcast()
+    {
+        Debug.Log($"Get first{m_TCPClient.objectHolders[0].prefabName}");
+    }
 
 
     void Start()
