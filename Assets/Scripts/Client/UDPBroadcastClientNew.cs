@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 
 
@@ -31,16 +32,24 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private const int HEADER_SIZE = 12; // [archived] 3 ints: bundleId, totalChunks, chunkIndex.
 
     // an gameObject triangle mesh data
-    GameObject recGameObject;
-    int numVerticesPerChunk = 57; // constant for all the chunk
-    int totalVertexNum; // ObjectHolder -> totalVertNum
-    int subMeshCount;  // ObjectHolder -> submeshCount
-    Vector3 position, eulerAngles, scale;
-    string[] materialNames;  // per object
-    List<Material> materials;
-    List<List<int>> triangles;
-    Vector3[] vertices;
-    Vector3[] normals;
+    //GameObject recGameObject;
+    //int numVerticesPerChunk = 57; // constant for all the chunk
+    //int totalVertexNum; // ObjectHolder -> totalVertNum
+    //int subMeshCount;  // ObjectHolder -> submeshCount
+    //Vector3 position, eulerAngles, scale;
+    //string[] materialNames;  // per object
+    //List<Material> materials;
+    //List<List<int>> triangles;
+    //Vector3[] vertices;
+    //Vector3[] normals;
+
+    // multiple scene objects data
+    public int numVerticesPerChunk = 57; // constant 
+    private Dictionary<int, GameObject> recGameObjects = new Dictionary<int, GameObject>();
+    private Dictionary<int, Vector3[]> verticesDict = new Dictionary<int, Vector3[]>();
+    private Dictionary<int, List<List<int>>> trianglesDict = new Dictionary<int, List<List<int>>>();
+    private Dictionary<int, Vector3[]> normalsDict = new Dictionary<int, Vector3[]>();
+    private Dictionary<int, string[]> matNamesDict = new Dictionary<int, string[]>();
 
 
     // Represents an in-progress asset BUNDLE transmission.
@@ -100,8 +109,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
     void Start()
     {
         // init the mesh list
-        triangles = new List<List<int>>();
-        materials = new List<Material>();
+        //triangles = new List<List<int>>();
+        //materials = new List<Material>();
     }
 
     private void StartListenToBroadcast()
@@ -339,26 +348,35 @@ public class UDPBroadcastClientNew : MonoBehaviour
         int objectID = chunk.objectID;
         byte[] chunk_data = chunk.data;
 
-        if (vertices == null || vertices.Length == 0)
+        // get the object info from the table
+        int totalVertexNum = m_TCPClient.objectHolders[objectID].totalVertNum;
+        int subMeshCount = m_TCPClient.objectHolders[objectID].submeshCount;
+        string[] materialNames = m_TCPClient.objectHolders[objectID].materialNames;
+        Vector3 position = m_TCPClient.objectHolders[objectID].position;
+        Vector3 eulerAngles = m_TCPClient.objectHolders[objectID].eulerAngles;
+        Vector3 scale = m_TCPClient.objectHolders[objectID].scale;
+
+        //Debug.Log($"gameObjectID: {objectID}, vertexNum: {totalVertexNum}, SubMeshCount: {subMeshCount}, MatNum: {materialNames.Length}");
+
+        if (!recGameObjects.ContainsKey(objectID)) 
         {
-            // get the table information
-            totalVertexNum = m_TCPClient.objectHolders[objectID].totalVertNum;
-            subMeshCount = m_TCPClient.objectHolders[objectID].submeshCount;
-            materialNames = m_TCPClient.objectHolders[objectID].materialNames;
-            position = m_TCPClient.objectHolders[objectID].position;
-            eulerAngles = m_TCPClient.objectHolders[objectID].eulerAngles;
-            scale = m_TCPClient.objectHolders[objectID].scale;
-            
-            Debug.Log($"vertexNum: {totalVertexNum}, SubMeshCount: {subMeshCount}, MatNum: {materialNames.Length}");
+            //int numVerticesPerChunk = 57; // constant for all the chunk
+            //int totalVertexNum; // ObjectHolder -> totalVertNum
+            //int subMeshCount;  // ObjectHolder -> submeshCount
+            //Vector3 position, eulerAngles, scale;
 
             // init the mesh arrays
-            vertices = new Vector3[totalVertexNum];
-            normals = new Vector3[totalVertexNum];
+            Vector3[] vertices = new Vector3[totalVertexNum];
+            Vector3[] normals = new Vector3[totalVertexNum];
+            verticesDict[objectID] = vertices;
+            normalsDict[objectID] = normals;
 
+            List<List<int>> triangles = new List<List<int>>();
             for (int i = 0; i < subMeshCount; i++)
             {
                 triangles.Add(new List<int>());
             }
+            trianglesDict[objectID] = triangles;
         }
 
         if (vorT == 'V')
@@ -368,8 +386,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
             Buffer.BlockCopy(chunk_data, 0, floatArray, 0, floatArray.Length * sizeof(float));
             for (int j = 0; j < numVerticesInChunk; j++)
             {
-                vertices[chunkID * numVerticesPerChunk + j] = new Vector3(floatArray[j * 6], floatArray[j * 6 + 1], floatArray[j * 6 + 2]);
-                normals[chunkID * numVerticesPerChunk + j] = new Vector3(floatArray[j * 6 + 3], floatArray[j * 6 + 4], floatArray[j * 6 + 5]);
+                verticesDict[objectID][chunkID * numVerticesPerChunk + j] = new Vector3(floatArray[j * 6], floatArray[j * 6 + 1], floatArray[j * 6 + 2]);
+                normalsDict[objectID][chunkID * numVerticesPerChunk + j] = new Vector3(floatArray[j * 6 + 3], floatArray[j * 6 + 4], floatArray[j * 6 + 5]);
             }
         }
         else if (vorT == 'T')
@@ -378,29 +396,30 @@ public class UDPBroadcastClientNew : MonoBehaviour
             int numVerticesInChunk = (chunk_data.Length) / sizeof(int);
             int[] intArray = new int[numVerticesInChunk];
             Buffer.BlockCopy(chunk_data, 0, intArray, 0, intArray.Length * sizeof(int));
-            triangles[subMeshIdx].AddRange(intArray);
+            trianglesDict[objectID][subMeshIdx].AddRange(intArray);
         }
 
-        if (recGameObject == null)
+        if (!recGameObjects.ContainsKey(objectID))
         {
-            recGameObject = new GameObject();
+            GameObject recGameObject = new GameObject();
             recGameObject.AddComponent<MeshFilter>();
 
             Mesh newMesh = new Mesh();
-            newMesh.vertices = vertices;
-            newMesh.normals = normals;
+            newMesh.vertices = verticesDict[objectID];
+            newMesh.normals = normalsDict[objectID];
             newMesh.subMeshCount = subMeshCount;
             for (int i = 0; i < subMeshCount; i++)
             {
-                newMesh.SetTriangles(triangles[i].ToArray(), i);
+                newMesh.SetTriangles(trianglesDict[objectID][i].ToArray(), i);
             }
             recGameObject.GetComponent<MeshFilter>().mesh = newMesh;
             recGameObject.AddComponent<MeshRenderer>();
             
             // set up the material list
+            List<Material> materials = new List<Material>();
             foreach (string matName in materialNames)
             {
-                Debug.Log(matName);
+                //Debug.Log(matName);
                 Material mat = m_ResourceLoader.LoadMaterialByName(matName);
                 materials.Add(mat);
             }
@@ -410,14 +429,16 @@ public class UDPBroadcastClientNew : MonoBehaviour
             recGameObject.transform.position = position;
             recGameObject.transform.eulerAngles = eulerAngles;
             recGameObject.transform.localScale = scale;
+
+            recGameObjects[objectID] = recGameObject;
         }
         else
         {
-            recGameObject.GetComponent<MeshFilter>().mesh.vertices = vertices;
-            recGameObject.GetComponent<MeshFilter>().mesh.normals = normals;
+            recGameObjects[objectID].GetComponent<MeshFilter>().mesh.vertices = verticesDict[objectID];
+            recGameObjects[objectID].GetComponent<MeshFilter>().mesh.normals = normalsDict[objectID];
             for (int i = 0; i < subMeshCount; i++)
             {
-                recGameObject.GetComponent<MeshFilter>().mesh.SetTriangles(triangles[i].ToArray(), i);
+                recGameObjects[objectID].GetComponent<MeshFilter>().mesh.SetTriangles(trianglesDict[objectID][i].ToArray(), i);
             }
         }
     }
