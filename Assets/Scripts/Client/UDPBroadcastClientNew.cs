@@ -5,6 +5,7 @@ using System.Data;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using TMPro;
 using UnityEngine;
 
 
@@ -26,8 +27,7 @@ public class ObjectHolder
 
 public class UDPBroadcastClientNew : MonoBehaviour
 {
-    // TODO: will change later
-    public GameObject m_TestObject;
+    public TextMeshProUGUI m_TextLog;
 
     [SerializeField] private TCPClient m_TCPClient;
     [SerializeField] private ResourceLoader m_ResourceLoader;
@@ -362,10 +362,10 @@ public class UDPBroadcastClientNew : MonoBehaviour
         Vector3 eulerAngles = m_TCPClient.objectHolders[objectID].eulerAngles;
         Vector3 scale = m_TCPClient.objectHolders[objectID].scale;
 
-        Debug.Log($"[+++++++] {m_TCPClient}");
-        Debug.Log($"[+++++++] {m_TCPClient.objectHolders}");
-        Debug.Log($"[+++++++] object holder len: {m_TCPClient.objectHolders.Length}");
-        Debug.Log($"[+++++++] total vertext num: {totalVertexNum}");
+        //Debug.Log($"[+++++++] {m_TCPClient}");
+        //Debug.Log($"[+++++++] {m_TCPClient.objectHolders}");
+        //Debug.Log($"[+++++++] object holder len: {m_TCPClient.objectHolders.Length}");
+        //Debug.Log($"[+++++++] total vertext num: {totalVertexNum}");
 
         //Debug.Log($"gameObjectID: {objectID}, vertexNum: {totalVertexNum}, SubMeshCount: {subMeshCount}, MatNum: {materialNames.Length}");
 
@@ -388,6 +388,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 triangles.Add(new List<int>());
             }
             trianglesDict[objectID] = triangles;
+
+            m_TextLog.text = $"Received\n {activeMeshTransmissions.Count} \nobjects";
         }
 
         if (vorT == 'V')
