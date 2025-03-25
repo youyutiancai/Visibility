@@ -6,8 +6,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using UnityEngine;
-using UnityEngine.UIElements;
-
 
 
 [Serializable]
@@ -15,6 +13,15 @@ public class RetransmissionRequest
 {
     public int bundleId;
     public int[] missingChunks;
+}
+
+public class ObjectHolder
+{
+    public Vector3 position, eulerAngles, scale;
+    public string prefabName;
+    public string[] materialNames;
+    public int totalVertChunkNum, totalTriChunkNum, totalVertNum, submeshCount;
+    public bool ifVisible, ifOwned;
 }
 
 public class UDPBroadcastClientNew : MonoBehaviour
@@ -108,9 +115,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     void Start()
     {
-        // init the mesh list
-        //triangles = new List<List<int>>();
-        //materials = new List<Material>();
+
     }
 
     private void StartListenToBroadcast()
@@ -121,16 +126,17 @@ public class UDPBroadcastClientNew : MonoBehaviour
             udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
 
-            Debug.Log($"UDP client listening on port {port1}");
+            Debug.Log($"[+++++++] UDP client listening on port {port1}");
 
             // Start the coroutine to periodically check for retransmissions.
             //StartCoroutine(CheckRetransmissions());   //TODO
         }
         catch (Exception ex)
         {
-            Debug.LogError("UDP client initialization failed: " + ex.Message);
+            Debug.Log("UDP client initialization failed: " + ex.Message);
         }
     }
+
 
     private void ReceiveMeshChunks(IAsyncResult ar)
     {
@@ -356,6 +362,11 @@ public class UDPBroadcastClientNew : MonoBehaviour
         Vector3 eulerAngles = m_TCPClient.objectHolders[objectID].eulerAngles;
         Vector3 scale = m_TCPClient.objectHolders[objectID].scale;
 
+        Debug.Log($"[+++++++] {m_TCPClient}");
+        Debug.Log($"[+++++++] {m_TCPClient.objectHolders}");
+        Debug.Log($"[+++++++] object holder len: {m_TCPClient.objectHolders.Length}");
+        Debug.Log($"[+++++++] total vertext num: {totalVertexNum}");
+
         //Debug.Log($"gameObjectID: {objectID}, vertexNum: {totalVertexNum}, SubMeshCount: {subMeshCount}, MatNum: {materialNames.Length}");
 
         if (!recGameObjects.ContainsKey(objectID)) 
@@ -550,5 +561,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
             udpClient.Close();
         }
     }
+
 }
 

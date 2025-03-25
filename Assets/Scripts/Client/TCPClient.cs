@@ -1,13 +1,8 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using TMPro;
-using UnityEditor.Experimental.GraphView;
-using UnityEditor.VersionControl;
 using UnityEngine;
 
 public class TCPClient : MonoBehaviour
@@ -160,16 +155,16 @@ public class TCPClient : MonoBehaviour
             for (int i = 0; i < totalObjectNum; i++)
             {
                 objectHolders[i] = new ObjectHolder();
-                objectHolders[i].position = new Vector3(BitConverter.ToSingle(message, cursor), BitConverter.ToSingle(message, cursor += sizeof(float)),
-                    BitConverter.ToSingle(message, cursor += sizeof(float)));
-                objectHolders[i].eulerAngles = new Vector3(BitConverter.ToSingle(message, cursor += sizeof(float)), BitConverter.ToSingle(message, cursor += sizeof(float)),
-                    BitConverter.ToSingle(message, cursor += sizeof(float)));
-                objectHolders[i].scale = new Vector3(BitConverter.ToSingle(message, cursor += sizeof(float)), BitConverter.ToSingle(message, cursor += sizeof(float)),
-                    BitConverter.ToSingle(message, cursor += sizeof(float)));
-                objectHolders[i].totalVertChunkNum = BitConverter.ToInt32(message, cursor += sizeof(float));
-                objectHolders[i].totalTriChunkNum = BitConverter.ToInt32(message, cursor += sizeof(int));
-                objectHolders[i].totalVertNum = BitConverter.ToInt32(message, cursor += sizeof(int));
-                objectHolders[i].submeshCount = BitConverter.ToInt32(message, cursor += sizeof(int));
+                objectHolders[i].position = new Vector3(BitConverter.ToSingle(table_data.ToArray(), cursor), BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)),
+                    BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)));
+                objectHolders[i].eulerAngles = new Vector3(BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)), BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)),
+                    BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)));
+                objectHolders[i].scale = new Vector3(BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)), BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)),
+                    BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)));
+                objectHolders[i].totalVertChunkNum = BitConverter.ToInt32(table_data.ToArray(), cursor += sizeof(float));
+                objectHolders[i].totalTriChunkNum = BitConverter.ToInt32(table_data.ToArray(), cursor += sizeof(int));
+                objectHolders[i].totalVertNum = BitConverter.ToInt32(table_data.ToArray(), cursor += sizeof(int));
+                objectHolders[i].submeshCount = BitConverter.ToInt32(table_data.ToArray(), cursor += sizeof(int));
                 cursor += sizeof(int);
 
                 // TODO: Currently not used for the isvisible and isowned
@@ -180,8 +175,8 @@ public class TCPClient : MonoBehaviour
                 //Transform transform = objectsInScene[i].transform;
                 for (int j = 0; j < objectHolders[i].submeshCount; j++)
                 {
-                    int materialNameLength = BitConverter.ToInt32(message, cursor);
-                    objectHolders[i].materialNames[j] = Encoding.ASCII.GetString(message, cursor += sizeof(int), materialNameLength);
+                    int materialNameLength = BitConverter.ToInt32(table_data.ToArray(), cursor);
+                    objectHolders[i].materialNames[j] = Encoding.ASCII.GetString(table_data.ToArray(), cursor += sizeof(int), materialNameLength);
                     cursor += materialNameLength;
 
                     //Debug.Log($"ObjectID{i} - {objectHolders[i].materialNames[j]}");

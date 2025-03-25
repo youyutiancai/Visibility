@@ -7,10 +7,7 @@ using UnityEditor;
 #endif
 using Random = UnityEngine.Random;
 using UnityTCPClient.Assets.Scripts;
-using UnityEngine.UIElements;
 using System.Collections;
-using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
-using UnityEditor.PackageManager;
 using System.Text;
 
 public class VisibilityCheck : Singleton<VisibilityCheck>
@@ -1226,11 +1223,11 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     }
 }
 
-public class ObjectHolder
-{
-    public Vector3 position, eulerAngles, scale;
-    public string prefabName;
-    public string[] materialNames;
-    public int totalVertChunkNum, totalTriChunkNum, totalVertNum, submeshCount;
-    public bool ifVisible, ifOwned;
-}
+//public class ObjectHolder
+//{
+//    public Vector3 position, eulerAngles, scale;
+//    public string prefabName;
+//    public string[] materialNames;
+//    public int totalVertChunkNum, totalTriChunkNum, totalVertNum, submeshCount;
+//    public bool ifVisible, ifOwned;
+//}
