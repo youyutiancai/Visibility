@@ -1,13 +1,9 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using TMPro;
-using UnityEditor.Experimental.GraphView;
-using UnityEditor.VersionControl;
 using UnityEngine;
 
 public class TCPClient : MonoBehaviour
@@ -22,6 +18,8 @@ public class TCPClient : MonoBehaviour
 
     [SerializeField]
     private int port = 13000;
+
+    public TextMeshProUGUI debugText;
 
     //[SerializeField]
     //private TextMeshProUGUI debugText;
@@ -147,29 +145,32 @@ public class TCPClient : MonoBehaviour
 
         if (table_data.Count < totalBytes)
         {
-            
+            debugText.text += $"have received {table_data.Count} / {totalBytes}\n";   
             table_data.AddRange(message);
         }
 
         if (table_data.Count == totalBytes)
         {
+            byte[] table_data_array = table_data.ToArray();
+            debugText.text += $"have received all\n";
             cursor = sizeof(int) * 3;
 
             objectHolders = new ObjectHolder[totalObjectNum];
 
             for (int i = 0; i < totalObjectNum; i++)
             {
+                Debug.Log($"TCP: {i} parsing table {cursor}");
                 objectHolders[i] = new ObjectHolder();
-                objectHolders[i].position = new Vector3(BitConverter.ToSingle(message, cursor), BitConverter.ToSingle(message, cursor += sizeof(float)),
-                    BitConverter.ToSingle(message, cursor += sizeof(float)));
-                objectHolders[i].eulerAngles = new Vector3(BitConverter.ToSingle(message, cursor += sizeof(float)), BitConverter.ToSingle(message, cursor += sizeof(float)),
-                    BitConverter.ToSingle(message, cursor += sizeof(float)));
-                objectHolders[i].scale = new Vector3(BitConverter.ToSingle(message, cursor += sizeof(float)), BitConverter.ToSingle(message, cursor += sizeof(float)),
-                    BitConverter.ToSingle(message, cursor += sizeof(float)));
-                objectHolders[i].totalVertChunkNum = BitConverter.ToInt32(message, cursor += sizeof(float));
-                objectHolders[i].totalTriChunkNum = BitConverter.ToInt32(message, cursor += sizeof(int));
-                objectHolders[i].totalVertNum = BitConverter.ToInt32(message, cursor += sizeof(int));
-                objectHolders[i].submeshCount = BitConverter.ToInt32(message, cursor += sizeof(int));
+                objectHolders[i].position = new Vector3(BitConverter.ToSingle(table_data_array, cursor), BitConverter.ToSingle(table_data_array, cursor += sizeof(float)),
+                    BitConverter.ToSingle(table_data_array, cursor += sizeof(float)));
+                objectHolders[i].eulerAngles = new Vector3(BitConverter.ToSingle(table_data_array, cursor += sizeof(float)), BitConverter.ToSingle(table_data_array, cursor += sizeof(float)),
+                    BitConverter.ToSingle(table_data_array, cursor += sizeof(float)));
+                objectHolders[i].scale = new Vector3(BitConverter.ToSingle(table_data_array, cursor += sizeof(float)), BitConverter.ToSingle(table_data_array, cursor += sizeof(float)),
+                    BitConverter.ToSingle(table_data_array, cursor += sizeof(float)));
+                objectHolders[i].totalVertChunkNum = BitConverter.ToInt32(table_data_array, cursor += sizeof(float));
+                objectHolders[i].totalTriChunkNum = BitConverter.ToInt32(table_data_array, cursor += sizeof(int));
+                objectHolders[i].totalVertNum = BitConverter.ToInt32(table_data_array, cursor += sizeof(int));
+                objectHolders[i].submeshCount = BitConverter.ToInt32(table_data_array, cursor += sizeof(int));
                 cursor += sizeof(int);
 
                 // TODO: Currently not used for the isvisible and isowned
@@ -180,12 +181,14 @@ public class TCPClient : MonoBehaviour
                 //Transform transform = objectsInScene[i].transform;
                 for (int j = 0; j < objectHolders[i].submeshCount; j++)
                 {
-                    int materialNameLength = BitConverter.ToInt32(message, cursor);
-                    objectHolders[i].materialNames[j] = Encoding.ASCII.GetString(message, cursor += sizeof(int), materialNameLength);
+                    int materialNameLength = BitConverter.ToInt32(table_data_array, cursor);
+                    Debug.Log($"TCP: {table_data_array.Length}, {cursor}, {materialNameLength}");
+                    objectHolders[i].materialNames[j] = Encoding.ASCII.GetString(table_data_array, cursor += sizeof(int), materialNameLength);
                     cursor += materialNameLength;
 
                     //Debug.Log($"ObjectID{i} - {objectHolders[i].materialNames[j]}");
                 }
+                Debug.Log($"TCP: {i} finished parsing table {cursor}");
             }
 
             OnReceivedServerTable?.Invoke();

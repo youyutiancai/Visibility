@@ -130,6 +130,7 @@ public class TCPControl : MonoBehaviour
             //Buffer.BlockCopy(BitConverter.GetBytes(newUser.transform.position.y), 0, visibilityCheck.objectTable, sizeof(int) * 3 + sizeof(float), sizeof(float));
             //Buffer.BlockCopy(BitConverter.GetBytes(newUser.transform.position.y), 0, visibilityCheck.objectTable, sizeof(int) * 3 + sizeof(float) * 2, sizeof(float));
             client.GetStream().Write(visibilityCheck.objectTable);
+            Debug.Log($"table size: {visibilityCheck.objectTable.Length}");
         }
     }
 }
