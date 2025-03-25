@@ -12,7 +12,7 @@ using UnityEngine;
 
 public class BroadcastControl : MonoBehaviour
 {
-    private const string BROADCAST_IP = "255.255.255.255";
+    private const string BROADCAST_IP = "192.168.1.255";
     private const int PORT = 5005;
     // We use a separate port for retransmission requests.
     private const int RETRANSMISSION_PORT = 5006;

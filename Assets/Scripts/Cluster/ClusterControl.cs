@@ -7,6 +7,7 @@ using UnityTCPClient.Assets.Scripts;
 using System.IO;
 using System;
 using Random = UnityEngine.Random;
+using UnityEngine.InputSystem;
 
 public class ClusterControl : Singleton<ClusterControl>
 {
@@ -17,7 +18,7 @@ public class ClusterControl : Singleton<ClusterControl>
 
     public float epsilon = 10;  // Radius for clustering
     public int minPts = 2;      // Minimum points to form a cluster
-    public float updateInterval = 0.1f, timegapForSwapUsers;  // How often to update (in seconds)
+    public float updateInterval, timegapForSwapUsers;  // How often to update (in seconds)
     public bool regularlySwapUsers, regularlySwapLeader, writeToData;
 
     //[HideInInspector]
@@ -115,7 +116,7 @@ public class ClusterControl : Singleton<ClusterControl>
     {
         timeSinceLastUpdate += Time.deltaTime;
 
-        if (SimulationStrategy == SimulationStrategyDropDown.RealUser && Input.GetKeyDown(KeyCode.B))
+        if (SimulationStrategy == SimulationStrategyDropDown.RealUser && Keyboard.current.bKey.wasPressedThisFrame)
         {
             canSendObjects = !canSendObjects;
             nc.BroadcastObjectData(1);

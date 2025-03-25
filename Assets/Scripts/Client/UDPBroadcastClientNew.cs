@@ -176,8 +176,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
             {
                 Debug.LogError("Err: Please ensure the packet parser is correct");
             }
-            
-           
+
+
             int dataSize = packet.Length - headerSize;
             byte[] chunkData = new byte[dataSize];
             Array.Copy(packet, headerSize, chunkData, 0, dataSize);
@@ -369,7 +369,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
         //Debug.Log($"gameObjectID: {objectID}, vertexNum: {totalVertexNum}, SubMeshCount: {subMeshCount}, MatNum: {materialNames.Length}");
 
-        if (!recGameObjects.ContainsKey(objectID)) 
+        if (!recGameObjects.ContainsKey(objectID))
         {
             //int numVerticesPerChunk = 57; // constant for all the chunk
             //int totalVertexNum; // ObjectHolder -> totalVertNum
@@ -425,7 +425,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
             }
             recGameObject.GetComponent<MeshFilter>().mesh = newMesh;
             recGameObject.AddComponent<MeshRenderer>();
-            
+
             // set up the material list
             List<Material> materials = new List<Material>();
             foreach (string matName in materialNames)
@@ -477,7 +477,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
             char vorT = chunk.type;
             int objectID = chunk.objectID;
             int chunkID = i;
-            
+
             if (vorT == 'V')
             {
                 int numVerticesInChunk = chunk_data.Length / (sizeof(float) * 6);  // 6: pos and rot
@@ -563,4 +563,3 @@ public class UDPBroadcastClientNew : MonoBehaviour
     }
 
 }
-

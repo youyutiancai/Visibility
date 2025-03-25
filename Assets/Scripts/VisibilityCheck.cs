@@ -9,6 +9,7 @@ using Random = UnityEngine.Random;
 using UnityTCPClient.Assets.Scripts;
 using System.Collections;
 using System.Text;
+using UnityEngine.InputSystem;
 
 public class VisibilityCheck : Singleton<VisibilityCheck>
 {
@@ -552,7 +553,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             if (!captureAndCount)
                 Serialize();
         }
-        if (Input.GetKeyDown(KeyCode.Space))
+        if (Keyboard.current.spaceKey.wasPressedThisFrame)
         {
             //Debug.Log($"{gd.numGridX}, {gd.numGridZ}");
             //cameraPosID = 0;
@@ -562,7 +563,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             //StartCoroutine(CombineGridDifferences());
             //StartCoroutine(ShrinkGridLevelVis());
             //StartCoroutine(CombineGrids());
-        } else if (Input.GetKeyDown(KeyCode.Q))
+        } else if (Keyboard.current.qKey.wasPressedThisFrame)
         {
             UpdateVisibleObjects();
             //CreateUI();
@@ -571,7 +572,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
 
     private void FixedUpdate()
     {
-        if (Input.GetKeyDown(KeyCode.A) || (!preAutoMove && autoMove))
+        if (Keyboard.current.aKey.wasPressedThisFrame || (!preAutoMove && autoMove))
         {
             float oriY = visTarget.transform.position.y;
             visTarget.transform.position = pathStartPos;
