@@ -25,10 +25,13 @@ public class BroadcastControl : MonoBehaviour
     private CancellationToken ct;
     private const int CHUNK_SIZE = 1400;
     private const int HEADER_SIZE = 12;
-    private int bundleID;
+    private int bundleID, currentChunkToSend;
     // Dictionary to store each chunk's packet for possible retransmission.
     private Dictionary<int, byte[]> chunks;
     private MeshVariant mv;
+    private NetworkControl nc;
+    private List<byte[]> chunksOfObject;
+    private float sleepTime, timeSinceLastUpdate;
 
     // Object metadata (unused in this snippet but left for context)
     private List<Dictionary<string, object>> objectTable = new List<Dictionary<string, object>>()
@@ -45,6 +48,7 @@ public class BroadcastControl : MonoBehaviour
         udpClient = new UdpClient();
         udpClient.EnableBroadcast = true;
         appRunning = true;
+        nc = NetworkControl.Instance;
         lastTimeCheck = 0;
         bundleID = 0;
         chunks = new Dictionary<int, byte[]>();
@@ -65,8 +69,10 @@ public class BroadcastControl : MonoBehaviour
     }
 
     // Entry point for broadcasting object data.
-    public void BroadcastObjectData(int objectID)
+    public void BroadcastObjectData(int objectID, float _sleepTime = 0.01f)
     {
+        sleepTime = _sleepTime;
+        timeSinceLastUpdate = 0;
         Dispatcher.Instance.Enqueue(() => BroadcastChunks(objectID));
         // For demonstration, we broadcast a prefab named "balcony_1".
         //BroadcastPrefab("balcony_1");
@@ -74,14 +80,27 @@ public class BroadcastControl : MonoBehaviour
 
     private void BroadcastChunks(int objectID)
     {
-        List<byte[]> chunks = mv.RequestChunks(objectID, CHUNK_SIZE);
+        chunksOfObject = mv.RequestChunks(objectID, CHUNK_SIZE);
+        nc.readyForNextObject = false;
+        currentChunkToSend = 0;
         //DecodeMesh(chunks);
-        for (int i = 0; i < chunks.Count; i++)
+        //for (int i = 0; i < chunks.Count; i++)
+        //{
+        //Broadcast(chunks[i]);
+        //}
+    }
+
+    public void UpdateChunkSending()
+    {
+        timeSinceLastUpdate += Time.deltaTime;
+        if (nc.readyForNextObject || timeSinceLastUpdate < sleepTime || chunksOfObject == null || currentChunkToSend >= chunksOfObject.Count)
+            return;
+        timeSinceLastUpdate = 0;
+        Broadcast(chunksOfObject[currentChunkToSend]);
+        currentChunkToSend++;
+        if (currentChunkToSend == chunksOfObject.Count)
         {
-            Broadcast(chunks[i]);
-            //Debug.Log($"Sent chunk {BitConverter.ToInt32(chunks[i], sizeof(char) + sizeof(int)) + 1}/{chunks.Count}, size: {chunks[i].Length} bytes, {BitConverter.ToChar(chunks[i], 0)}");
-            //yield return null;
-            //Thread.Sleep(10);
+            nc.readyForNextObject = true;
         }
     }
 
