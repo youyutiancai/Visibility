@@ -28,6 +28,8 @@ public class ObjectHolder
 public class UDPBroadcastClientNew : MonoBehaviour
 {
     public TextMeshProUGUI m_TextLog;
+    private string logContext = "";
+    public bool isShowLog = false;
 
     [SerializeField] private TCPClient m_TCPClient;
     [SerializeField] private ResourceLoader m_ResourceLoader;
@@ -56,8 +58,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private Dictionary<int, Vector3[]> verticesDict = new Dictionary<int, Vector3[]>();
     private Dictionary<int, List<List<int>>> trianglesDict = new Dictionary<int, List<List<int>>>();
     private Dictionary<int, Vector3[]> normalsDict = new Dictionary<int, Vector3[]>();
-    private Dictionary<int, string[]> matNamesDict = new Dictionary<int, string[]>();
-    private int totalChunkN = 0;
+    private int recevTotalChunkPerObject = 0;
+    private int recevTotalChunkN = 0;
 
 
     // Represents an in-progress asset BUNDLE transmission.
@@ -86,7 +88,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
         public int subMeshIdx;  // only has when the chunk type is triangle
         public byte[] data;
     }
-    private class MeshTransmission
+    private class MeshTransmission  // one object one mesh transmission, with multiple chunks
     {
         public int totalMeshChunks;
         public Dictionary<int, Chunk> chunks = new Dictionary<int, Chunk>();
@@ -119,6 +121,14 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     }
 
+    void Update()
+    {
+        if (isShowLog)
+        {
+            m_TextLog.text = $"Received Chunks Numbers - [{recevTotalChunkN}]";
+        }
+    }
+
     private void StartListenToBroadcast()
     {
         try
@@ -127,7 +137,10 @@ public class UDPBroadcastClientNew : MonoBehaviour
             udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
 
-            Debug.Log($"[+++++++] UDP client listening on port {port1}");
+            int recvBuf = (int)udpClient.Client.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReceiveBuffer);
+            int sendBuf = (int)udpClient.Client.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendBuffer);
+
+            //Debug.Log($"[+++++++] UDP client listening on port {port1}, recvBuf-{recvBuf}, sendBuf-{sendBuf}");
 
             // Start the coroutine to periodically check for retransmissions.
             //StartCoroutine(CheckRetransmissions());   //TODO
@@ -156,18 +169,18 @@ public class UDPBroadcastClientNew : MonoBehaviour
             // Parse the header. (Object ID to determine whether continue the logic)
             char submeshType = BitConverter.ToChar(packet, 0);
             int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
-            int totalMeshTrunks = 364; // TODO: get from the initial user object tables by tcp
+            int totalMeshTrunks = 10000;  // placeholder
 
             if (submeshType == 'V')
             {
-                Debug.Log($"Received package type V...");
+                //Debug.Log($"Received package type V...");
                 objectId = BitConverter.ToInt32(packet, 2);
                 chunkId = BitConverter.ToInt32(packet, 6);
                 headerSize = 10;
             }
             else if (submeshType == 'T')
             {
-                Debug.Log($"Received package type T...");
+                //Debug.Log($"Received package type T...");
                 objectId = BitConverter.ToInt32(packet, 2);
                 chunkId = BitConverter.ToInt32(packet, 6);
                 submeshId = BitConverter.ToInt32(packet, 10);
@@ -186,18 +199,28 @@ public class UDPBroadcastClientNew : MonoBehaviour
             // Create or update the transmission record.
             if (!activeMeshTransmissions.ContainsKey(objectId))
             {
+                recevTotalChunkPerObject = 0;  // refresh the chunk N
+                
                 activeMeshTransmissions[objectId] = new MeshTransmission
                 {
-                    totalMeshChunks = totalMeshTrunks,  // TODO: need to use the table to record
+                    totalMeshChunks = totalMeshTrunks,
                     firstChunkTime = DateTime.UtcNow,
                     remoteEP = remoteEP   // store the sender's endpoint
                 };
-                Debug.Log($"Started receiving objectId {objectId} with {totalMeshTrunks} chunks from {remoteEP.Address}");
+                //Debug.Log($"Starting received Object {objectId}");
+                //UnityDispatcher.Instance.Enqueue(() =>
+                //{
+                //    //UpdateUI(objectId, recevTotalChunkPerObject, true);
+                //});
             }
             MeshTransmission transmission = activeMeshTransmissions[objectId];
 
             if (!transmission.chunks.ContainsKey(chunkId))
             {
+                recevTotalChunkPerObject++;
+                recevTotalChunkN++;
+
+                
                 transmission.chunks[chunkId] = new Chunk
                 {
                     id = chunkId,
@@ -206,16 +229,13 @@ public class UDPBroadcastClientNew : MonoBehaviour
                     subMeshIdx = submeshId,
                     data = chunkData
                 };
-                Debug.Log($"Received chunk {chunkId + 1}/{totalMeshTrunks} of {transmission.chunks[chunkId].type} for objectId {objectId}");
-                
-                //// update the chunks received for all objects
-                //totalChunkN++;
-                //m_TextLog.text = $"Received [ {totalChunkN} ] Chunks";
+                //Debug.Log($"Received chunk {chunkId + 1}/{totalMeshTrunks} of {transmission.chunks[chunkId].type} for objectId {objectId}");
 
                 // update the triangles, vertices and normals list
                 UnityDispatcher.Instance.Enqueue(() =>
                 {
                     UpdateObjectSubMeshes(transmission.chunks[chunkId]);
+                    //UpdateUI(objectId, recevTotalChunkPerObject, false);
                 });
             }
 
@@ -270,14 +290,14 @@ public class UDPBroadcastClientNew : MonoBehaviour
                     firstChunkTime = DateTime.UtcNow,
                     remoteEP = remoteEP   // store the sender's endpoint
                 };
-                Debug.Log($"Started receiving bundleId {bundleId} with {totalChunks} chunks from {remoteEP.Address}");
+                //Debug.Log($"Started receiving bundleId {bundleId} with {totalChunks} chunks from {remoteEP.Address}");
             }
             BundleTransmission transmission = activeTransmissions[bundleId];
 
             if (!transmission.chunks.ContainsKey(chunkIndex))
             {
                 transmission.chunks[chunkIndex] = chunkData;
-                Debug.Log($"Received chunk {chunkIndex + 1}/{totalChunks} for bundleId {bundleId}");
+                //Debug.Log($"Received chunk {chunkIndex + 1}/{totalChunks} for bundleId {bundleId}");
             }
 
             // If all chunks have been received, schedule reassembly and loading on the main thread.
@@ -341,7 +361,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
                             // Use the stored remoteEP address for the retransmission request.
                             requestClient.Send(reqData, reqData.Length, transmission.remoteEP.Address.ToString(), port2);
                             requestClient.Close();
-                            Debug.Log("Requested retransmission for bundleId " + bundleId + " for missing chunks: " + string.Join(",", missingChunks));
+                            //Debug.Log("Requested retransmission for bundleId " + bundleId + " for missing chunks: " + string.Join(",", missingChunks));
 
                             // Reset the timer for retransmission requests.
                             transmission.firstChunkTime = DateTime.UtcNow;
@@ -352,8 +372,28 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
     }
 
+    private void UpdateUI(int objectId, int meshReceivedN, bool isAppending)
+    {
+        //int trunksPerObject = m_TCPClient.objectHolders[objectId].totalTriChunkNum + m_TCPClient.objectHolders[objectId].totalVertChunkNum;
+
+        if (isAppending)
+        {
+            // new object log added.
+
+            logContext = m_TextLog.text;
+
+            m_TextLog.text += $"Starting Receiving Object-[{objectId}] with total chunks-[xxx]\n";
+        }
+        else
+        {
+            // update the chunks received for the current object
+            m_TextLog.text = logContext + $"Object-[{objectId}]: {meshReceivedN} / xxx \n";
+        }
+    }
+
     private void UpdateObjectSubMeshes(Chunk chunk)
     {
+
         int chunkID = chunk.id;
         char vorT = chunk.type;
         int objectID = chunk.objectID;
