@@ -14,6 +14,8 @@ public class NetworkControl : Singleton<NetworkControl>
     TCPControl tc;
     private CancellationTokenSource cts;
     ClusterControl cc;
+    [HideInInspector]
+    public bool readyForNextObject;
 
     void Start()
     {
@@ -26,7 +28,7 @@ public class NetworkControl : Singleton<NetworkControl>
             bcc = new BroadcastControl(cts.Token);
             tc = new TCPControl(cts.Token, dispatcher, visibilityCheck, cc);
         }
-        
+        readyForNextObject = true;
     }
 
     private void Update()
@@ -38,12 +40,13 @@ public class NetworkControl : Singleton<NetworkControl>
             //{
             //    bcc.BroadcastObjectData(1);
             //}
+            bcc.UpdateChunkSending();
         }
     }
 
-    public void BroadcastObjectData(int objectID)
+    public void BroadcastObjectData(int objectID, float _sleepTime = 0.01f)
     {
-        bcc.BroadcastObjectData(objectID);
+        bcc.BroadcastObjectData(objectID, _sleepTime);
     }
 
     private void OnApplicationQuit()

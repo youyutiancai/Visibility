@@ -18,7 +18,7 @@ public class ClusterControl : Singleton<ClusterControl>
 
     public float epsilon = 10;  // Radius for clustering
     public int minPts = 2;      // Minimum points to form a cluster
-    public float updateInterval, timegapForSwapUsers;  // How often to update (in seconds)
+    public float updateInterval, newChunkInterval, timegapForSwapUsers;  // How often to update (in seconds)
     public bool regularlySwapUsers, regularlySwapLeader, writeToData;
 
     //[HideInInspector]
@@ -44,6 +44,7 @@ public class ClusterControl : Singleton<ClusterControl>
 
     private StreamWriter writer;
     private string filePath;
+    private int currentObjectToSend;
 
     void Start()
     {
@@ -63,6 +64,7 @@ public class ClusterControl : Singleton<ClusterControl>
         visibleObjectsInRegion = new int[vc.objectsInScene.Count];
         objectSentCluster = 0;
         objectSentIndi = 0;
+        currentObjectToSend = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
         initialClusterCenterPos = initialClusterCenter.transform.position;
         objectsWaitToBeSent = new List<int>();
@@ -119,18 +121,23 @@ public class ClusterControl : Singleton<ClusterControl>
         if (SimulationStrategy == SimulationStrategyDropDown.RealUser && Keyboard.current.bKey.wasPressedThisFrame)
         {
             canSendObjects = !canSendObjects;
-            nc.BroadcastObjectData(1);
+            Debug.Log($"canSendObject changed to {canSendObjects}");
+            //nc.BroadcastObjectData(1);
+        } else if (SimulationStrategy == SimulationStrategyDropDown.RealUser && Keyboard.current.rKey.wasPressedThisFrame)
+        {
+            currentObjectToSend = 0;
         }
 
         if (timeSinceLastUpdate >= updateInterval)
         {
             timeSinceLastUpdate = 0f;
-            if (canSendObjects && objectsWaitToBeSent.Count != 0)
+            if (canSendObjects && nc.readyForNextObject && currentObjectToSend < objectsWaitToBeSent.Count)
             {
-                int sendingObjectIdx = objectsWaitToBeSent[0];
-                nc.BroadcastObjectData(sendingObjectIdx);
-                objectsWaitToBeSent.RemoveAt(0);
-                Debug.Log($"finished {sendingObjectIdx}, {objectsWaitToBeSent.Count} is left");
+                int sendingObjectIdx = objectsWaitToBeSent[currentObjectToSend];
+                nc.BroadcastObjectData(sendingObjectIdx, newChunkInterval);
+                currentObjectToSend++;
+                //objectsWaitToBeSent.RemoveAt(0);
+                Debug.Log($"finished {sendingObjectIdx}, {objectsWaitToBeSent.Count - currentObjectToSend} is left");
             }
 
             //int missing = 0;
@@ -180,11 +187,27 @@ public class ClusterControl : Singleton<ClusterControl>
                     {
                         if (newObjectsToSend[i] > 0 && !objectsWaitToBeSent.Contains(i))
                         {
-                            objectsWaitToBeSent.Add(i);
+                            float newDistance = Vector3.Distance(vc.objectsInScene[i].transform.position, initialClusterCenter.transform.position);
+                            int low = 0;
+                            int high = objectsWaitToBeSent.Count;
+
+                            // Binary search for the correct insertion index
+                            while (low < high)
+                            {
+                                int mid = (low + high) / 2;
+                                int currentIndex = objectsWaitToBeSent[mid];
+                                float currentDistance = Vector3.Distance(vc.objectsInScene[currentIndex].transform.position, initialClusterCenter.transform.position);
+
+                                if (newDistance < currentDistance)
+                                    high = mid;
+                                else
+                                    low = mid + 1;
+                            }
+                            objectsWaitToBeSent.Insert(low, i);
                         }
                     }
                     //SendObjectsToUsers();
-                    
+
                     break;
             }
 
