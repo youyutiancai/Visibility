@@ -57,6 +57,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private Dictionary<int, List<List<int>>> trianglesDict = new Dictionary<int, List<List<int>>>();
     private Dictionary<int, Vector3[]> normalsDict = new Dictionary<int, Vector3[]>();
     private Dictionary<int, string[]> matNamesDict = new Dictionary<int, string[]>();
+    private int totalChunkN = 0;
 
 
     // Represents an in-progress asset BUNDLE transmission.
@@ -206,6 +207,10 @@ public class UDPBroadcastClientNew : MonoBehaviour
                     data = chunkData
                 };
                 Debug.Log($"Received chunk {chunkId + 1}/{totalMeshTrunks} of {transmission.chunks[chunkId].type} for objectId {objectId}");
+                
+                //// update the chunks received for all objects
+                //totalChunkN++;
+                //m_TextLog.text = $"Received [ {totalChunkN} ] Chunks";
 
                 // update the triangles, vertices and normals list
                 UnityDispatcher.Instance.Enqueue(() =>
@@ -388,8 +393,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 triangles.Add(new List<int>());
             }
             trianglesDict[objectID] = triangles;
-
-            m_TextLog.text = $"Received\n {activeMeshTransmissions.Count} \nobjects";
         }
 
         if (vorT == 'V')
