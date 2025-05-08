@@ -12,7 +12,7 @@ public class TCPClient : MonoBehaviour
 
 
     //[HideInInspector]
-    private string serverIPAddress = "192.168.0.60";
+    private string serverIPAddress = "192.168.1.188";  // 192.168.1.2
     //public string serverIPAddress;
 
     [SerializeField]

@@ -28,17 +28,24 @@ public class ObjectHolder
 public class UDPBroadcastClientNew : MonoBehaviour
 {
     public TextMeshProUGUI m_TextLog;
+    public TextMeshProUGUI m_TextLog2;
     private string logContext = "";
     public bool isShowLog = false;
+    public bool isMulticast = true;
 
     [SerializeField] private TCPClient m_TCPClient;
     [SerializeField] private ResourceLoader m_ResourceLoader;
 
 
-    public int port1 = 5005;  // broadcast port
-    public int port2 = 5006;  // retransmit port
+    public int portUDP = 5005;  // broadcast port
+    public int portTCP = 5006;  // retransmit port
     private UdpClient udpClient;
+    private IPEndPoint remoteEP;
+    private IPEndPoint localEP;
+    private string multicastAddr = "230.0.0.1";
+    private IPAddress multicastAddress;  // multicast
     private const int HEADER_SIZE = 12; // [archived] 3 ints: bundleId, totalChunks, chunkIndex.
+    private int bufferSize = 1024 * 1024;
 
     // an gameObject triangle mesh data
     //GameObject recGameObject;
@@ -112,7 +119,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     {
         Debug.Log($"[The first object info]: name-{m_TCPClient.objectHolders[0].prefabName}, vertN-{m_TCPClient.objectHolders[0].totalVertNum}, submeshN-{m_TCPClient.objectHolders[0].submeshCount}");
 
-        StartListenToBroadcast();
+        StartListenToServer();
     }
 
 
@@ -129,18 +136,45 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
     }
 
-    private void StartListenToBroadcast()
+    private void StartListenToServer()
     {
         try
         {
-            udpClient = new UdpClient(port1);
-            udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+            if (isMulticast)
+            {
+                multicastAddress = IPAddress.Parse(multicastAddr);
+                Debug.Log($"Parsed MCast addr = {multicastAddress}");
+
+                udpClient = new UdpClient(AddressFamily.InterNetwork);
+                udpClient.Client.SetSocketOption(
+                    SocketOptionLevel.Socket,
+                    SocketOptionName.ReuseAddress, true);
+
+                localEP = new IPEndPoint(IPAddress.Any, portUDP);
+                udpClient.Client.Bind(localEP);
+                Debug.Log($"Bound UDP client to {localEP}");
+
+                udpClient.JoinMulticastGroup(multicastAddress);
+                Debug.Log($"Joined multicast group {multicastAddress}");
+
+                udpClient.Client.ReceiveBufferSize = bufferSize;
+                Debug.Log($"Set ReceiveBufferSize = {bufferSize}");
+
+                udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+            }
+            else
+            {
+                udpClient = new UdpClient(portUDP);
+                udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                udpClient.Client.ReceiveBufferSize = bufferSize;
+                udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+            }
 
             int recvBuf = (int)udpClient.Client.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReceiveBuffer);
             int sendBuf = (int)udpClient.Client.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendBuffer);
 
-            //Debug.Log($"[+++++++] UDP client listening on port {port1}, recvBuf-{recvBuf}, sendBuf-{sendBuf}");
+            Debug.Log($"[+++++++] UDP client listening on the server, recvBuf-{recvBuf}, sendBuf-{sendBuf}");
+            m_TextLog2.text = $"[+++++++] UDP client listening on the server, recvBuf-{recvBuf}, sendBuf-{sendBuf}";
 
             // Start the coroutine to periodically check for retransmissions.
             //StartCoroutine(CheckRetransmissions());   //TODO
@@ -156,7 +190,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     {
         try
         {
-            IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, port1);
+            IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, portUDP);
             byte[] packet = udpClient.EndReceive(ar, ref remoteEP);
 
             if (packet.Length < HEADER_SIZE) // archived
@@ -262,7 +296,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     {
         try
         {
-            IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, port1);
+            IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, portUDP);
             byte[] packet = udpClient.EndReceive(ar, ref remoteEP);
 
             if (packet.Length < HEADER_SIZE)
@@ -359,7 +393,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
                             UdpClient requestClient = new UdpClient();
                             // Use the stored remoteEP address for the retransmission request.
-                            requestClient.Send(reqData, reqData.Length, transmission.remoteEP.Address.ToString(), port2);
+                            requestClient.Send(reqData, reqData.Length, transmission.remoteEP.Address.ToString(), portTCP);
                             requestClient.Close();
                             //Debug.Log("Requested retransmission for bundleId " + bundleId + " for missing chunks: " + string.Join(",", missingChunks));
 
@@ -603,7 +637,15 @@ public class UDPBroadcastClientNew : MonoBehaviour
     {
         if (udpClient != null)
         {
-            udpClient.Close();
+            if (isMulticast)
+            {
+                udpClient.DropMulticastGroup(multicastAddress);
+                udpClient.Close();
+            }
+            else
+            {
+                udpClient.Close();
+            }
         }
     }
 
