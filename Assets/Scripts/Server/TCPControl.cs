@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -10,11 +11,12 @@ public class TCPControl : MonoBehaviour
 {
     private IPAddress iP4Address;
     private int listenerport = 13000;
-    private Thread tcpThread;
-    private TcpListener tcpListener;
     private CancellationToken ct;
+    private TcpListener tcpListener;
+    private Task listenerTask;
     private static object _lock = new object();
     private static Dictionary<IPEndPoint, TcpClient> clients;
+    private static Dictionary<IPEndPoint, Task> clientTasks;
     private Dispatcher dispatcher;
     private VisibilityCheck visibilityCheck;
     private ClusterControl cc;
@@ -23,88 +25,110 @@ public class TCPControl : MonoBehaviour
     {
         ct = _ct;
         dispatcher = _dispatcher;
-        iP4Address = IPAddress.Any;
-        clients = new Dictionary<IPEndPoint, TcpClient>();
-        tcpThread = new Thread(() => ListenTCP());
-        tcpThread.Start();
         visibilityCheck = _visibilityCheck;
         cc = _clusterControl;
+        iP4Address = IPAddress.Any;
+        clients = new Dictionary<IPEndPoint, TcpClient>();
+        clientTasks = new Dictionary<IPEndPoint, Task>();
+
+        listenerTask = ListenTCPAsync();
     }
 
-    private void ListenTCP()
+    private async Task ListenTCPAsync()
     {
         IPEndPoint localEndPoint = new IPEndPoint(iP4Address, listenerport);
         tcpListener = new TcpListener(localEndPoint);
         tcpListener.Start();
+
         try
         {
-            while(!ct.IsCancellationRequested)
+            while (!ct.IsCancellationRequested)
             {
-                Debug.Log($"Waiting for client connections...");
-                TcpClient newClient = tcpListener.AcceptTcpClient();
+                if (!tcpListener.Pending())
+                {
+                    await Task.Delay(100, ct);
+                    continue;
+                }
+
+                TcpClient newClient = await tcpListener.AcceptTcpClientAsync();
                 IPEndPoint ep = newClient.Client.RemoteEndPoint as IPEndPoint;
+
                 lock (_lock)
                 {
-                    clients.Add(ep, newClient);
+                    clients[ep] = newClient;
+                    clientTasks[ep] = HandleClientConnectionAsync(ep, ct);
                 }
-                Thread thread = new Thread(() => HandleClientConnection(ep, ct));
-                thread.Start();
             }
-            tcpListener.Stop();
-        } catch (SocketException e)
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception e)
         {
-            Debug.Log($"socketException: {e}");
+            Debug.Log($"ListenTCPAsync error: {e.Message}");
+        }
+        finally
+        {
             tcpListener.Stop();
         }
     }
 
-    public void HandleClientConnection(IPEndPoint ep, CancellationToken ct)
+    public async Task HandleClientConnectionAsync(IPEndPoint ep, CancellationToken ct)
     {
-        TcpClient client = null;
+        TcpClient client;
         lock (_lock)
         {
             client = clients[ep];
         }
+
         dispatcher.Enqueue(() => SendTable(client));
         Debug.Log($"ClientID {ep} is connected and added to our clients...");
-        while (!ct.IsCancellationRequested)
+
+        NetworkStream stream = client.GetStream();
+        byte[] buffer = new byte[1000000];
+
+        try
         {
-            NetworkStream stream = client.GetStream();
-            byte[] buffer = new byte[1000000];
-            int byteCount = 0;
-            try
+            while (!ct.IsCancellationRequested)
             {
-                byteCount = stream.Read(buffer, 0, buffer.Length);
-            } catch (Exception e)
-            {
-                Debug.Log(e);
-                break;
-            }
+                if (!stream.DataAvailable)
+                {
+                    await Task.Delay(10, ct);
+                    continue;
+                }
 
-            if (byteCount == 0)
-            {
-                break;
-            }
+                int byteCount = await stream.ReadAsync(buffer, 0, buffer.Length, ct);
 
-            byte[] data = new byte[byteCount];
-            Buffer.BlockCopy(buffer, 0, data, 0, byteCount);
-            dispatcher.Enqueue(() => HandleMessageTCP(client, data));
+                if (byteCount == 0)
+                    break;
+
+                byte[] data = new byte[byteCount];
+                Buffer.BlockCopy(buffer, 0, data, 0, byteCount);
+                dispatcher.Enqueue(() => HandleMessageTCP(client, data));
+            }
         }
-
-        lock (_lock)
+        catch (OperationCanceledException) { }
+        catch (Exception e)
         {
-            clients.Remove(ep);
-            Debug.Log($"Client {ep} has been removed");
+            Debug.Log($"Client {ep} read error: {e.Message}");
         }
-        client.Close();
+        finally
+        {
+            lock (_lock)
+            {
+                clients.Remove(ep);
+                clientTasks.Remove(ep);
+                Debug.Log($"Client {ep} has been removed");
+            }
+            client.Close();
+        }
     }
 
     private void HandleMessageTCP(TcpClient client, byte[] data)
     {
-        TCPMessageType mt = (TCPMessageType) BitConverter.ToInt32(data, 0);
+        TCPMessageType mt = (TCPMessageType)BitConverter.ToInt32(data, 0);
         Debug.Log($"Client {client.Client.RemoteEndPoint} sends message: {mt}");
 
-        switch (mt) {
+        switch (mt)
+        {
             case TCPMessageType.TABLE:
                 SendTable(client);
                 break;
@@ -117,7 +141,11 @@ public class TCPControl : MonoBehaviour
     private void SendTable(TcpClient client)
     {
         if (cc.SimulationStrategy != SimulationStrategyDropDown.RealUser)
+        {
             Debug.LogError($"The current simulation strategy is not real user!");
+            return;
+        }
+
         lock (_lock)
         {
             GameObject newUser = Instantiate(cc.realUserPrefab);
@@ -126,11 +154,45 @@ public class TCPControl : MonoBehaviour
                 Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f));
             newUser.transform.parent = cc.transform;
             cc.users.Add(newUser.GetComponent<RealUser>());
-            //Buffer.BlockCopy(BitConverter.GetBytes(newUser.transform.position.x), 0, visibilityCheck.objectTable, sizeof(int) * 3, sizeof(float));
-            //Buffer.BlockCopy(BitConverter.GetBytes(newUser.transform.position.y), 0, visibilityCheck.objectTable, sizeof(int) * 3 + sizeof(float), sizeof(float));
-            //Buffer.BlockCopy(BitConverter.GetBytes(newUser.transform.position.y), 0, visibilityCheck.objectTable, sizeof(int) * 3 + sizeof(float) * 2, sizeof(float));
             client.GetStream().Write(visibilityCheck.objectTable);
             Debug.Log($"table size: {visibilityCheck.objectTable.Length}");
         }
+    }
+
+    public async void OnQuit()
+    {
+        Debug.Log("Shutting down TCPControl...");
+
+        try
+        {
+            tcpListener?.Stop();
+        }
+        catch (Exception e)
+        {
+            Debug.Log($"Error stopping tcpListener: {e.Message}");
+        }
+
+        lock (_lock)
+        {
+            foreach (var kvp in clients)
+            {
+                try { kvp.Value?.Close(); }
+                catch (Exception e) { Debug.Log($"Error closing client {kvp.Key}: {e.Message}"); }
+            }
+            clients.Clear();
+        }
+
+        try
+        {
+            await Task.WhenAll(clientTasks.Values);
+        }
+        catch (Exception e)
+        {
+            Debug.Log($"Error waiting for client tasks: {e.Message}");
+        }
+
+        clientTasks.Clear();
+
+        Debug.Log("TCPControl shutdown complete.");
     }
 }

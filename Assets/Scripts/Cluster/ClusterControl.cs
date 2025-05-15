@@ -117,6 +117,7 @@ public class ClusterControl : Singleton<ClusterControl>
     void Update()
     {
         timeSinceLastUpdate += Time.deltaTime;
+        nc.timeSinceLastBroadcast += Time.deltaTime;
 
         if (SimulationStrategy == SimulationStrategyDropDown.RealUser && Keyboard.current.bKey.wasPressedThisFrame)
         {
@@ -128,17 +129,19 @@ public class ClusterControl : Singleton<ClusterControl>
             currentObjectToSend = 0;
         }
 
+        if (canSendObjects && nc.timeSinceLastBroadcast >= newChunkInterval && nc.readyForNextObject && currentObjectToSend < objectsWaitToBeSent.Count)
+        {
+            int sendingObjectIdx = objectsWaitToBeSent[currentObjectToSend];
+            nc.BroadcastObjectData(sendingObjectIdx, newChunkInterval);
+            currentObjectToSend++;
+            //objectsWaitToBeSent.RemoveAt(0);
+            Debug.Log($"broadcasting: {nc.isBroadcast}. finished {sendingObjectIdx}, {objectsWaitToBeSent.Count - currentObjectToSend} is left");
+        }
+
         if (timeSinceLastUpdate >= updateInterval)
         {
             timeSinceLastUpdate = 0f;
-            if (canSendObjects && nc.readyForNextObject && currentObjectToSend < objectsWaitToBeSent.Count)
-            {
-                int sendingObjectIdx = objectsWaitToBeSent[currentObjectToSend];
-                nc.BroadcastObjectData(sendingObjectIdx, newChunkInterval);
-                currentObjectToSend++;
-                //objectsWaitToBeSent.RemoveAt(0);
-                Debug.Log($"finished {sendingObjectIdx}, {objectsWaitToBeSent.Count - currentObjectToSend} is left");
-            }
+            
 
             //int missing = 0;
             //int notDisplayed = 0;

@@ -12,7 +12,7 @@ using UnityEngine;
 
 public class BroadcastControl : MonoBehaviour
 {
-    private const string BROADCAST_IP = "192.168.1.255";
+    private IPAddress BROADCAST_IP = IPAddress.Broadcast;// IPAddress.Parse("192.168.1.255");//  //IPAddress.Parse("192.168.0.211");
     private const int PORT = 5005;
     // We use a separate port for retransmission requests.
     private const int RETRANSMISSION_PORT = 5006;
@@ -46,7 +46,9 @@ public class BroadcastControl : MonoBehaviour
     {
         ct = _ct;
         udpClient = new UdpClient();
+        udpClient.Client.SendBufferSize = 1024 * 1024;
         udpClient.EnableBroadcast = true;
+        Debug.Log(udpClient.Client.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendBuffer));
         appRunning = true;
         nc = NetworkControl.Instance;
         lastTimeCheck = 0;
@@ -86,22 +88,35 @@ public class BroadcastControl : MonoBehaviour
         //DecodeMesh(chunks);
         //for (int i = 0; i < chunks.Count; i++)
         //{
-        //Broadcast(chunks[i]);
+        //    Broadcast(chunks[i]);
         //}
     }
 
     public void UpdateChunkSending()
     {
         timeSinceLastUpdate += Time.deltaTime;
+        //Debug.Log($"{Time.deltaTime * 1000}");
         if (nc.readyForNextObject || timeSinceLastUpdate < sleepTime || chunksOfObject == null || currentChunkToSend >= chunksOfObject.Count)
             return;
         timeSinceLastUpdate = 0;
-        Broadcast(chunksOfObject[currentChunkToSend]);
-        currentChunkToSend++;
-        if (currentChunkToSend == chunksOfObject.Count)
+        //int maxToSend = Mathf.Max(0, Mathf.Min(chunksOfObject.Count - currentChunkToSend, 5));
+        //for (int i = 0; i < maxToSend; i++)
+        //{
+            //Broadcast(chunksOfObject[currentChunkToSend]);
+            //currentChunkToSend++;
+        //}
+
+        //if (currentChunkToSend == chunksOfObject.Count)
+        //{
+        //    nc.readyForNextObject = true;
+        //    nc.timeSinceLastBroadcast = 0;
+        //}
+        for (int i = currentChunkToSend; i < chunksOfObject.Count; i++)
         {
-            nc.readyForNextObject = true;
+            Broadcast(chunksOfObject[i]);
         }
+        nc.readyForNextObject = true;
+        nc.timeSinceLastBroadcast = 0;
     }
 
     private void DecodeMesh(List<byte[]> chunks)
@@ -166,8 +181,17 @@ public class BroadcastControl : MonoBehaviour
         try
         {
             byte[] data = Encoding.UTF8.GetBytes(message);
-            IPEndPoint endPoint = new IPEndPoint(IPAddress.Broadcast, PORT);
-            udpClient.Send(data, data.Length, endPoint);
+            if (nc.isBroadcast)
+            {
+                udpClient.EnableBroadcast = true;
+                IPEndPoint endPoint = new IPEndPoint(BROADCAST_IP, PORT);
+                udpClient.Send(data, data.Length, endPoint);
+            } else
+            {
+                IPAddress multicastAddress = IPAddress.Parse("192.168.1.3"); // pick any in 224.x.x.x - 239.x.x.x
+                IPEndPoint multicastEndPoint = new IPEndPoint(multicastAddress, PORT);
+                udpClient.Send(data, data.Length, multicastEndPoint);
+            }
         }
         catch (Exception e)
         {
@@ -222,8 +246,37 @@ public class BroadcastControl : MonoBehaviour
     // Sends the provided message as a broadcast UDP packet.
     private void Broadcast(byte[] message)
     {
-        IPEndPoint endPoint = new IPEndPoint(IPAddress.Broadcast, PORT);
-        udpClient.Send(message, message.Length, endPoint);
+        nc.totalChunkSent++;
+        nc.totalBytesSent += message.Length;
+        //byte[] placeHolder = BitConverter.GetBytes('a');
+        //udpClient.Send(placeHolder, placeHolder.Length, new IPEndPoint(IPAddress.Parse("192.168.1.137"), PORT));
+        if (nc.isBroadcast)
+        {
+            udpClient.EnableBroadcast = true;
+            IPEndPoint endPoint = new IPEndPoint(BROADCAST_IP, PORT);
+            udpClient.Send(message, message.Length, endPoint);
+        }
+        else
+        {
+            udpClient.EnableBroadcast = false;
+            //IPAddress multicastAddress = IPAddress.Parse("192.168.1.173");
+            IPAddress multicastAddress = IPAddress.Parse("230.0.0.1"); // pick any in 224.x.x.x - 239.x.x.x
+            IPEndPoint multicastEndPoint = new IPEndPoint(multicastAddress, PORT);
+            udpClient.Send(message, message.Length, multicastEndPoint);
+
+            //multicastAddress = IPAddress.Parse("192.168.0.84");
+            //multicastEndPoint = new IPEndPoint(multicastAddress, PORT);
+            //udpClient.Send(message, message.Length, multicastEndPoint);
+
+            //for (int i = 0; i < 50; i++)
+            //{
+            //    multicastAddress = IPAddress.Parse($"192.168.1.{i}");
+            //    multicastEndPoint = new IPEndPoint(multicastAddress, PORT);
+            //    udpClient.Send(message, message.Length, multicastEndPoint);
+            //}
+        }
+        //IPEndPoint endPoint = new IPEndPoint(BROADCAST_IP, PORT);
+        //udpClient.Send(message, message.Length, endPoint);
     }
 
     // Listens for retransmission requests on RETRANSMISSION_PORT.
