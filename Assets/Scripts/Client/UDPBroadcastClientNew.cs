@@ -1,11 +1,14 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using TMPro;
 using UnityEngine;
+using UnityEngine.XR;
 
 [Serializable]
 public class RetransmissionRequest
@@ -54,6 +57,12 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private float[] reusableFloatBuffer = new float[57 * 6];
     private int[] reusableIntBuffer = new int[1024];
 
+    private readonly Queue<Chunk> chunkQueue = new Queue<Chunk>();
+    private readonly object chunkQueueLock = new object();
+    private int maxChunksPerFrame = 50; // You can tweak this
+    private float lastAdjustTime = 0f;
+    private float adjustCooldown = 0.3f; // seconds
+
     private class BundleTransmission
     {
         public int totalChunks;
@@ -81,6 +90,19 @@ public class UDPBroadcastClientNew : MonoBehaviour
     }
     private Dictionary<int, MeshTransmission> activeMeshTransmissions = new Dictionary<int, MeshTransmission>();
 
+    [SerializeField] private Transform headsetTransform;
+
+    private StreamWriter logWriter;
+    private List<string> chunksThisFrame = new List<string>();
+    private string logFilePath;
+
+    private void Start()
+    {
+        string filename = $"ClientRuntimeLog_{DateTime.UtcNow:yyyyMMdd_HHmmss}.jsonl";
+        logFilePath = Path.Combine(Application.persistentDataPath, filename);
+        logWriter = new StreamWriter(logFilePath, append: false);
+    }
+
     private void OnEnable()
     {
         m_TCPClient.OnReceivedServerTable += OnRecevTable;
@@ -101,7 +123,71 @@ public class UDPBroadcastClientNew : MonoBehaviour
     {
         if (isShowLog && m_TextLog != null)
         {
-            m_TextLog.text = $"Received Chunks Numbers - [{recevTotalChunkN}]";
+            m_TextLog.text = $"Received Chunks Numbers - [{recevTotalChunkN}]" +
+            $"max chunks per frame: \n{maxChunksPerFrame}";
+        }
+
+        InputDevice rightHand = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
+
+        bool aPressed = false, bPressed = false;
+        rightHand.TryGetFeatureValue(CommonUsages.primaryButton, out aPressed);
+        rightHand.TryGetFeatureValue(CommonUsages.secondaryButton, out bPressed);
+
+        if (Time.time - lastAdjustTime > adjustCooldown)
+        {
+            if (aPressed)
+            {
+                maxChunksPerFrame += 1;
+                lastAdjustTime = Time.time;
+            }
+            else if (bPressed)
+            {
+                maxChunksPerFrame = Mathf.Max(1, maxChunksPerFrame - 1);
+                lastAdjustTime = Time.time;
+            }
+        }
+
+        int processed = 0;
+        lock (chunkQueueLock)
+        {
+            while (chunkQueue.Count > 0 && processed < maxChunksPerFrame)
+            {
+                var chunk = chunkQueue.Dequeue();
+
+                if (!activeMeshTransmissions.TryGetValue(chunk.objectID, out var transmission))
+                {
+                    transmission = new MeshTransmission
+                    {
+                        totalMeshChunks = 10000,
+                        firstChunkTime = DateTime.UtcNow
+                    };
+                    activeMeshTransmissions[chunk.objectID] = transmission;
+                }
+
+                if (!transmission.chunks.ContainsKey(chunk.id))
+                {
+                    recevTotalChunkPerObject++;
+                    recevTotalChunkN++;
+
+                    transmission.chunks[chunk.id] = chunk;
+                    UpdateObjectSubMeshes(chunk);
+                }
+
+                processed++;
+            }
+        }
+
+        if (chunksThisFrame.Count > 0 && headsetTransform != null)
+        {
+            Vector3 pos = headsetTransform.position;
+            Vector3 rot = headsetTransform.eulerAngles;
+
+            string timeStamp = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+            string frameEntry = $"{{\"time\":\"{timeStamp}\",\"headset\":{{\"position\":[{pos.x:F4},{pos.y:F4},{pos.z:F4}],\"rotationEuler\":[{rot.x:F1},{rot.y:F1},{rot.z:F1}]}},\"chunks\":[{string.Join(",", chunksThisFrame)}]}}";
+
+            logWriter.WriteLine(frameEntry);
+            logWriter.Flush();
+            chunksThisFrame.Clear();
         }
     }
 
@@ -139,6 +225,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
     }
 
+    
+
     private void ReceiveMeshChunks(IAsyncResult ar)
     {
         try
@@ -155,7 +243,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
             char submeshType = BitConverter.ToChar(packet, 0);
             int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
-            int totalMeshTrunks = 10000;
 
             if (submeshType == 'V')
             {
@@ -181,37 +268,18 @@ public class UDPBroadcastClientNew : MonoBehaviour
             byte[] chunkData = new byte[dataSize];
             Buffer.BlockCopy(packet, headerSize, chunkData, 0, dataSize);
 
-            if (!activeMeshTransmissions.ContainsKey(objectId))
+            var newChunk = new Chunk
             {
-                recevTotalChunkPerObject = 0;
-                activeMeshTransmissions[objectId] = new MeshTransmission
-                {
-                    totalMeshChunks = totalMeshTrunks,
-                    firstChunkTime = DateTime.UtcNow,
-                    remoteEP = remoteEP
-                };
-            }
+                id = chunkId,
+                type = submeshType,
+                objectID = objectId,
+                subMeshIdx = submeshId,
+                data = chunkData
+            };
 
-            MeshTransmission transmission = activeMeshTransmissions[objectId];
-
-            if (!transmission.chunks.ContainsKey(chunkId))
+            lock (chunkQueueLock)
             {
-                recevTotalChunkPerObject++;
-                recevTotalChunkN++;
-
-                transmission.chunks[chunkId] = new Chunk
-                {
-                    id = chunkId,
-                    type = submeshType,
-                    objectID = objectId,
-                    subMeshIdx = submeshId,
-                    data = chunkData
-                };
-
-                UnityDispatcher.Instance.Enqueue(() =>
-                {
-                    UpdateObjectSubMeshes(transmission.chunks[chunkId]);
-                });
+                chunkQueue.Enqueue(newChunk);
             }
         }
         catch (Exception ex)
@@ -267,12 +335,16 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 verticesArr[baseIdx] = new Vector3(reusableFloatBuffer[j * 6], reusableFloatBuffer[j * 6 + 1], reusableFloatBuffer[j * 6 + 2]);
                 normalsArr[baseIdx] = new Vector3(reusableFloatBuffer[j * 6 + 3], reusableFloatBuffer[j * 6 + 4], reusableFloatBuffer[j * 6 + 5]);
             }
+            string vEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunkID},\"type\":\"V\"}}";
+            chunksThisFrame.Add(vEntry);
         }
         else if (vorT == 'T')
         {
             int count = chunk_data.Length / sizeof(int);
             Buffer.BlockCopy(chunk_data, 0, reusableIntBuffer, 0, chunk_data.Length);
             trianglesArr[chunk.subMeshIdx].AddRange(new ArraySegment<int>(reusableIntBuffer, 0, count));
+            string tEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunkID},\"type\":\"T\",\"subMeshIdx\":{chunk.subMeshIdx}}}";
+            chunksThisFrame.Add(tEntry);
         }
 
         if (!recGameObjects.ContainsKey(objectID))
@@ -326,5 +398,93 @@ public class UDPBroadcastClientNew : MonoBehaviour
             }
             udpClient.Close();
         }
+        if (logWriter != null)
+        {
+            logWriter.Flush();
+            logWriter.Close();
+        }
     }
 }
+
+//private void ReceiveMeshChunks(IAsyncResult ar)
+//{
+//    try
+//    {
+//        IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, portUDP);
+//        byte[] packet = udpClient.EndReceive(ar, ref remoteEP);
+
+//        if (packet.Length < HEADER_SIZE)
+//        {
+//            Debug.LogWarning("Received packet too small to contain header.");
+//            udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+//            return;
+//        }
+
+//        char submeshType = BitConverter.ToChar(packet, 0);
+//        int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
+//        int totalMeshTrunks = 10000;
+
+//        if (submeshType == 'V')
+//        {
+//            objectId = BitConverter.ToInt32(packet, 2);
+//            chunkId = BitConverter.ToInt32(packet, 6);
+//            headerSize = 10;
+//        }
+//        else if (submeshType == 'T')
+//        {
+//            objectId = BitConverter.ToInt32(packet, 2);
+//            chunkId = BitConverter.ToInt32(packet, 6);
+//            submeshId = BitConverter.ToInt32(packet, 10);
+//            headerSize = 14;
+//        }
+//        else
+//        {
+//            Debug.LogError("Unknown packet type.");
+//            udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+//            return;
+//        }
+
+//        int dataSize = packet.Length - headerSize;
+//        byte[] chunkData = new byte[dataSize];
+//        Buffer.BlockCopy(packet, headerSize, chunkData, 0, dataSize);
+
+//        if (!activeMeshTransmissions.ContainsKey(objectId))
+//        {
+//            recevTotalChunkPerObject = 0;
+//            activeMeshTransmissions[objectId] = new MeshTransmission
+//            {
+//                totalMeshChunks = totalMeshTrunks,
+//                firstChunkTime = DateTime.UtcNow,
+//                remoteEP = remoteEP
+//            };
+//        }
+
+//        MeshTransmission transmission = activeMeshTransmissions[objectId];
+
+//        if (!transmission.chunks.ContainsKey(chunkId))
+//        {
+//            recevTotalChunkPerObject++;
+//            recevTotalChunkN++;
+
+//            transmission.chunks[chunkId] = new Chunk
+//            {
+//                id = chunkId,
+//                type = submeshType,
+//                objectID = objectId,
+//                subMeshIdx = submeshId,
+//                data = chunkData
+//            };
+
+//            UnityDispatcher.Instance.Enqueue(() =>
+//            {
+//                UpdateObjectSubMeshes(transmission.chunks[chunkId]);
+//            });
+//        }
+//    }
+//    catch (Exception ex)
+//    {
+//        Debug.LogError("ReceiveMeshChunks error: " + ex.Message);
+//    }
+
+//    udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+//}
