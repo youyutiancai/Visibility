@@ -433,6 +433,9 @@ public class UDPBroadcastClientNew : MonoBehaviour
         int objectID = chunk.objectID;
         byte[] chunk_data = chunk.data;
 
+        Debug.Log($"[+++++++]: chunkid:{chunkID} - type:{vorT} - objectid:{objectID} - chunk_data_size:{chunk.data.Length}");
+
+
         // get the object info from the table
         int totalVertexNum = m_TCPClient.objectHolders[objectID].totalVertNum;
         int subMeshCount = m_TCPClient.objectHolders[objectID].submeshCount;
