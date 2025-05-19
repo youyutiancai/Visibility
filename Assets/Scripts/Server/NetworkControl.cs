@@ -16,6 +16,10 @@ public class NetworkControl : Singleton<NetworkControl>
     ClusterControl cc;
     [HideInInspector]
     public bool readyForNextObject;
+    public int totalChunkSent, totalBytesSent;
+    public bool isBroadcast;
+    [HideInInspector]
+    public float timeSinceLastBroadcast;
 
     void Start()
     {
@@ -29,6 +33,7 @@ public class NetworkControl : Singleton<NetworkControl>
             tc = new TCPControl(cts.Token, dispatcher, visibilityCheck, cc);
         }
         readyForNextObject = true;
+        totalChunkSent = 0;
     }
 
     private void Update()
@@ -36,10 +41,6 @@ public class NetworkControl : Singleton<NetworkControl>
         if (cc.SimulationStrategy == SimulationStrategyDropDown.RealUser)
         {
             bcc.UpdateTime();
-            //if (Input.GetKeyDown(KeyCode.B))
-            //{
-            //    bcc.BroadcastObjectData(1);
-            //}
             bcc.UpdateChunkSending();
         }
     }
@@ -52,11 +53,18 @@ public class NetworkControl : Singleton<NetworkControl>
     private void OnApplicationQuit()
     {
         Debug.Log($"Cancelling the ct OnApplicationQuit");
+
         if (cts != null)
         {
             cts.Cancel();
         }
+
+        if (tc != null)
+        {
+            tc.OnQuit(); // Create a public cleanup method instead of relying on OnApplicationQuit
+        }
     }
+
 }
 
 public enum TCPMessageType

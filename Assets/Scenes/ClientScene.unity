@@ -7895,6 +7895,7 @@ MonoBehaviour:
   portUDP: 5005
   portTCP: 5006
   numVerticesPerChunk: 57
+  headsetTransform: {fileID: 411600411}
 --- !u!114 &742252864
 MonoBehaviour:
   m_ObjectHideFlags: 0
