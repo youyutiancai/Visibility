@@ -105,7 +105,7 @@ public class ClusterControl : Singleton<ClusterControl>
 
             case SimulationStrategyDropDown.IndiUserRandomSpawn:
                 ss = new IndiUserRandomSpawn();
-                ss.CreateUsers(1, randomMovingUserPrefab);
+                ss.CreateUsers(100, randomMovingUserPrefab);
                 break;
 
             case SimulationStrategyDropDown.RealUser:

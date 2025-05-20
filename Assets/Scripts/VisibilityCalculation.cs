@@ -11,7 +11,7 @@ using System.Collections;
 using System.Text;
 using UnityEngine.InputSystem;
 
-public class VisibilityCheck : Singleton<VisibilityCheck>
+public class VisibilityCalculation : Singleton<VisibilityCalculation>
 {
     public Camera mainCamera;
     public GameObject sceneRoot, footprintCameras, grids, pathStart, pathEnd, testObject;
@@ -76,7 +76,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             {
                 writer.WriteLine($"{name},{mf.sharedMesh.vertices.Length},{mf.sharedMesh.triangles.Length}," +
                     $"{48 * mf.sharedMesh.vertices.Length + 2 * mf.sharedMesh.triangles.Length}");
-            } else
+            }
+            else
             {
                 writer.WriteLine($"{name},0,0,0");
             }
@@ -194,6 +195,44 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         return totalTriangleChunks;
     }
 
+    private void TestObjectTable()
+    {
+        int totalObjectNum = BitConverter.ToInt32(objectTable, sizeof(int) * 2);
+        ObjectHolder[] objectHolders = new ObjectHolder[totalObjectNum];
+        Debug.Log($"total bytes num: {BitConverter.ToInt32(objectTable, sizeof(int))}, {totalObjectNum}");
+        int cursor = sizeof(int) * 3 + sizeof(float) * 3;
+        Debug.Log(objectHolders[0]);
+        for (int i = 0; i < totalObjectNum; i++)
+        {
+            objectHolders[i] = new ObjectHolder();
+            objectHolders[i].position = new Vector3(BitConverter.ToSingle(objectTable, cursor), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
+                BitConverter.ToSingle(objectTable, cursor += sizeof(float)));
+            objectHolders[i].eulerAngles = new Vector3(BitConverter.ToSingle(objectTable, cursor += sizeof(float)), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
+                BitConverter.ToSingle(objectTable, cursor += sizeof(float)));
+            objectHolders[i].scale = new Vector3(BitConverter.ToSingle(objectTable, cursor += sizeof(float)), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
+                BitConverter.ToSingle(objectTable, cursor += sizeof(float)));
+            objectHolders[i].totalVertChunkNum = BitConverter.ToInt32(objectTable, cursor += sizeof(float));
+            objectHolders[i].totalTriChunkNum = BitConverter.ToInt32(objectTable, cursor += sizeof(int));
+            objectHolders[i].totalVertNum = BitConverter.ToInt32(objectTable, cursor += sizeof(int));
+            objectHolders[i].submeshCount = BitConverter.ToInt32(objectTable, cursor += sizeof(int));
+            cursor += sizeof(int);
+
+            objectHolders[i].materialNames = new string[objectHolders[i].submeshCount];
+            Transform transform = objectsInScene[i].transform;
+            for (int j = 0; j < objectHolders[i].submeshCount; j++)
+            {
+                int materialNameLength = BitConverter.ToInt32(objectTable, cursor);
+                objectHolders[i].materialNames[j] = Encoding.ASCII.GetString(objectTable, cursor += sizeof(int), materialNameLength);
+                cursor += materialNameLength;
+                Debug.Log($"{j}, {materialNameLength}, {objectHolders[i].materialNames[j]}");
+            }
+
+
+            Debug.Log($"{cursor}, {transform.position}, {objectHolders[i].position}, " +
+                $"{transform.eulerAngles}, {objectHolders[i].eulerAngles}, " +
+                $"{transform.lossyScale}, {objectHolders[i].scale}");
+        }
+    }
 
     public static float EstimateGameObjectSizeMB(GameObject obj)
     {
@@ -324,7 +363,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             {
                 objectsInScene[i].SetActive(visibleObjects[i] > 0 || objectsInScene[i].tag == "Terrain" || showAll);
             }
-        } else if (visTarget.GetComponent<Camera>() != null)
+        }
+        else if (visTarget.GetComponent<Camera>() != null)
         {
             //Debug.Log(visTarget.name);
             User user = visTarget.GetComponent<User>();
@@ -335,7 +375,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 {
                     objectsInScene[i].SetActive(visibileObjects[i] == 1 || objectsInScene[i].tag == "Terrain" || showAll);
                 }
-            } else
+            }
+            else
             {
                 int[] visibleObjects = new int[objectsInScene.Count];
                 GetVisibleObjectsInRegion(visTarget.transform.position, ClusterControl.Instance.epsilon / 2, ref visibleObjects);
@@ -348,6 +389,189 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         preVisTarget = visTarget;
         preShowAll = showAll;
         preProgBased = progBased;
+    }
+
+    private void VisUpdateCluster()
+    {
+        int xStartIndex = Mathf.FloorToInt((visTarget.transform.position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        int zStartIndex = Mathf.FloorToInt((visTarget.transform.position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+        List<int[]> finalSum = new List<int[]>();
+
+        for (int i = -1; i < 2; i++)
+        {
+            for (int j = -1; j < 2; j++)
+            {
+                //finalSum.Add(ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + i) * gd.numGridZ + zStartIndex + j).position));
+                //finalSum.Add(ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + i) * gd.numGridZ + zStartIndex + j + 1).position));
+                //finalSum.Add(ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + i + 1) * gd.numGridZ + zStartIndex + j).position));
+                //finalSum.Add(ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + i + 1) * gd.numGridZ + zStartIndex + j + 1).position));
+                finalSum.Add(ReadFootprints((xStartIndex + i) * gd.numGridZ + zStartIndex + j));
+                finalSum.Add(ReadFootprints((xStartIndex + i) * gd.numGridZ + zStartIndex + j + 1));
+                finalSum.Add(ReadFootprints((xStartIndex + i + 1) * gd.numGridZ + zStartIndex + j));
+                finalSum.Add(ReadFootprints((xStartIndex + i + 1) * gd.numGridZ + zStartIndex + j + 1));
+
+                for (int k = 0; k < objectsInScene.Count; k++)
+                {
+                    int active = 0;
+                    for (int d = 0; d < finalSum.Count; d++)
+                    {
+                        active += finalSum[d][k];
+                    }
+                    objectsInScene[k].SetActive(active > 0 || objectsInScene[k].tag == "Terrain" || showAll);
+                }
+            }
+        }
+    }
+
+    private void VisUpdateIndiCell()
+    {
+        int xStartIndex = Mathf.FloorToInt((visTarget.transform.position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        int zStartIndex = Mathf.FloorToInt((visTarget.transform.position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+        //int[] cornerVis1 = ReadFootprints(gd.gridCornerParent.transform.GetChild(xStartIndex * gd.numGridZ + zStartIndex).position);
+        //int[] cornerVis2 = ReadFootprints(gd.gridCornerParent.transform.GetChild(xStartIndex * gd.numGridZ + zStartIndex + 1).position);
+        //int[] cornerVis3 = ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + 1) * gd.numGridZ + zStartIndex).position);
+        //int[] cornerVis4 = ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + 1) * gd.numGridZ + zStartIndex + 1).position);
+
+        int[] cornerVis1 = ReadFootprints(xStartIndex * gd.numGridZ + zStartIndex);
+        int[] cornerVis2 = ReadFootprints(xStartIndex * gd.numGridZ + zStartIndex + 1);
+        int[] cornerVis3 = ReadFootprints((xStartIndex + 1) * gd.numGridZ + zStartIndex);
+        int[] cornerVis4 = ReadFootprints((xStartIndex + 1) * gd.numGridZ + zStartIndex + 1);
+
+        for (int i = 0; i < cornerVis1.Length; i++)
+        {
+            objectsInScene[i].SetActive(cornerVis1[i] + cornerVis2[i] + cornerVis3[i] + cornerVis4[i] > 0 ||
+            objectsInScene[i].tag == "Terrain" || showAll);
+        }
+
+        preShowAll = showAll;
+        preProgBased = progBased;
+    }
+
+    public void GetVisibleObjectsInRegion(Vector3 position, float radius, ref int[] objectVisibility)
+    {
+        //if (progBased)
+        //{
+        GetVisibleObjectsInRegionProg(position, radius, ref objectVisibility);
+        //} else
+        //{
+        //    GetVisibleObjectsInRegionCorner(position, radius, ref objectVisibility);
+        //}
+    }
+    public void GetVisibleObjectsInRegionCorner(Vector3 position, float radius, ref int[] objectVisibility)
+    {
+        int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+
+        for (int i = -Mathf.FloorToInt(radius / gd.gridSize); i < Mathf.FloorToInt(radius / gd.gridSize) + 1; i++)
+        {
+            for (int j = -Mathf.FloorToInt(radius / gd.gridSize); j < Mathf.FloorToInt(radius / gd.gridSize) + 1; j++)
+            {
+                //        for (int i = 0; i < 1; i++)
+                //{
+                //    for (int j = 0; j < 1; j++)
+                //    {
+                if (xStartIndex + i < 0 || zStartIndex + j < 0 || xStartIndex + i > gd.numGridX - 1 || zStartIndex + j > gd.numGridZ - 1)
+                { continue; }
+
+                //int[] footprints = ReadFootprints((xStartIndex + i) * gd.numGridZ + zStartIndex + j);
+                int[] footprints = ReadFootprintsGrid(xStartIndex + i, zStartIndex + j);
+
+                for (int k = 0; k < objectsInScene.Count; k++)
+                {
+                    if (footprints[k] > 0)
+                    {
+                        objectVisibility[k] = 1;
+                    }
+                }
+            }
+        }
+    }
+
+    public void GetVisibleObjectsInRegionProg(Vector3 position, float radius, ref int[] objectVisibility)
+    {
+        int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+
+        //int[] footprints = ReadFootprintsGrid(xStartIndex, zStartIndex);
+        //List<int> visibleObjects = new List<int>();
+        //for (int i = 0; i < objectsInScene.Count; i++)
+        //{
+        //    if (footprints[i] > 0)
+        //    {
+        //        objectVisibility[i] = 1;
+        //        visibleObjects.Add(i);
+        //    }
+        //}
+        //Debug.Log($"old: {string.Join(',', visibleObjects)}");
+        int[] footprints = ReadFootprintGridUnit(xStartIndex, zStartIndex);
+        //Debug.Log($"unit: {string.Join(", ", footprints)}");
+        for (int i = 0; i < footprints.Length; i++)
+        {
+            objectVisibility[footprints[i]] = 1;
+        }
+
+        int gridNumToInclude = Mathf.FloorToInt(radius / gd.gridSize);
+        UpdateVisOnLine(xStartIndex, zStartIndex, xStartIndex - gridNumToInclude, zStartIndex, -1, 0, ref objectVisibility);
+        UpdateVisOnLine(xStartIndex, zStartIndex, xStartIndex + gridNumToInclude, zStartIndex, 1, 0, ref objectVisibility);
+
+        for (int i = xStartIndex - gridNumToInclude; i < xStartIndex + gridNumToInclude + 1; i++)
+        {
+            UpdateVisOnLine(i, zStartIndex, i, zStartIndex - gridNumToInclude, 0, -1, ref objectVisibility);
+            UpdateVisOnLine(i, zStartIndex, i, zStartIndex + gridNumToInclude, 0, 1, ref objectVisibility);
+        }
+    }
+
+    private void UpdateVisOnLine(int fromX, int fromZ, int toX, int toZ, int xStep, int zStep, ref int[] visibility)
+    {
+        if (fromX == toX && fromZ == toZ) { return; }
+
+        UpdateVis(fromX, fromZ, fromX + xStep, fromZ + zStep, ref visibility);
+
+        UpdateVisOnLine(fromX + xStep, fromZ + zStep, toX, toZ, xStep, zStep, ref visibility);
+    }
+
+    private void UpdateVis(int fromX, int fromZ, int toX, int toZ, ref int[] visibility)
+    {
+        int[] updatedVis = ReadFootprintsDiffUnit(fromX, fromZ, toX, toZ);
+
+        int count = updatedVis[0];
+        if (count != 0)
+        {
+            for (int i = 1; i < count + 1; i++)
+            {
+                visibility[updatedVis[i]] = 1;
+            }
+        }
+    }
+    void Update()
+    {
+        if (captureAndCount)
+        {
+            captureAndCount = false;
+            foreach (bool fpCameraReady in fpcameraFinished)
+            {
+                if (!fpCameraReady)
+                    captureAndCount = true;
+            }
+            if (!captureAndCount)
+                Serialize();
+        }
+        if (Keyboard.current.spaceKey.wasPressedThisFrame)
+        {
+            //Debug.Log($"{gd.numGridX}, {gd.numGridZ}");
+            //cameraPosID = 0;
+            //ResetFootprintCount();
+            //WriteFromCornerToGrid();
+            //WriteGridDifferences();
+            //StartCoroutine(CombineGridDifferences());
+            //StartCoroutine(ShrinkGridLevelVis());
+            //StartCoroutine(CombineGrids());
+        }
+        else if (Keyboard.current.qKey.wasPressedThisFrame)
+        {
+            UpdateVisibleObjects();
+            //CreateUI();
+        }
     }
 
     private void FixedUpdate()
@@ -441,7 +665,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         if (selectedObject != null &&
             (selectedObject.tag == "Cluster" || selectedObject.tag == "User") && selectedObject != preVisTarget)
         {
-            if (visTarget != null && visTarget.GetComponent<Camera>() != null)
+            if (visTarget.GetComponent<Camera>() != null)
             {
                 visTarget.GetComponent<Camera>().enabled = false;
             }
@@ -453,7 +677,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         }
     }
 
-        private void CheckGridsVis()
+    private void CheckGridsVis()
     {
         if (visTarget == null)
             return;
@@ -470,6 +694,52 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         }
     }
 
+    private void CreateUI()
+    {
+        for (int i = -10; i < 10; i++)
+        {
+            for (int j = -10; j < 10; j++)
+            {
+                Vector3 pos = visTarget.transform.position + new Vector3(i, -1, j);
+                if (Vector3.Distance(pos, visTarget.transform.position) < 10)
+                {
+                    GameObject newGridCorner = Instantiate(gd.gridCornerPrefab);
+                    newGridCorner.layer = 5;
+                    newGridCorner.transform.localScale *= 0.1f;
+                    newGridCorner.transform.SetParent(transform);
+                    newGridCorner.transform.position = pos;
+                }
+            }
+        }
+        int childCount = transform.childCount;
+        for (int i = 0; i < childCount - 1; i++)
+        {
+            for (int j = i + 1; j < childCount; j++)
+            {
+                Vector3 childiPos = transform.GetChild(i).position;
+                Vector3 childjPos = transform.GetChild(j).position;
+                if (Vector3.Distance(childiPos, childjPos) <= 1.1f)
+                {
+                    CreateConnectingCuboid(transform.GetChild(i), transform.GetChild(j));
+                }
+            }
+        }
+    }
+
+    void CreateConnectingCuboid(Transform cube1, Transform cube2)
+    {
+        Vector3 midPoint = (cube1.position + cube2.position) / 2.0f;
+        float distance = Vector3.Distance(cube1.position, cube2.position);
+        float sideLength = cube1.transform.localScale.x;
+        GameObject cuboid = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cuboid.transform.position = midPoint;
+        cuboid.transform.localScale = new Vector3(sideLength, sideLength, 0.8f * (distance - sideLength));
+        cuboid.transform.rotation = Quaternion.FromToRotation(Vector3.forward, cube2.transform.position - cube1.transform.position);
+        cuboid.GetComponent<Renderer>().material.color = Color.white;
+        cuboid.transform.parent = transform;
+        cuboid.layer = 5;
+    }
+
     private void UpdateGrids()
     {
         if (visTarget == null) return;
@@ -477,106 +747,6 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         grids.transform.position = new Vector3(Mathf.FloorToInt(posDiff.x), posDiff.y, Mathf.FloorToInt(posDiff.z)) +
             gd.gridCornerParent.transform.position;
     }
-
-
-    public void GetVisibleObjectsInRegion(Vector3 position, float radius, ref int[] objectVisibility)
-    {
-        //if (progBased)
-        //{
-        GetVisibleObjectsInRegionProg(position, radius, ref objectVisibility);
-        //} else
-        //{
-        //    GetVisibleObjectsInRegionCorner(position, radius, ref objectVisibility);
-        //}
-    }
-
-    public void GetVisibleObjectsInRegionProg(Vector3 position, float radius, ref int[] objectVisibility)
-    {
-        int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
-        int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-
-        //int[] footprints = ReadFootprintsGrid(xStartIndex, zStartIndex);
-        //List<int> visibleObjects = new List<int>();
-        //for (int i = 0; i < objectsInScene.Count; i++)
-        //{
-        //    if (footprints[i] > 0)
-        //    {
-        //        objectVisibility[i] = 1;
-        //        visibleObjects.Add(i);
-        //    }
-        //}
-        //Debug.Log($"old: {string.Join(',', visibleObjects)}");
-        int[] footprints = ReadFootprintGridUnit(xStartIndex, zStartIndex);
-        //Debug.Log($"unit: {string.Join(", ", footprints)}");
-        for (int i = 0; i < footprints.Length; i++)
-        {
-            objectVisibility[footprints[i]] = 1;
-        }
-
-        int gridNumToInclude = Mathf.FloorToInt(radius / gd.gridSize);
-        UpdateVisOnLine(xStartIndex, zStartIndex, xStartIndex - gridNumToInclude, zStartIndex, -1, 0, ref objectVisibility);
-        UpdateVisOnLine(xStartIndex, zStartIndex, xStartIndex + gridNumToInclude, zStartIndex, 1, 0, ref objectVisibility);
-
-        for (int i = xStartIndex - gridNumToInclude; i < xStartIndex + gridNumToInclude + 1; i++)
-        {
-            UpdateVisOnLine(i, zStartIndex, i, zStartIndex - gridNumToInclude, 0, -1, ref objectVisibility);
-            UpdateVisOnLine(i, zStartIndex, i, zStartIndex + gridNumToInclude, 0, 1, ref objectVisibility);
-        }
-    }
-
-    private void UpdateVisOnLine(int fromX, int fromZ, int toX, int toZ, int xStep, int zStep, ref int[] visibility)
-    {
-        if (fromX == toX && fromZ == toZ) { return; }
-
-        UpdateVis(fromX, fromZ, fromX + xStep, fromZ + zStep, ref visibility);
-
-        UpdateVisOnLine(fromX + xStep, fromZ + zStep, toX, toZ, xStep, zStep, ref visibility);
-    }
-
-    private void UpdateVis(int fromX, int fromZ, int toX, int toZ, ref int[] visibility)
-    {
-        int[] updatedVis = ReadFootprintsDiffUnit(fromX, fromZ, toX, toZ);
-
-        int count = updatedVis[0];
-        if (count != 0)
-        {
-            for (int i = 1; i < count + 1; i++)
-            {
-                visibility[updatedVis[i]] = 1;
-            }
-        }
-    }
-    void Update()
-    {
-        if (captureAndCount)
-        {
-            captureAndCount = false;
-            foreach (bool fpCameraReady in fpcameraFinished)
-            {
-                if (!fpCameraReady)
-                    captureAndCount = true;
-            }
-            if (!captureAndCount)
-                Serialize();
-        }
-        if (Keyboard.current.spaceKey.wasPressedThisFrame)
-        {
-            //Debug.Log($"{gd.numGridX}, {gd.numGridZ}");
-            //cameraPosID = 0;
-            //ResetFootprintCount();
-            //WriteFromCornerToGrid();
-            //WriteGridDifferences();
-            //StartCoroutine(CombineGridDifferences());
-            //StartCoroutine(ShrinkGridLevelVis());
-            //StartCoroutine(CombineGrids());
-        } else if (Keyboard.current.qKey.wasPressedThisFrame)
-        {
-            UpdateVisibleObjects();
-            //CreateUI();
-        }
-    }
-
-
 
     private void ResetFootprintCount()
     {
@@ -667,6 +837,214 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         File.WriteAllBytes(fileName, bytes);
     }
 
+    private void WriteFromCornerToGrid()
+    {
+        for (int i = 0; i < gd.numGridX - 1; i++)
+        {
+            for (int j = 0; j < gd.numGridZ - 1; j++)
+            {
+                int[] visibilityAtGrid = new int[objectsInScene.Count];
+                UpdateVisibilityForGrid(i, j, ref visibilityAtGrid);
+                UpdateVisibilityForGrid(i + 1, j, ref visibilityAtGrid);
+                UpdateVisibilityForGrid(i, j + 1, ref visibilityAtGrid);
+                UpdateVisibilityForGrid(i + 1, j + 1, ref visibilityAtGrid);
+                string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis\\";
+                string fileName = $"{filePath}{i}_{j}.bin";
+                byte[] bytes = ConvertIntArrayToByteArray(visibilityAtGrid);
+                File.WriteAllBytes(fileName, bytes);
+                Debug.Log($"Finished {i}, {j}");
+            }
+        }
+    }
+
+    private void UpdateVisibilityForGrid(int cornerX, int cornerZ, ref int[] visibility)
+    {
+        int[] visAtCorner = ReadFootprints(cornerX * gd.numGridZ + cornerZ);
+        for (int i = 0; i < visibility.Length; i++)
+        {
+            if (visAtCorner[i] > 0)
+            {
+                visibility[i] = 1;
+            }
+        }
+    }
+
+    private void WriteGridDifferences()
+    {
+        for (int i = 0; i < gd.numGridX - 1; i++)
+        {
+            for (int j = 0; j < gd.numGridZ - 1; j++)
+            {
+                if (i > 0)
+                {
+                    WriteGridDiffPair(i, j, i - 1, j);
+                }
+                if (j > 0)
+                {
+                    WriteGridDiffPair(i, j, i, j - 1);
+                }
+                if (i < gd.numGridX - 2)
+                {
+                    WriteGridDiffPair(i, j, i + 1, j);
+                }
+                if (j < gd.numGridZ - 2)
+                {
+                    WriteGridDiffPair(i, j, i, j + 1);
+                }
+            }
+        }
+    }
+
+    private void WriteGridDiffPair(int fromX, int fromZ, int toX, int toZ)
+    {
+        int[] visFrom = ReadFootprintsGrid(fromX, fromZ);
+        int[] visTo = ReadFootprintsGrid(toX, toZ);
+
+        List<int> addVis = new List<int>();
+        List<int> removeVis = new List<int>();
+
+        for (int i = 0; i < visFrom.Length; i++)
+        {
+            if (visFrom[i] > 0 && visTo[i] == 0)
+            {
+                removeVis.Add(i);
+            }
+            else if (visFrom[i] == 0 && visTo[i] > 0)
+            {
+                addVis.Add(i);
+            }
+        }
+
+        byte[] toWrite = new byte[sizeof(int) * (1 + addVis.Count + removeVis.Count)];
+        Buffer.BlockCopy(BitConverter.GetBytes(addVis.Count), 0, toWrite, 0, sizeof(int));
+        Buffer.BlockCopy(addVis.ToArray(), 0, toWrite, sizeof(int), sizeof(int) * addVis.Count);
+        Buffer.BlockCopy(removeVis.ToArray(), 0, toWrite, sizeof(int) * (1 + addVis.Count), sizeof(int) * removeVis.Count);
+
+        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff\\";
+        string fileName = $"{filePath}{fromX}_{fromZ}_{toX}_{toZ}.bin";
+        File.WriteAllBytes(fileName, toWrite);
+    }
+
+    private IEnumerator ShrinkGridLevelVis()
+    {
+        int numUnitX = Mathf.CeilToInt(gd.numGridX / numInUnitX);
+        int numUnitZ = Mathf.CeilToInt(gd.numGridZ / numInUnitZ);
+        string UnitFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis_Unit\\";
+        for (int i = 8; i < numUnitX; i++)
+        {
+            for (int j = 23; j < numUnitZ; j++)
+            {
+                List<int> infoToWrite = new List<int>();
+                int cursor = 0;
+                for (int k = 0; k < numInUnitX; k++)
+                {
+                    for (int l = 0; l < numInUnitZ; l++)
+                    {
+                        infoToWrite.Add(0);
+                        int gridX = i * (int)numInUnitX + k, gridZ = j * (int)numInUnitZ + l;
+                        int[] visibilityInfo = ReadFootprintsGrid(gridX, gridZ);
+                        for (int t = 0; t < visibilityInfo.Length; t++)
+                        {
+                            if (visibilityInfo[t] > 0)
+                            {
+                                infoToWrite.Add(t);
+                                infoToWrite[cursor]++;
+                            }
+                        }
+                        cursor += infoToWrite[cursor] + 1;
+                    }
+                }
+                cursor = 0;
+                for (int k = 0; k < numInUnitX; k++)
+                {
+                    for (int l = 0; l < numInUnitZ; l++)
+                    {
+                        int gridX = i * (int)numInUnitX + k, gridZ = j * (int)numInUnitZ + l;
+                        int[] visibilityInfo = ReadFootprintsGrid(gridX, gridZ);
+                        List<int> ints = new List<int>();
+                        for (int t = 0; t < visibilityInfo.Length; t++)
+                        {
+                            if (visibilityInfo[t] > 0)
+                            {
+                                ints.Add(t);
+                            }
+                        }
+                        Debug.Log($"old: {string.Join(',', ints)}");
+                        int[] visibleObjects = new int[infoToWrite[cursor]];
+                        Array.Copy(infoToWrite.ToArray(), cursor + 1, visibleObjects, 0, infoToWrite[cursor]);
+                        Debug.Log($"unit: {string.Join(", ", visibleObjects)}");
+                        cursor += infoToWrite[cursor] + 1;
+                    }
+                }
+                string fileName = $"{UnitFilePath}{i}_{j}.bin";
+                byte[] toWrite = ConvertIntArrayToByteArray(infoToWrite.ToArray());
+                File.WriteAllBytes(fileName, toWrite);
+                Debug.Log($"finished {i}_{j}");
+                yield return null;
+            }
+        }
+    }
+
+    //private IEnumerator CombineGrids()
+    //{
+    //    int numUnitX = Mathf.CeilToInt(gd.numGridX / numInUnitX);
+    //    int numUnitZ = Mathf.CeilToInt(gd.numGridZ / numInUnitZ);
+    //    string UnitFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis\\";
+    //    for (int i = 0; i < numUnitX; i++)
+    //    {
+    //        for (int j = 0; j < numUnitZ; j++)
+    //        {
+    //            List<int> infoToWrite = new List<int>();
+    //            for (int k = 0; k < numInUnitX; k++)
+    //            {
+    //                for (int l = 0; l < numInUnitZ; l++)
+    //                {
+    //                    int gridX = i * (int)numInUnitX + k, gridZ = j * (int)numInUnitZ + l;
+    //                    CombineGridDiffSingle(gridX, gridZ, gridX + 1, gridZ, ref infoToWrite);
+    //                    CombineGridDiffSingle(gridX, gridZ, gridX - 1, gridZ, ref infoToWrite);
+    //                    CombineGridDiffSingle(gridX, gridZ, gridX, gridZ + 1, ref infoToWrite);
+    //                    CombineGridDiffSingle(gridX, gridZ, gridX, gridZ - 1, ref infoToWrite);
+    //                }
+    //            }
+    //            string fileName = $"{UnitFilePath}{i}_{j}.bin";
+    //            byte[] toWrite = ConvertIntArrayToByteArray(infoToWrite.ToArray());
+    //            File.WriteAllBytes(fileName, toWrite);
+    //            Debug.Log($"finished {i}_{j}");
+    //            yield return null;
+    //        }
+    //    }
+    //}
+
+    private IEnumerator CombineGridDifferences()
+    {
+        int numUnitX = Mathf.CeilToInt(gd.numGridX / numInUnitX);
+        int numUnitZ = Mathf.CeilToInt(gd.numGridZ / numInUnitZ);
+        string UnitFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff_Unit\\";
+        for (int i = 0; i < numUnitX; i++)
+        {
+            for (int j = 0; j < numUnitZ; j++)
+            {
+                List<int> infoToWrite = new List<int>();
+                for (int k = 0; k < numInUnitX; k++)
+                {
+                    for (int l = 0; l < numInUnitZ; l++)
+                    {
+                        int gridX = i * (int)numInUnitX + k, gridZ = j * (int)numInUnitZ + l;
+                        CombineGridDiffSingle(gridX, gridZ, gridX + 1, gridZ, ref infoToWrite);
+                        CombineGridDiffSingle(gridX, gridZ, gridX - 1, gridZ, ref infoToWrite);
+                        CombineGridDiffSingle(gridX, gridZ, gridX, gridZ + 1, ref infoToWrite);
+                        CombineGridDiffSingle(gridX, gridZ, gridX, gridZ - 1, ref infoToWrite);
+                    }
+                }
+                string fileName = $"{UnitFilePath}{i}_{j}.bin";
+                byte[] toWrite = ConvertIntArrayToByteArray(infoToWrite.ToArray());
+                File.WriteAllBytes(fileName, toWrite);
+                Debug.Log($"finished {i}_{j}");
+                yield return null;
+            }
+        }
+    }
+
     private void CombineGridDiffSingle(int fromX, int fromZ, int toX, int toZ, ref List<int> infoToWrite)
     {
         string diffFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff\\";
@@ -697,6 +1075,39 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         Buffer.BlockCopy(BitConverter.GetBytes(length), 0, result, 0, 4);
         Buffer.BlockCopy(array, 0, result, 4, length * 4);
         return result;
+    }
+    //private int[] ReadFootprints(Vector3 pos)
+    //{
+    //    string filePath = "C:\\Users\\zhou1168\\VRAR\\Visibility\\Assets\\GridData\\ObjectVisibility/";
+    //    string fileName = $"{filePath}{pos.x}_{pos.y}_{pos.z}.bin";
+    //    byte[] bytes_read = File.ReadAllBytes(fileName);
+    //    return ConvertByteArrayToIntArray(bytes_read);
+    //}
+
+    private int[] ReadFootprints(float index)
+    {
+        string filePath = "C:\\Users\\zhou1168\\VRAR\\Visibility\\Assets\\GridData\\ObjectVisibility/";
+        string fileName = $"{filePath}{index}.bin";
+        if (!File.Exists(fileName))
+        {
+            Debug.Log($"{fileName} does not exist");
+            return new int[objectsInScene.Count];
+        }
+        byte[] bytes_read = File.ReadAllBytes(fileName);
+        return ConvertByteArrayToIntArray(bytes_read);
+    }
+
+    private int[] ReadFootprintsGrid(int x, int z)
+    {
+        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis\\";
+        string fileName = $"{filePath}{x}_{z}.bin";
+        if (!File.Exists(fileName))
+        {
+            Debug.Log($"{fileName} does not exist");
+            return new int[objectsInScene.Count];
+        }
+        byte[] bytes_read = File.ReadAllBytes(fileName);
+        return ConvertByteArrayToIntArray(bytes_read);
     }
 
     private int[] ReadFootprintGridUnit(int x, int z)
@@ -740,6 +1151,26 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         return visibleObjectsInGrid[indiGrid];
     }
 
+    private int[] ReadFootprintsDiff(int fromX, int fromZ, int toX, int toZ)
+    {
+        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff\\";
+        string fileName = $"{filePath}{fromX}_{fromZ}_{toX}_{toZ}.bin";
+        if (diffInfoAdd.ContainsKey(fileName))
+        {
+            return diffInfoAdd[fileName];
+        }
+        if (!File.Exists(fileName))
+        {
+            Debug.Log($"{fileName} does not exist");
+            return new int[objectsInScene.Count];
+        }
+        byte[] bytes_read = File.ReadAllBytes(fileName);
+        int[] result = new int[bytes_read.Length / 4];
+        Buffer.BlockCopy(bytes_read, 0, result, 0, bytes_read.Length);
+        diffInfoAdd.Add(fileName, result);
+
+        return result;
+    }
 
     private int[] ReadFootprintsDiffUnit(int fromX, int fromZ, int toX, int toZ)
     {
@@ -805,133 +1236,6 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     }
 }
 
-
-
-//private void TestObjectTable()
-//{
-//    int totalObjectNum = BitConverter.ToInt32(objectTable, sizeof(int) * 2);
-//    ObjectHolder[] objectHolders = new ObjectHolder[totalObjectNum];
-//    Debug.Log($"total bytes num: {BitConverter.ToInt32(objectTable, sizeof(int))}, {totalObjectNum}");
-//    int cursor = sizeof(int) * 3 + sizeof(float) * 3;
-//    Debug.Log(objectHolders[0]);
-//    for (int i = 0; i < totalObjectNum; i++)
-//    {
-//        objectHolders[i] = new ObjectHolder();
-//        objectHolders[i].position = new Vector3(BitConverter.ToSingle(objectTable, cursor), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
-//            BitConverter.ToSingle(objectTable, cursor += sizeof(float)));
-//        objectHolders[i].eulerAngles = new Vector3(BitConverter.ToSingle(objectTable, cursor += sizeof(float)), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
-//            BitConverter.ToSingle(objectTable, cursor += sizeof(float)));
-//        objectHolders[i].scale = new Vector3(BitConverter.ToSingle(objectTable, cursor += sizeof(float)), BitConverter.ToSingle(objectTable, cursor += sizeof(float)),
-//            BitConverter.ToSingle(objectTable, cursor += sizeof(float)));
-//        objectHolders[i].totalVertChunkNum = BitConverter.ToInt32(objectTable, cursor += sizeof(float));
-//        objectHolders[i].totalTriChunkNum = BitConverter.ToInt32(objectTable, cursor += sizeof(int));
-//        objectHolders[i].totalVertNum = BitConverter.ToInt32(objectTable, cursor += sizeof(int));
-//        objectHolders[i].submeshCount = BitConverter.ToInt32(objectTable, cursor += sizeof(int));
-//        cursor += sizeof(int);
-
-//        objectHolders[i].materialNames = new string[objectHolders[i].submeshCount];
-//        Transform transform = objectsInScene[i].transform;
-//        for (int j = 0; j < objectHolders[i].submeshCount; j++)
-//        {
-//            int materialNameLength = BitConverter.ToInt32(objectTable, cursor);
-//            objectHolders[i].materialNames[j] = Encoding.ASCII.GetString(objectTable, cursor += sizeof(int), materialNameLength);
-//            cursor += materialNameLength;
-//            Debug.Log($"{j}, {materialNameLength}, {objectHolders[i].materialNames[j]}");
-//        }
-
-
-//        Debug.Log($"{cursor}, {transform.position}, {objectHolders[i].position}, " +
-//            $"{transform.eulerAngles}, {objectHolders[i].eulerAngles}, " +
-//            $"{transform.lossyScale}, {objectHolders[i].scale}");
-//    }
-//}
-
-//private void VisUpdateCluster()
-//{
-//    int xStartIndex = Mathf.FloorToInt((visTarget.transform.position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
-//    int zStartIndex = Mathf.FloorToInt((visTarget.transform.position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-//    List<int[]> finalSum = new List<int[]>();
-
-//    for (int i = -1; i < 2; i++)
-//    {
-//        for (int j = -1; j < 2; j++)
-//        {
-//            //finalSum.Add(ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + i) * gd.numGridZ + zStartIndex + j).position));
-//            //finalSum.Add(ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + i) * gd.numGridZ + zStartIndex + j + 1).position));
-//            //finalSum.Add(ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + i + 1) * gd.numGridZ + zStartIndex + j).position));
-//            //finalSum.Add(ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + i + 1) * gd.numGridZ + zStartIndex + j + 1).position));
-//            finalSum.Add(ReadFootprints((xStartIndex + i) * gd.numGridZ + zStartIndex + j));
-//            finalSum.Add(ReadFootprints((xStartIndex + i) * gd.numGridZ + zStartIndex + j + 1));
-//            finalSum.Add(ReadFootprints((xStartIndex + i + 1) * gd.numGridZ + zStartIndex + j));
-//            finalSum.Add(ReadFootprints((xStartIndex + i + 1) * gd.numGridZ + zStartIndex + j + 1));
-
-//            for (int k = 0; k < objectsInScene.Count; k++)
-//            {
-//                int active = 0;
-//                for (int d = 0; d < finalSum.Count; d++)
-//                {
-//                    active += finalSum[d][k];
-//                }
-//                objectsInScene[k].SetActive(active > 0 || objectsInScene[k].tag == "Terrain" || showAll);
-//            }
-//        }
-//    }
-//}
-
-//private void VisUpdateIndiCell()
-//{
-//    int xStartIndex = Mathf.FloorToInt((visTarget.transform.position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
-//    int zStartIndex = Mathf.FloorToInt((visTarget.transform.position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-//    //int[] cornerVis1 = ReadFootprints(gd.gridCornerParent.transform.GetChild(xStartIndex * gd.numGridZ + zStartIndex).position);
-//    //int[] cornerVis2 = ReadFootprints(gd.gridCornerParent.transform.GetChild(xStartIndex * gd.numGridZ + zStartIndex + 1).position);
-//    //int[] cornerVis3 = ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + 1) * gd.numGridZ + zStartIndex).position);
-//    //int[] cornerVis4 = ReadFootprints(gd.gridCornerParent.transform.GetChild((xStartIndex + 1) * gd.numGridZ + zStartIndex + 1).position);
-
-//    int[] cornerVis1 = ReadFootprints(xStartIndex * gd.numGridZ + zStartIndex);
-//    int[] cornerVis2 = ReadFootprints(xStartIndex * gd.numGridZ + zStartIndex + 1);
-//    int[] cornerVis3 = ReadFootprints((xStartIndex + 1) * gd.numGridZ + zStartIndex);
-//    int[] cornerVis4 = ReadFootprints((xStartIndex + 1) * gd.numGridZ + zStartIndex + 1);
-
-//    for (int i = 0; i < cornerVis1.Length; i++)
-//    {
-//        objectsInScene[i].SetActive(cornerVis1[i] + cornerVis2[i] + cornerVis3[i] + cornerVis4[i] > 0 ||
-//        objectsInScene[i].tag == "Terrain" || showAll);
-//    }
-
-//    preShowAll = showAll;
-//    preProgBased = progBased;
-//}
-
-//public void GetVisibleObjectsInRegionCorner(Vector3 position, float radius, ref int[] objectVisibility)
-//{
-//    int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
-//    int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-
-//    for (int i = -Mathf.FloorToInt(radius / gd.gridSize); i < Mathf.FloorToInt(radius / gd.gridSize) + 1; i++)
-//    {
-//        for (int j = -Mathf.FloorToInt(radius / gd.gridSize); j < Mathf.FloorToInt(radius / gd.gridSize) + 1; j++)
-//        {
-//            //        for (int i = 0; i < 1; i++)
-//            //{
-//            //    for (int j = 0; j < 1; j++)
-//            //    {
-//            if (xStartIndex + i < 0 || zStartIndex + j < 0 || xStartIndex + i > gd.numGridX - 1 || zStartIndex + j > gd.numGridZ - 1)
-//            { continue; }
-
-//            //int[] footprints = ReadFootprints((xStartIndex + i) * gd.numGridZ + zStartIndex + j);
-//            int[] footprints = ReadFootprintsGrid(xStartIndex + i, zStartIndex + j);
-
-//            for (int k = 0; k < objectsInScene.Count; k++)
-//            {
-//                if (footprints[k] > 0)
-//                {
-//                    objectVisibility[k] = 1;
-//                }
-//            }
-//        }
-//    }
-//}
-
 //public class ObjectHolder
 //{
 //    public Vector3 position, eulerAngles, scale;
@@ -939,309 +1243,4 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
 //    public string[] materialNames;
 //    public int totalVertChunkNum, totalTriChunkNum, totalVertNum, submeshCount;
 //    public bool ifVisible, ifOwned;
-//}
-
-//private void CreateUI()
-//{
-//    for (int i = -10; i < 10; i++)
-//    {
-//        for (int j = -10; j < 10; j++)
-//        {
-//            Vector3 pos = visTarget.transform.position + new Vector3(i, -1, j);
-//            if (Vector3.Distance(pos, visTarget.transform.position) < 10)
-//            {
-//                GameObject newGridCorner = Instantiate(gd.gridCornerPrefab);
-//                newGridCorner.layer = 5;
-//                newGridCorner.transform.localScale *= 0.1f;
-//                newGridCorner.transform.SetParent(transform);
-//                newGridCorner.transform.position = pos;
-//            }
-//        }
-//    }
-//    int childCount = transform.childCount;
-//    for (int i = 0; i < childCount - 1; i++)
-//    {
-//        for (int j = i + 1; j < childCount; j++)
-//        {
-//            Vector3 childiPos = transform.GetChild(i).position;
-//            Vector3 childjPos = transform.GetChild(j).position;
-//            if (Vector3.Distance(childiPos, childjPos) <= 1.1f)
-//            {
-//                CreateConnectingCuboid(transform.GetChild(i), transform.GetChild(j));
-//            }
-//        }
-//    }
-//}
-
-//void CreateConnectingCuboid(Transform cube1, Transform cube2)
-//{
-//    Vector3 midPoint = (cube1.position + cube2.position) / 2.0f;
-//    float distance = Vector3.Distance(cube1.position, cube2.position);
-//    float sideLength = cube1.transform.localScale.x;
-//    GameObject cuboid = GameObject.CreatePrimitive(PrimitiveType.Cube);
-//    cuboid.transform.position = midPoint;
-//    cuboid.transform.localScale = new Vector3(sideLength, sideLength, 0.8f * (distance - sideLength));
-//    cuboid.transform.rotation = Quaternion.FromToRotation(Vector3.forward, cube2.transform.position - cube1.transform.position);
-//    cuboid.GetComponent<Renderer>().material.color = Color.white;
-//    cuboid.transform.parent = transform;
-//    cuboid.layer = 5;
-//}
-
-//private int[] ReadFootprintsDiff(int fromX, int fromZ, int toX, int toZ)
-//{
-//    string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff\\";
-//    string fileName = $"{filePath}{fromX}_{fromZ}_{toX}_{toZ}.bin";
-//    if (diffInfoAdd.ContainsKey(fileName))
-//    {
-//        return diffInfoAdd[fileName];
-//    }
-//    if (!File.Exists(fileName))
-//    {
-//        Debug.Log($"{fileName} does not exist");
-//        return new int[objectsInScene.Count];
-//    }
-//    byte[] bytes_read = File.ReadAllBytes(fileName);
-//    int[] result = new int[bytes_read.Length / 4];
-//    Buffer.BlockCopy(bytes_read, 0, result, 0, bytes_read.Length);
-//    diffInfoAdd.Add(fileName, result);
-
-//    return result;
-//}
-
-//private int[] ReadFootprints(Vector3 pos)
-//{
-//    string filePath = "C:\\Users\\zhou1168\\VRAR\\Visibility\\Assets\\GridData\\ObjectVisibility/";
-//    string fileName = $"{filePath}{pos.x}_{pos.y}_{pos.z}.bin";
-//    byte[] bytes_read = File.ReadAllBytes(fileName);
-//    return ConvertByteArrayToIntArray(bytes_read);
-//}
-
-//private int[] ReadFootprints(float index)
-//{
-//    string filePath = "C:\\Users\\zhou1168\\VRAR\\Visibility\\Assets\\GridData\\ObjectVisibility/";
-//    string fileName = $"{filePath}{index}.bin";
-//    if (!File.Exists(fileName)) {
-//        Debug.Log($"{fileName} does not exist");
-//        return new int[objectsInScene.Count];
-//    }
-//    byte[] bytes_read = File.ReadAllBytes(fileName);
-//    return ConvertByteArrayToIntArray(bytes_read);
-//}
-
-//private int[] ReadFootprintsGrid(int x, int z)
-//{
-//    string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis\\";
-//    string fileName = $"{filePath}{x}_{z}.bin";
-//    if (!File.Exists(fileName))
-//    {
-//        Debug.Log($"{fileName} does not exist");
-//        return new int[objectsInScene.Count];
-//    }
-//    byte[] bytes_read = File.ReadAllBytes(fileName);
-//    return ConvertByteArrayToIntArray(bytes_read);
-//}
-
-
-//private void WriteFromCornerToGrid()
-//{
-//    for (int i = 0; i < gd.numGridX - 1; i++) {
-//        for (int j = 0; j < gd.numGridZ - 1; j++)
-//        {
-//            int[] visibilityAtGrid = new int[objectsInScene.Count];
-//            UpdateVisibilityForGrid(i, j, ref visibilityAtGrid);
-//            UpdateVisibilityForGrid(i + 1, j, ref visibilityAtGrid);
-//            UpdateVisibilityForGrid(i, j + 1, ref visibilityAtGrid);
-//            UpdateVisibilityForGrid(i + 1, j + 1, ref visibilityAtGrid);
-//            string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis\\";
-//            string fileName = $"{filePath}{i}_{j}.bin";
-//            byte[] bytes = ConvertIntArrayToByteArray(visibilityAtGrid);
-//            File.WriteAllBytes(fileName, bytes);
-//            Debug.Log($"Finished {i}, {j}");
-//        }
-//    }
-//}
-
-//private void UpdateVisibilityForGrid(int cornerX, int cornerZ, ref int[] visibility)
-//{
-//    int[] visAtCorner = ReadFootprints(cornerX * gd.numGridZ + cornerZ);
-//    for (int i = 0; i < visibility.Length; i++) { 
-//        if (visAtCorner[i] > 0)
-//        {
-//            visibility[i] = 1;
-//        }
-//    }   
-//}
-
-//private void WriteGridDifferences()
-//{
-//    for (int i = 0; i < gd.numGridX - 1; i++)
-//    {
-//        for (int j = 0; j < gd.numGridZ - 1; j++)
-//        {
-//            if (i > 0)
-//            {
-//                WriteGridDiffPair(i, j, i - 1, j);
-//            }
-//            if (j > 0)
-//            {
-//                WriteGridDiffPair(i, j, i, j - 1);
-//            }
-//            if (i < gd.numGridX - 2)
-//            {
-//                WriteGridDiffPair(i, j, i + 1, j);
-//            }
-//            if (j < gd.numGridZ - 2) {
-//                WriteGridDiffPair(i, j, i, j + 1);
-//            }
-//        }
-//    }
-//}
-
-//private void WriteGridDiffPair(int fromX, int fromZ, int toX, int toZ)
-//{
-//    int[] visFrom = ReadFootprintsGrid(fromX, fromZ);
-//    int[] visTo = ReadFootprintsGrid(toX, toZ);
-
-//    List<int> addVis = new List<int>();
-//    List<int> removeVis = new List<int>();
-
-//    for (int i = 0; i < visFrom.Length; i++)
-//    {
-//        if (visFrom[i] > 0 && visTo[i] == 0)
-//        {
-//            removeVis.Add(i);
-//        }
-//        else if (visFrom[i] == 0 && visTo[i] > 0)
-//        {
-//            addVis.Add(i);
-//        }
-//    }
-
-//    byte[] toWrite = new byte[sizeof(int) * (1 + addVis.Count + removeVis.Count)];
-//    Buffer.BlockCopy(BitConverter.GetBytes(addVis.Count), 0, toWrite, 0, sizeof(int));
-//    Buffer.BlockCopy(addVis.ToArray(), 0, toWrite, sizeof(int), sizeof(int) * addVis.Count);
-//    Buffer.BlockCopy(removeVis.ToArray(), 0, toWrite, sizeof(int) * (1 + addVis.Count), sizeof(int) * removeVis.Count);
-
-//    string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff\\";
-//    string fileName = $"{filePath}{fromX}_{fromZ}_{toX}_{toZ}.bin";
-//    File.WriteAllBytes(fileName, toWrite);
-//}
-
-//private IEnumerator ShrinkGridLevelVis()
-//{
-//    int numUnitX = Mathf.CeilToInt(gd.numGridX / numInUnitX);
-//    int numUnitZ = Mathf.CeilToInt(gd.numGridZ / numInUnitZ);
-//    string UnitFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis_Unit\\";
-//    for (int i = 8; i < numUnitX; i++)
-//    {
-//        for (int j = 23; j < numUnitZ; j++)
-//        {
-//            List<int> infoToWrite = new List<int>();
-//            int cursor = 0;
-//            for (int k = 0; k < numInUnitX; k++)
-//            {
-//                for (int l = 0; l < numInUnitZ; l++)
-//                {
-//                    infoToWrite.Add(0);
-//                    int gridX = i * (int)numInUnitX + k, gridZ = j * (int)numInUnitZ + l;
-//                    int[] visibilityInfo = ReadFootprintsGrid(gridX, gridZ);
-//                    for (int t = 0; t < visibilityInfo.Length; t++)
-//                    {
-//                        if (visibilityInfo[t] > 0)
-//                        {
-//                            infoToWrite.Add(t);
-//                            infoToWrite[cursor]++;
-//                        }
-//                    }
-//                    cursor += infoToWrite[cursor] + 1;
-//                }
-//            }
-//            cursor = 0;
-//            for (int k = 0; k < numInUnitX; k++)
-//            {
-//                for (int l = 0; l < numInUnitZ; l++)
-//                {
-//                    int gridX = i * (int)numInUnitX + k, gridZ = j * (int)numInUnitZ + l;
-//                    int[] visibilityInfo = ReadFootprintsGrid(gridX, gridZ);
-//                    List<int> ints = new List<int>();
-//                    for (int t = 0; t < visibilityInfo.Length; t++)
-//                    {
-//                        if (visibilityInfo[t] > 0)
-//                        {
-//                            ints.Add(t);
-//                        }
-//                    }
-//                    Debug.Log($"old: {string.Join(',', ints)}");
-//                    int[] visibleObjects = new int[infoToWrite[cursor]];
-//                    Array.Copy(infoToWrite.ToArray(), cursor + 1, visibleObjects, 0, infoToWrite[cursor]);
-//                    Debug.Log($"unit: {string.Join(", ", visibleObjects)}");
-//                    cursor += infoToWrite[cursor] + 1;
-//                }
-//            }
-//            string fileName = $"{UnitFilePath}{i}_{j}.bin";
-//            byte[] toWrite = ConvertIntArrayToByteArray(infoToWrite.ToArray());
-//            File.WriteAllBytes(fileName, toWrite);
-//            Debug.Log($"finished {i}_{j}");
-//            yield return null;
-//        }
-//    }
-//}
-
-//private IEnumerator CombineGrids()
-//{
-//    int numUnitX = Mathf.CeilToInt(gd.numGridX / numInUnitX);
-//    int numUnitZ = Mathf.CeilToInt(gd.numGridZ / numInUnitZ);
-//    string UnitFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis\\";
-//    for (int i = 0; i < numUnitX; i++)
-//    {
-//        for (int j = 0; j < numUnitZ; j++)
-//        {
-//            List<int> infoToWrite = new List<int>();
-//            for (int k = 0; k < numInUnitX; k++)
-//            {
-//                for (int l = 0; l < numInUnitZ; l++)
-//                {
-//                    int gridX = i * (int)numInUnitX + k, gridZ = j * (int)numInUnitZ + l;
-//                    CombineGridDiffSingle(gridX, gridZ, gridX + 1, gridZ, ref infoToWrite);
-//                    CombineGridDiffSingle(gridX, gridZ, gridX - 1, gridZ, ref infoToWrite);
-//                    CombineGridDiffSingle(gridX, gridZ, gridX, gridZ + 1, ref infoToWrite);
-//                    CombineGridDiffSingle(gridX, gridZ, gridX, gridZ - 1, ref infoToWrite);
-//                }
-//            }
-//            string fileName = $"{UnitFilePath}{i}_{j}.bin";
-//            byte[] toWrite = ConvertIntArrayToByteArray(infoToWrite.ToArray());
-//            File.WriteAllBytes(fileName, toWrite);
-//            Debug.Log($"finished {i}_{j}");
-//            yield return null;
-//        }
-//    }
-//}
-
-//private IEnumerator CombineGridDifferences()
-//{
-//    int numUnitX = Mathf.CeilToInt(gd.numGridX / numInUnitX);
-//    int numUnitZ = Mathf.CeilToInt(gd.numGridZ / numInUnitZ);
-//    string UnitFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff_Unit\\";
-//    for (int i = 0; i < numUnitX; i++) {
-//        for (int j = 0; j < numUnitZ; j++)
-//        {
-//            List<int> infoToWrite = new List<int>();
-//            for (int k = 0; k < numInUnitX; k++)
-//            {
-//                for (int l = 0; l < numInUnitZ; l++)
-//                {
-//                    int gridX = i * (int) numInUnitX + k, gridZ = j * (int) numInUnitZ + l;
-//                    CombineGridDiffSingle(gridX, gridZ, gridX + 1, gridZ, ref infoToWrite);
-//                    CombineGridDiffSingle(gridX, gridZ, gridX - 1, gridZ, ref infoToWrite);
-//                    CombineGridDiffSingle(gridX, gridZ, gridX, gridZ + 1, ref infoToWrite);
-//                    CombineGridDiffSingle(gridX, gridZ, gridX, gridZ - 1, ref infoToWrite);
-//                }
-//            }
-//            string fileName = $"{UnitFilePath}{i}_{j}.bin";
-//            byte[] toWrite = ConvertIntArrayToByteArray(infoToWrite.ToArray());
-//            File.WriteAllBytes(fileName, toWrite);
-//            Debug.Log($"finished {i}_{j}");
-//            yield return null;
-//        }
-//    }
 //}
