@@ -660,7 +660,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             footprintCount[colorRecordID[c]] = colorCount[c];
         }
-        string filePath = "C:\\Users\\zhou1168\\VRAR\\Visibility\\Assets\\GridData\\ObjectVisibility/";
+        string filePath = Application.dataPath + $"/Data/ObjectVisibility/";
         //Vector3 pos = footprintCameras.transform.position;
         string fileName = $"{filePath}{cameraPosID}.bin";
         byte[] bytes = ConvertIntArrayToByteArray(footprintCount);
@@ -706,7 +706,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             return visibleObjectsInGrid[indiGrid];
         }
-        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelVis_Unit\\";
+        string filePath = Application.dataPath + $"/Data/GridLevelVis_Unit/";
         int unitX = x / (int)numInUnitX, unitZ = z / (int)numInUnitZ;
         string fileName = $"{filePath}{unitX}_{unitZ}.bin";
         if (!File.Exists(fileName))
@@ -751,7 +751,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             //Debug.Log($"unit: {string.Join(',', diffInfoAdd[indiDiff])}");
             return diffInfoAdd[indiDiff];
         }
-        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff_Unit\\";
+        string filePath = Application.dataPath + $"/Data/GridDiff_Unit/";
         int unitX = fromX / (int)numInUnitX, unitZ = fromZ / (int)numInUnitZ;
         string fileName = $"{filePath}{unitX}_{unitZ}.bin";
         //Debug.Log(fileName);

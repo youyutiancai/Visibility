@@ -189,6 +189,6 @@ public class RandomizedMesh : MeshVariant
             }
             totalTriangleChunks += numTriangleChunks;
         }
-        //Debug.Log($"# of vertex chunks: {numVertexChunks}, # of triangle chunks: {totalTriangleChunks}");
+        // Debug.Log($"# of vertex chunks: {numVertexChunks}, # of triangle chunks: {totalTriangleChunks}");
     }
 }
