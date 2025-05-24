@@ -79,7 +79,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
         public char type;
         public int objectID;
         public int subMeshIdx;
-        public DataTime chunkRecvTime;
+        public DateTime chunkRecvTime;
         public byte[] data;
     }
     private class MeshTransmission
