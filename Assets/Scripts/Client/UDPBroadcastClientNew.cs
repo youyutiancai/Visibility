@@ -79,6 +79,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
         public char type;
         public int objectID;
         public int subMeshIdx;
+        public DataTime chunkRecvTime;
         public byte[] data;
     }
     private class MeshTransmission
@@ -156,7 +157,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
                 if (!activeMeshTransmissions.TryGetValue(chunk.objectID, out var transmission))
                 {
-                    transmission = new MeshTransmission
+                    transmission = new MeshTransmission  // lack of remoteEP
                     {
                         totalMeshChunks = 10000,
                         firstChunkTime = DateTime.UtcNow
@@ -195,7 +196,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     {
         try
         {
-            if (isMulticast)
+            if (isMulticast) // multicast
             {
                 multicastAddress = IPAddress.Parse(multicastAddr);
                 udpClient = new UdpClient(AddressFamily.InterNetwork);
@@ -204,7 +205,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 udpClient.Client.Bind(localEP);
                 udpClient.JoinMulticastGroup(multicastAddress);
             }
-            else
+            else // broadcast
             {
                 udpClient = new UdpClient(portUDP);
                 udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
@@ -241,6 +242,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 return;
             }
 
+            // parse the packet header
             char submeshType = BitConverter.ToChar(packet, 0);
             int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
 
@@ -264,16 +266,19 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 return;
             }
 
+            // parse the packet data
             int dataSize = packet.Length - headerSize;
             byte[] chunkData = new byte[dataSize];
             Buffer.BlockCopy(packet, headerSize, chunkData, 0, dataSize);
 
+            // init the chunk in the client
             var newChunk = new Chunk
             {
                 id = chunkId,
                 type = submeshType,
                 objectID = objectId,
                 subMeshIdx = submeshId,
+                chunkRecvTime = DateTime.UtcNow,
                 data = chunkData
             };
 
@@ -335,15 +340,15 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 verticesArr[baseIdx] = new Vector3(reusableFloatBuffer[j * 6], reusableFloatBuffer[j * 6 + 1], reusableFloatBuffer[j * 6 + 2]);
                 normalsArr[baseIdx] = new Vector3(reusableFloatBuffer[j * 6 + 3], reusableFloatBuffer[j * 6 + 4], reusableFloatBuffer[j * 6 + 5]);
             }
-            string vEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunkID},\"type\":\"V\"}}";
+            string vEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunkID},\"type\":\"V\",\"chunkRecvTime\":\"{chunk.chunkRecvTime}\"}}";
             chunksThisFrame.Add(vEntry);
         }
         else if (vorT == 'T')
         {
             int count = chunk_data.Length / sizeof(int);
             Buffer.BlockCopy(chunk_data, 0, reusableIntBuffer, 0, chunk_data.Length);
-            trianglesArr[chunk.subMeshIdx].AddRange(new ArraySegment<int>(reusableIntBuffer, 0, count));
-            string tEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunkID},\"type\":\"T\",\"subMeshIdx\":{chunk.subMeshIdx}}}";
+            trianglesArr[chunk.subMeshIdx].AddRange(new ArraySegment<int>(reusableIntBuffer, 0, count)); 
+            string tEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunkID},\"type\":\"T\",\"subMeshIdx\":{chunk.subMeshIdx},\"chunkRecvTime\":\"{chunk.chunkRecvTime}\"}}";
             chunksThisFrame.Add(tEntry);
         }
 
