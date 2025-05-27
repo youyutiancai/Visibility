@@ -5,13 +5,14 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using System;
 using Newtonsoft.Json.Linq;
+using TMPro;
 
 public class SimulatorManager : MonoBehaviour
 {
     public Transform cameraRig;
     public string jsonlFilePath = "Assets/Data/ClientLogData/with_interrupt.jsonl";
-    public bool startSimulating = false;
-    
+    public TMP_Text logTimePerFrame;
+    private bool startSimulating = false;
     private List<LogEntry> logEntries;
     private int currentEntryIndex = 0;
     private float startTime;
@@ -22,13 +23,16 @@ public class SimulatorManager : MonoBehaviour
     {
         [JsonProperty("time")]
         private DateTime _time;
+        private string _originalTimeString;
         
         public float time => (float)(_time - DateTime.UnixEpoch).TotalSeconds;
+        public string originalTime => _originalTimeString;
         public HeadsetData headset;
 
-        public LogEntry(DateTime time, HeadsetData headsetData)
+        public LogEntry(DateTime time, string originalTimeStr, HeadsetData headsetData)
         {
             _time = time;
+            _originalTimeString = originalTimeStr;
             headset = headsetData;
         }
     }
@@ -74,6 +78,9 @@ public class SimulatorManager : MonoBehaviour
             cameraRig.position = entry.headset.position;
             cameraRig.rotation = Quaternion.Euler(entry.headset.rotationEuler);
 
+            // Update logTimePerFrame text with the original timestamp
+            logTimePerFrame.text = entry.originalTime;
+
             // Calculate time until next frame
             if (currentEntryIndex < logEntries.Count - 1)
             {
@@ -111,9 +118,11 @@ public class SimulatorManager : MonoBehaviour
                     jsonObj["headset"].ToString()
                 );
 
+                string timeStr = jsonObj["time"].ToString();
                 // Create and add log entry
                 logEntries.Add(new LogEntry(
-                    DateTime.Parse(jsonObj["time"].ToString()),
+                    DateTime.Parse(timeStr),
+                    timeStr,
                     headsetData
                 ));
             }
