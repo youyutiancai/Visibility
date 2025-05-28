@@ -117,6 +117,7 @@ public class SimulatorManager : MonoBehaviour
         InitializeModeDropdown();
 
         // load default jsonl file
+        jsonlFilePath = Path.Combine("Assets/Data/ClientLogData", fileSelectionDropdown.options[0].text);
         LoadJsonlData();
     }
 
