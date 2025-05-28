@@ -176,6 +176,17 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         }
         byte[] result = objectTable.ToArray();
         Buffer.BlockCopy(BitConverter.GetBytes(objectTable.Count), 0, result, sizeof(int), sizeof(int));
+
+        // Save the object table to a file
+        // string dataPath = Path.Combine(Application.dataPath, "Data");
+        // if (!Directory.Exists(dataPath))
+        // {
+        //     Directory.CreateDirectory(dataPath);
+        // }
+        // string filePath = Path.Combine(dataPath, "ObjectTable.bin");
+        // File.WriteAllBytes(filePath, result);
+        // Debug.Log($"Object table saved to: {filePath}");
+
         return result;
     }
 
