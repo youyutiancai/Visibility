@@ -8,6 +8,7 @@ using Newtonsoft.Json.Linq;
 using TMPro;
 
 [RequireComponent(typeof(ObjectChunkManager))]
+[RequireComponent(typeof(ObjectTableManager))]
 public class SimulatorManager : MonoBehaviour
 {
     public Transform cameraRig;
@@ -19,7 +20,9 @@ public class SimulatorManager : MonoBehaviour
     private float startTime;
     private float nextFrameTime;
     private ObjectChunkManager chunkManager;
-    private Dictionary<int, bool[]> receivedChunks; // objectID -> array of received status for each chunk
+    private ObjectTableManager objectTableManager;
+    private ResourceLoader resourceLoader;
+    private Dictionary<int, bool[]> receivedChunks;
     private Dictionary<int, GameObject> visualizedObjects = new Dictionary<int, GameObject>();
     private Dictionary<int, Vector3[]> verticesDict = new Dictionary<int, Vector3[]>();
     private Dictionary<int, Vector3[]> normalsDict = new Dictionary<int, Vector3[]>();
@@ -87,6 +90,18 @@ public class SimulatorManager : MonoBehaviour
             Debug.LogError("ObjectChunkManager component not found!");
             return;
         }
+        objectTableManager = GetComponent<ObjectTableManager>();
+        if (objectTableManager == null)
+        {
+            Debug.LogError("ObjectTableManager component not found!");
+            return;
+        }
+        resourceLoader = GetComponent<ResourceLoader>();
+        if (resourceLoader == null)
+        {
+            Debug.LogError("ResourceLoader component not found!");
+            return;
+        }
         receivedChunks = new Dictionary<int, bool[]>();
         LoadJsonlData();
     }
@@ -136,6 +151,14 @@ public class SimulatorManager : MonoBehaviour
 
         foreach (var chunk in chunks)
         {
+            // Get object information from ObjectTableManager
+            ObjectHolder holder = objectTableManager.GetObjectInfo(chunk.objectID);
+            if (holder == null)
+            {
+                Debug.LogError($"Object {chunk.objectID} not found in object table!");
+                continue;
+            }
+
             // Get the chunk data from ObjectChunkManager
             if (chunkManager.HasChunk(chunk.objectID, chunk.chunkID))
             {
@@ -156,10 +179,13 @@ public class SimulatorManager : MonoBehaviour
                 // Initialize data structures if needed
                 if (!verticesDict.ContainsKey(objectId))
                 {
-                    verticesDict[objectId] = new Vector3[1000]; // Assuming max vertices
-                    normalsDict[objectId] = new Vector3[1000];
+                    verticesDict[objectId] = new Vector3[holder.totalVertNum];
+                    normalsDict[objectId] = new Vector3[holder.totalVertNum];
                     trianglesDict[objectId] = new List<List<int>>();
-                    trianglesDict[objectId].Add(new List<int>());
+                    for (int i = 0; i < holder.submeshCount; i++)
+                    {
+                        trianglesDict[objectId].Add(new List<int>());
+                    }
                 }
 
                 var verticesArr = verticesDict[objectId];
@@ -174,7 +200,7 @@ public class SimulatorManager : MonoBehaviour
 
                     for (int j = 0; j < count / 6; j++)
                     {
-                        int baseIdx = chunkId * 57 + j;
+                        int baseIdx = chunkId * 57 + j; // Using 57 vertices per chunk as in the original
                         if (baseIdx >= verticesArr.Length)
                         {
                             Debug.LogError($"Vertex index {baseIdx} out of bounds for array size {verticesArr.Length}");
@@ -198,52 +224,67 @@ public class SimulatorManager : MonoBehaviour
                     // Process triangle data
                     int count = chunkData.Length / sizeof(int);
                     Buffer.BlockCopy(chunkData, 0, reusableIntBuffer, 0, chunkData.Length);
-                    
-                    // Ensure we have enough submesh lists
-                    while (trianglesArr.Count <= submeshId)
-                    {
-                        trianglesArr.Add(new List<int>());
-                    }
-                    
                     trianglesArr[submeshId].AddRange(new ArraySegment<int>(reusableIntBuffer, 0, count));
                 }
 
                 // Update mesh visualization
-                UpdateMeshVisualization(objectId);
+                UpdateMeshVisualization(objectId, holder);
             }
         }
     }
 
-    private void UpdateMeshVisualization(int objectID)
+    private void UpdateMeshVisualization(int objectID, ObjectHolder holder)
     {
         if (!visualizedObjects.ContainsKey(objectID))
         {
+            // Create new object if it doesn't exist
             GameObject newObject = new GameObject($"Object_{objectID}");
             newObject.AddComponent<MeshFilter>();
-            newObject.AddComponent<MeshRenderer>();
+            MeshRenderer renderer = newObject.AddComponent<MeshRenderer>();
+
+            // Create new mesh
+            Mesh newMesh = new Mesh();
+            newMesh.vertices = verticesDict[objectID];
+            newMesh.normals = normalsDict[objectID];
+            newMesh.subMeshCount = holder.submeshCount;
+            
+            // Set triangles for each submesh
+            for (int i = 0; i < holder.submeshCount; i++)
+            {
+                newMesh.SetTriangles(trianglesDict[objectID][i], i);
+            }
+            
+            newObject.GetComponent<MeshFilter>().mesh = newMesh;
+
+            // Set up materials using ResourceLoader
+            List<Material> materials = new List<Material>();
+            foreach (string matName in holder.materialNames)
+            {
+                materials.Add(resourceLoader.LoadMaterialByName(matName));
+            }
+            renderer.materials = materials.ToArray();
+
+            // Set transform
+            newObject.transform.position = holder.position;
+            newObject.transform.eulerAngles = holder.eulerAngles;
+            newObject.transform.localScale = holder.scale;
+
             visualizedObjects[objectID] = newObject;
-            newObject.GetComponent<MeshRenderer>().material = new Material(Shader.Find("Standard"));
         }
-
-        GameObject obj = visualizedObjects[objectID];
-        Mesh mesh = obj.GetComponent<MeshFilter>().mesh;
-        if (mesh == null)
+        else
         {
-            mesh = new Mesh();
-            obj.GetComponent<MeshFilter>().mesh = mesh;
+            // Update existing mesh
+            GameObject obj = visualizedObjects[objectID];
+            Mesh mesh = obj.GetComponent<MeshFilter>().mesh;
+            
+            mesh.vertices = verticesDict[objectID];
+            mesh.normals = normalsDict[objectID];
+            
+            for (int i = 0; i < holder.submeshCount; i++)
+            {
+                mesh.SetTriangles(trianglesDict[objectID][i], i);
+            }
         }
-
-        mesh.vertices = verticesDict[objectID];
-        mesh.normals = normalsDict[objectID];
-        mesh.subMeshCount = trianglesDict[objectID].Count;
-        
-        for (int i = 0; i < trianglesDict[objectID].Count; i++)
-        {
-            mesh.SetTriangles(trianglesDict[objectID][i], i);
-        }
-
-        mesh.RecalculateBounds();
-        mesh.RecalculateTangents();
     }
 
     private void OnObjectComplete(int objectID)

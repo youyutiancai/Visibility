@@ -14859,6 +14859,9 @@ GameObject:
   m_Component:
   - component: {fileID: 282400824}
   - component: {fileID: 282400825}
+  - component: {fileID: 282400827}
+  - component: {fileID: 282400826}
+  - component: {fileID: 282400828}
   m_Layer: 0
   m_Name: Simulator
   m_TagString: Untagged
@@ -14896,6 +14899,42 @@ MonoBehaviour:
   cameraRig: {fileID: 1097433297}
   jsonlFilePath: Assets/Data/ClientLogData/with_interrupt.jsonl
   logTimePerFrame: {fileID: 1933175632}
+--- !u!114 &282400826
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 282400823}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 32cd8cefaab665749a2341d613dec1c7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &282400827
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 282400823}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8615d60ef1e41ea4ca41aaf1543196ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &282400828
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 282400823}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d8b6ec8f7a56568468bea679c6a8ed73, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1001 &282460522
 PrefabInstance:
   m_ObjectHideFlags: 0
