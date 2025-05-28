@@ -1,5 +1,7 @@
 using UnityEngine;
 using System.IO;
+using System.Threading.Tasks;
+using System.Collections.Concurrent;
 
 [RequireComponent(typeof(Camera))]
 public class CameraSetupManager : MonoBehaviour
@@ -8,6 +10,8 @@ public class CameraSetupManager : MonoBehaviour
     private int width, height;
     private RenderTexture renderTexture;
     private Camera renderCamera;
+    private ConcurrentQueue<byte[]> frameQueue = new ConcurrentQueue<byte[]>();
+    private bool isProcessingFrames = false;
 
     void Start()
     {
@@ -42,7 +46,6 @@ public class CameraSetupManager : MonoBehaviour
         {
             Debug.LogWarning("Intrinsics file not found at: " + filePath);
         }
-
 
         renderCamera = GetComponent<Camera>();
         renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
@@ -81,5 +84,26 @@ public class CameraSetupManager : MonoBehaviour
         m[2, 0] = 0;    m[2, 1] = 0;    m[2, 2] = c;    m[2, 3] = d;
         m[3, 0] = 0;    m[3, 1] = 0;    m[3, 2] = e;    m[3, 3] = 0;
         return m;
+    }
+
+    public byte[] CaptureFrameToBytes()
+    {
+        // Create a temporary RenderTexture to read from
+        RenderTexture currentRT = RenderTexture.active;
+        RenderTexture.active = renderTexture;
+
+        // Create a new Texture2D to read the pixels into
+        Texture2D screenshot = new Texture2D(width, height, TextureFormat.RGB24, false);
+        screenshot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+        screenshot.Apply();
+
+        // Convert to PNG bytes
+        byte[] bytes = screenshot.EncodeToPNG();
+
+        // Clean up
+        Destroy(screenshot);
+        RenderTexture.active = currentRT;
+
+        return bytes;
     }
 }
