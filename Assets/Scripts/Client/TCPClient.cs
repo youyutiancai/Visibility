@@ -34,6 +34,9 @@ public class TCPClient : MonoBehaviour
     private int tcpType;
     private int totalBytes;
     private int totalObjectNum;
+    private bool parsingTable;
+    public GameObject centerEye;
+    public bool isPuppet = false;
 
     #region
 
@@ -48,6 +51,7 @@ public class TCPClient : MonoBehaviour
     }
     void Start()
     {
+        parsingTable = false;
         try
         {
             client = new TcpClient(serverIPAddress, port);
@@ -85,6 +89,45 @@ public class TCPClient : MonoBehaviour
     public void ResetMessagestatus()
     {
     }
+
+    private void Update()
+    {
+        if (OVRInput.GetDown(OVRInput.Button.Three))
+        {
+            isPuppet = !isPuppet;
+            SendPuppetStateChange(isPuppet);
+            Debug.Log($"Puppet mode toggled: {isPuppet}");
+        }
+
+        if (!isPuppet && client != null && client.Connected && centerEye != null)
+        {
+            byte[] poseMessage = CreatePoseMessage(centerEye.transform.position, centerEye.transform.rotation);
+            SendMessage(poseMessage);
+        }
+    }
+
+    private void SendPuppetStateChange(bool isPuppet)
+    {
+        List<byte> buffer = new List<byte>();
+        buffer.AddRange(BitConverter.GetBytes((int)TCPMessageType.PUPPET_TOGGLE));
+        buffer.AddRange(BitConverter.GetBytes(isPuppet ? 1 : 0));
+        SendMessage(buffer.ToArray());
+    }
+
+    private byte[] CreatePoseMessage(Vector3 pos, Quaternion rot)
+    {
+        List<byte> buffer = new List<byte>();
+        buffer.AddRange(BitConverter.GetBytes((int)TCPMessageType.POSE_UPDATE));  // Use your enum
+        buffer.AddRange(BitConverter.GetBytes(pos.x));
+        buffer.AddRange(BitConverter.GetBytes(pos.y));
+        buffer.AddRange(BitConverter.GetBytes(pos.z));
+        buffer.AddRange(BitConverter.GetBytes(rot.x));
+        buffer.AddRange(BitConverter.GetBytes(rot.y));
+        buffer.AddRange(BitConverter.GetBytes(rot.z));
+        buffer.AddRange(BitConverter.GetBytes(rot.w));
+        return buffer.ToArray();
+    }
+
 
     /*** 
      * Received Message format:
@@ -132,6 +175,46 @@ public class TCPClient : MonoBehaviour
     {
         int cursor = 0;
 
+        TCPMessageType mt = (TCPMessageType)BitConverter.ToInt32(message, cursor);
+        Debug.Log($"[+++++++++++++++] message type: {mt}");
+
+        if (mt == TCPMessageType.TABLE && !parsingTable)
+        {
+            parsingTable = true;
+        }
+
+        if (mt == TCPMessageType.POSE_FROM_SERVER && isPuppet)
+        {
+            cursor = sizeof(int);
+            float px = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            float py = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            float pz = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            float rx = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            float ry = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            float rz = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            float rw = BitConverter.ToSingle(message, cursor);
+
+            Vector3 receivedPos = new Vector3(px, py, pz);
+            Quaternion receivedRot = new Quaternion(rx, ry, rz, rw);
+            Debug.Log($"[+++++++++++++++] {receivedPos}, {receivedRot}");
+
+            if (centerEye != null)
+            {
+                centerEye.transform.SetPositionAndRotation(receivedPos, receivedRot);
+            }
+            return;
+        }
+
+
+        if (parsingTable)
+        {
+            ParseTable(message);
+        }
+    }
+
+    private void ParseTable(byte[] message)
+    {
+        int cursor = 0;
         if (table_data == null || table_data.Count == 0)
         {
             table_data = new List<byte>();
@@ -187,11 +270,9 @@ public class TCPClient : MonoBehaviour
                     //Debug.Log($"ObjectID{i} - {objectHolders[i].materialNames[j]}");
                 }
             }
-
+            parsingTable = false;
             OnReceivedServerTable?.Invoke();
         }
-
-
     }
 
     public void SendString(string message)

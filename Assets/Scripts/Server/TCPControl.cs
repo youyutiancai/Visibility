@@ -20,6 +20,7 @@ public class TCPControl : MonoBehaviour
     private Dispatcher dispatcher;
     private VisibilityCheck visibilityCheck;
     private ClusterControl cc;
+    private static Dictionary<IPEndPoint, RealUser> endpointToUser;
 
     public TCPControl(CancellationToken _ct, Dispatcher _dispatcher, VisibilityCheck _visibilityCheck, ClusterControl _clusterControl)
     {
@@ -30,7 +31,7 @@ public class TCPControl : MonoBehaviour
         iP4Address = IPAddress.Any;
         clients = new Dictionary<IPEndPoint, TcpClient>();
         clientTasks = new Dictionary<IPEndPoint, Task>();
-
+        endpointToUser = new Dictionary<IPEndPoint, RealUser>();
         listenerTask = ListenTCPAsync();
     }
 
@@ -116,6 +117,7 @@ public class TCPControl : MonoBehaviour
             {
                 clients.Remove(ep);
                 clientTasks.Remove(ep);
+                endpointToUser.Remove(ep);
                 Debug.Log($"Client {ep} has been removed");
             }
             client.Close();
@@ -124,19 +126,54 @@ public class TCPControl : MonoBehaviour
 
     private void HandleMessageTCP(TcpClient client, byte[] data)
     {
-        TCPMessageType mt = (TCPMessageType)BitConverter.ToInt32(data, 0);
-        Debug.Log($"Client {client.Client.RemoteEndPoint} sends message: {mt}");
+        int cursor = 0;
+        IPEndPoint ep = client.Client.RemoteEndPoint as IPEndPoint;
 
-        switch (mt)
+        while (cursor + sizeof(int) <= data.Length)
         {
-            case TCPMessageType.TABLE:
-                SendTable(client);
-                break;
+            TCPMessageType mt = (TCPMessageType)BitConverter.ToInt32(data, cursor);
+            cursor += sizeof(int);
 
-            default:
-                break;
+            switch (mt)
+            {
+                case TCPMessageType.POSE_UPDATE:
+                    if (cursor + sizeof(float) * 7 > data.Length) return; // not enough data
+                    if (endpointToUser.TryGetValue(ep, out RealUser realUser) && !realUser.isPuppet)
+                    {
+                        float px = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
+                        float py = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
+                        float pz = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
+                        float rx = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
+                        float ry = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
+                        float rz = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
+                        float rw = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
+
+                        realUser.latestPosition = new Vector3(px, py, pz);
+                        realUser.latestRotation = new Quaternion(rx, ry, rz, rw);
+
+                        if (realUser.transform != null)
+                            realUser.transform.SetPositionAndRotation(realUser.latestPosition, realUser.latestRotation);
+                    }
+                    break;
+
+                case TCPMessageType.PUPPET_TOGGLE:
+                    if (cursor + sizeof(int) > data.Length) return; // not enough data
+                    if (endpointToUser.TryGetValue(ep, out realUser))
+                    {
+                        bool newState = BitConverter.ToInt32(data, cursor) == 1;
+                        cursor += sizeof(int);
+                        realUser.isPuppet = newState;
+                        Debug.Log($"User {ep} puppet mode set to: {newState}");
+                    }
+                    break;
+
+                default:
+                    Debug.LogWarning($"Unknown TCPMessageType: {mt}, remaining bytes: {data.Length - cursor}");
+                    return; // Avoid infinite loop
+            }
         }
     }
+
 
     private void SendTable(TcpClient client)
     {
@@ -154,6 +191,10 @@ public class TCPControl : MonoBehaviour
                 Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f));
             newUser.transform.parent = cc.transform;
             cc.users.Add(newUser.GetComponent<RealUser>());
+            var realUser = newUser.GetComponent<RealUser>();
+            realUser.tcpClient = client;
+            realUser.tcpEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
+            endpointToUser[realUser.tcpEndPoint] = realUser;
             client.GetStream().Write(visibilityCheck.objectTable);
             Debug.Log($"table size: {visibilityCheck.objectTable.Length}");
         }

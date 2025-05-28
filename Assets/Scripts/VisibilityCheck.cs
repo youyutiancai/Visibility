@@ -660,35 +660,13 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             footprintCount[colorRecordID[c]] = colorCount[c];
         }
-        string filePath = Application.dataPath + $"/Data/ObjectVisibility/";
+        string filePath = "C:\\Users\\zhou1168\\VRAR\\Visibility\\Assets\\GridData\\ObjectVisibility/";
         //Vector3 pos = footprintCameras.transform.position;
         string fileName = $"{filePath}{cameraPosID}.bin";
         byte[] bytes = ConvertIntArrayToByteArray(footprintCount);
         File.WriteAllBytes(fileName, bytes);
     }
 
-    private void CombineGridDiffSingle(int fromX, int fromZ, int toX, int toZ, ref List<int> infoToWrite)
-    {
-        string diffFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff\\";
-        string fileName = $"{diffFilePath}{fromX}_{fromZ}_{toX}_{toZ}.bin";
-        if (!File.Exists(fileName))
-        {
-            infoToWrite.Add(0);
-            infoToWrite.Add(0);
-            return;
-        }
-        int[] data = ReadFootprintsDiffUnit(fromX, fromZ, toX, toZ);
-        infoToWrite.Add(data[0]);
-        for (int i = 1; i < data[0] + 1; i++)
-        {
-            infoToWrite.Add(data[i]);
-        }
-        infoToWrite.Add(data.Length - 1 - data[0]);
-        for (int i = 1 + data[0]; i < data.Length; i++)
-        {
-            infoToWrite.Add(data[i]);
-        }
-    }
 
     static byte[] ConvertIntArrayToByteArray(int[] array)
     {
@@ -706,7 +684,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             return visibleObjectsInGrid[indiGrid];
         }
-        string filePath = Application.dataPath + $"/Data/GridLevelVis_Unit/";
+        string filePath = "./Assets/Data/GridLevelVis_Unit/";
         int unitX = x / (int)numInUnitX, unitZ = z / (int)numInUnitZ;
         string fileName = $"{filePath}{unitX}_{unitZ}.bin";
         if (!File.Exists(fileName))
@@ -751,7 +729,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             //Debug.Log($"unit: {string.Join(',', diffInfoAdd[indiDiff])}");
             return diffInfoAdd[indiDiff];
         }
-        string filePath = Application.dataPath + $"/Data/GridDiff_Unit/";
+        string filePath = "./Assets/Data/GridDiff_Unit/";
         int unitX = fromX / (int)numInUnitX, unitZ = fromZ / (int)numInUnitZ;
         string fileName = $"{filePath}{unitX}_{unitZ}.bin";
         //Debug.Log(fileName);
@@ -1243,5 +1221,28 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
 //            Debug.Log($"finished {i}_{j}");
 //            yield return null;
 //        }
+//    }
+//}
+
+//private void CombineGridDiffSingle(int fromX, int fromZ, int toX, int toZ, ref List<int> infoToWrite)
+//{
+//    string diffFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridDiff\\";
+//    string fileName = $"{diffFilePath}{fromX}_{fromZ}_{toX}_{toZ}.bin";
+//    if (!File.Exists(fileName))
+//    {
+//        infoToWrite.Add(0);
+//        infoToWrite.Add(0);
+//        return;
+//    }
+//    int[] data = ReadFootprintsDiffUnit(fromX, fromZ, toX, toZ);
+//    infoToWrite.Add(data[0]);
+//    for (int i = 1; i < data[0] + 1; i++)
+//    {
+//        infoToWrite.Add(data[i]);
+//    }
+//    infoToWrite.Add(data.Length - 1 - data[0]);
+//    for (int i = 1 + data[0]; i < data.Length; i++)
+//    {
+//        infoToWrite.Add(data[i]);
 //    }
 //}
