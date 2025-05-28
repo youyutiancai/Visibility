@@ -69,5 +69,8 @@ public class NetworkControl : Singleton<NetworkControl>
 
 public enum TCPMessageType
 {
-    TABLE
+    TABLE,
+    POSE_UPDATE,
+    POSE_FROM_SERVER,
+    PUPPET_TOGGLE
 }
