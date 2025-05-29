@@ -21,6 +21,7 @@ public class SimulatorManager : MonoBehaviour
     public TMP_Dropdown fileSelectionDropdown;
     public TMP_Dropdown modeDropdown;
     public CameraSetupManager cameraSetupManager;
+    public TMP_Text packetLossText;
     private bool startSimulating = false;
     private List<LogEntry> logEntries;
     private int currentEntryIndex = 0;
@@ -37,6 +38,8 @@ public class SimulatorManager : MonoBehaviour
     private float[] reusableFloatBuffer = new float[57 * 6];
     private int[] reusableIntBuffer = new int[1024];
     private int captureFrameCount = 0;
+    private Dictionary<int, int> totalExpectedChunks = new Dictionary<int, int>();
+    private Dictionary<int, int> totalReceivedChunks = new Dictionary<int, int>();
 
     [Serializable]
     private class ChunkData
@@ -241,6 +244,10 @@ public class SimulatorManager : MonoBehaviour
             currentEntryIndex = 0;
             cameraRig.position = new Vector3(-114f, 1.7f, -100f);
             cameraRig.rotation = Quaternion.Euler(0f, 0f, 0f);
+            if (packetLossText != null)
+            {
+                packetLossText.text = "Packet Loss Rate: --";
+            }
             return;
         }
 
@@ -280,6 +287,7 @@ public class SimulatorManager : MonoBehaviour
 
             // Update UI
             logTimePerFrame.text = entry.originalTime;
+            UpdatePacketLossDisplay();
 
             currentEntryIndex++;
         }
@@ -299,9 +307,19 @@ public class SimulatorManager : MonoBehaviour
                 continue;
             }
 
+            // Initialize tracking for this object if not already done
+            if (!totalExpectedChunks.ContainsKey(chunk.objectID))
+            {
+                var vertexChunks = chunkManager.GetVertexChunks(chunk.objectID);
+                var triangleChunks = chunkManager.GetTriangleChunks(chunk.objectID);
+                totalExpectedChunks[chunk.objectID] = (vertexChunks?.Count ?? 0) + (triangleChunks?.Count ?? 0);
+                totalReceivedChunks[chunk.objectID] = 0;
+            }
+
             // Get the chunk data from ObjectChunkManager
             if (chunkManager.HasChunk(chunk.objectID, chunk.chunkID))
             {
+                totalReceivedChunks[chunk.objectID]++;
                 byte[] packet = chunkManager.GetChunk(chunk.objectID, chunk.chunkID);
                 
                 // Parse the packet header
@@ -520,6 +538,62 @@ public class SimulatorManager : MonoBehaviour
         }
     }
 
+    public void CalculateAndLogPacketLossRates()
+    {
+        float totalLossRate = 0f;
+        int totalObjects = totalExpectedChunks.Count;
+        
+        Debug.Log("=== Packet Loss Rate Analysis ===");
+        foreach (var objectId in totalExpectedChunks.Keys)
+        {
+            int expected = totalExpectedChunks[objectId];
+            int received = totalReceivedChunks[objectId];
+            float lossRate = 1f - ((float)received / expected);
+            
+            // Debug.Log($"Object {objectId}:");
+            // Debug.Log($"  Expected chunks: {expected}");
+            // Debug.Log($"  Received chunks: {received}");
+            // Debug.Log($"  Loss rate: {lossRate:P2}");
+            
+            totalLossRate += lossRate;
+        }
+        
+        if (totalObjects > 0)
+        {
+            float averageLossRate = totalLossRate / totalObjects;
+            Debug.Log($"=== Summary ===");
+            Debug.Log($"Total objects: {totalObjects}");
+            Debug.Log($"Average packet loss rate: {averageLossRate:P2}");
+        }
+    }
+
+    private void UpdatePacketLossDisplay()
+    {
+        if (packetLossText == null) return;
+
+        if (totalExpectedChunks.Count == 0)
+        {
+            packetLossText.text = "Packet Loss Rate: --";
+            return;
+        }
+
+        float totalLossRate = 0f;
+        int totalObjects = totalExpectedChunks.Count;
+        int totalExpected = 0;
+        int totalReceived = 0;
+
+        foreach (var objectId in totalExpectedChunks.Keys)
+        {
+            totalExpected += totalExpectedChunks[objectId];
+            totalReceived += totalReceivedChunks[objectId];
+        }
+
+        float overallLossRate = 1f - ((float)totalReceived / totalExpected);
+        packetLossText.text = $"Packet Loss Rate: {overallLossRate:P2}\n" +
+                             $"Objects: {totalObjects}\n" +
+                             $"Received: {totalReceived}/{totalExpected} chunks";
+    }
+
     public void StartSimulation()
     {
         if (!startSimulating)
@@ -531,10 +605,23 @@ public class SimulatorManager : MonoBehaviour
             nextFrameTime = 0f; // First frame will be shown immediately
             captureFrameCount = 0; // Reset frame counter
 
+            // Reset packet loss tracking
+            totalExpectedChunks.Clear();
+            totalReceivedChunks.Clear();
+
+            // Reset packet loss display
+            if (packetLossText != null)
+            {
+                packetLossText.text = "Packet Loss Rate: --";
+            }
+
             toggleSimulateButton.GetComponentInChildren<TMP_Text>().text = "Reset";
         }
         else
         {
+            // Calculate and log packet loss rates before resetting
+            CalculateAndLogPacketLossRates();
+
             // Reset simulation
             startSimulating = false;
             currentEntryIndex = 0;
@@ -565,8 +652,12 @@ public class SimulatorManager : MonoBehaviour
             // Reset UI
             if (logTimePerFrame != null)
             {
-                logTimePerFrame.text = "";
+                logTimePerFrame.text = "Time log......";
                 toggleSimulateButton.GetComponentInChildren<TMP_Text>().text = "Simulate";
+            }
+            if (packetLossText != null)
+            {
+                packetLossText.text = "Packet Loss Rate: --";
             }
         }
     }
