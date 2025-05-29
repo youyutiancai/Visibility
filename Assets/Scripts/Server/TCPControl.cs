@@ -15,7 +15,7 @@ public class TCPControl : MonoBehaviour
     private TcpListener tcpListener;
     private Task listenerTask;
     private static object _lock = new object();
-    private static Dictionary<IPEndPoint, TcpClient> clients;
+    public static Dictionary<IPAddress, TcpClient> clients;
     private static Dictionary<IPEndPoint, Task> clientTasks;
     private Dispatcher dispatcher;
     private VisibilityCheck visibilityCheck;
@@ -29,7 +29,7 @@ public class TCPControl : MonoBehaviour
         visibilityCheck = _visibilityCheck;
         cc = _clusterControl;
         iP4Address = IPAddress.Any;
-        clients = new Dictionary<IPEndPoint, TcpClient>();
+        clients = new Dictionary<IPAddress, TcpClient>();
         clientTasks = new Dictionary<IPEndPoint, Task>();
         endpointToUser = new Dictionary<IPEndPoint, RealUser>();
         listenerTask = ListenTCPAsync();
@@ -56,7 +56,7 @@ public class TCPControl : MonoBehaviour
 
                 lock (_lock)
                 {
-                    clients[ep] = newClient;
+                    clients[ep.Address] = newClient;
                     clientTasks[ep] = HandleClientConnectionAsync(ep, ct);
                 }
             }
@@ -77,7 +77,7 @@ public class TCPControl : MonoBehaviour
         TcpClient client;
         lock (_lock)
         {
-            client = clients[ep];
+            client = clients[ep.Address];
         }
 
         dispatcher.Enqueue(() => SendTable(client));
@@ -115,7 +115,7 @@ public class TCPControl : MonoBehaviour
         {
             lock (_lock)
             {
-                clients.Remove(ep);
+                clients.Remove(ep.Address);
                 clientTasks.Remove(ep);
                 endpointToUser.Remove(ep);
                 Debug.Log($"Client {ep} has been removed");
@@ -198,6 +198,12 @@ public class TCPControl : MonoBehaviour
             client.GetStream().Write(visibilityCheck.objectTable);
             Debug.Log($"table size: {visibilityCheck.objectTable.Length}");
         }
+    }
+
+    public void SendMessageToClient(IPAddress clientEndPoint, byte[] message)
+    {
+        //Debug.Log($"Sending message to client {clients[clientEndPoint].Available} of size {BitConverter.ToInt32(message, 0)}");
+        clients[clientEndPoint].GetStream().Write(message, 0, message.Length);
     }
 
     public async void OnQuit()

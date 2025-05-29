@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using Oculus.Platform;
 using UnityEngine;
 
 public class TCPClient : MonoBehaviour
@@ -37,6 +38,7 @@ public class TCPClient : MonoBehaviour
     private bool parsingTable;
     public GameObject centerEye;
     public bool isPuppet = false;
+    public UDPBroadcastClientNew udpClient;
 
     #region
 
@@ -209,7 +211,10 @@ public class TCPClient : MonoBehaviour
         if (parsingTable)
         {
             ParseTable(message);
+            return;
         }
+
+        udpClient.ParseMessageForChunks(message);
     }
 
     private void ParseTable(byte[] message)

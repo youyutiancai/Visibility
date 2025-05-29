@@ -11,7 +11,7 @@ using UnityTCPClient.Assets.Scripts;
 public class NetworkControl : Singleton<NetworkControl>
 {
     BroadcastControl bcc;
-    TCPControl tc;
+    public TCPControl tc;
     private CancellationTokenSource cts;
     ClusterControl cc;
     [HideInInspector]

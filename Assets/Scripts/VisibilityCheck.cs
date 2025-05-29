@@ -125,6 +125,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     {
         int numVerticesPerChunk = 57;
         List<byte> objectTable = new List<byte>();
+        objectTable.AddRange(BitConverter.GetBytes(0));
         objectTable.AddRange(BitConverter.GetBytes((int)TCPMessageType.TABLE));
         objectTable.AddRange(BitConverter.GetBytes(0));
         objectTable.AddRange(BitConverter.GetBytes(objectsInScene.Count));
@@ -175,7 +176,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             //Debug.Log($"total number of bytes {objectTable.Count}");
         }
         byte[] result = objectTable.ToArray();
-        Buffer.BlockCopy(BitConverter.GetBytes(objectTable.Count), 0, result, sizeof(int), sizeof(int));
+        Buffer.BlockCopy(BitConverter.GetBytes(objectTable.Count - sizeof(int)), 0, result, sizeof(int) * 2, sizeof(int));
+        Buffer.BlockCopy(BitConverter.GetBytes(objectTable.Count - sizeof(int)), 0, result, 0, sizeof(int));
 
         // Save the object table to a file
         // string dataPath = Path.Combine(Application.dataPath, "Data");
