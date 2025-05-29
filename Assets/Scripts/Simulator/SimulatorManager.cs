@@ -6,14 +6,22 @@ using Newtonsoft.Json;
 using System;
 using Newtonsoft.Json.Linq;
 using TMPro;
+using UnityEngine.UI;
 
 [RequireComponent(typeof(ObjectChunkManager))]
 [RequireComponent(typeof(ObjectTableManager))]
+[RequireComponent(typeof(ResourceLoader))]
 public class SimulatorManager : MonoBehaviour
 {
     public Transform cameraRig;
+    public GameObject completeSceneObject;
     public string jsonlFilePath = "Assets/Data/ClientLogData/with_interrupt.jsonl";
     public TMP_Text logTimePerFrame;
+    public Button toggleSimulateButton;
+    public TMP_Dropdown fileSelectionDropdown;
+    public TMP_Dropdown modeDropdown;
+    public CameraSetupManager cameraSetupManager;
+    public TMP_Text packetLossText;
     private bool startSimulating = false;
     private List<LogEntry> logEntries;
     private int currentEntryIndex = 0;
@@ -29,6 +37,9 @@ public class SimulatorManager : MonoBehaviour
     private Dictionary<int, List<List<int>>> trianglesDict = new Dictionary<int, List<List<int>>>();
     private float[] reusableFloatBuffer = new float[57 * 6];
     private int[] reusableIntBuffer = new int[1024];
+    private int captureFrameCount = 0;
+    private Dictionary<int, int> totalExpectedChunks = new Dictionary<int, int>();
+    private Dictionary<int, int> totalReceivedChunks = new Dictionary<int, int>();
 
     [Serializable]
     private class ChunkData
@@ -103,7 +114,127 @@ public class SimulatorManager : MonoBehaviour
             return;
         }
         receivedChunks = new Dictionary<int, bool[]>();
+        
+        // Initialize the dropdown
+        InitializeFileDropdown();
+        InitializeModeDropdown();
+
+        // load default jsonl file
+        jsonlFilePath = Path.Combine("Assets/Data/ClientLogData", fileSelectionDropdown.options[0].text);
         LoadJsonlData();
+    }
+
+    private void InitializeModeDropdown()
+    {
+        if (modeDropdown == null)
+        {
+            Debug.LogError("Mode Dropdown not assigned!");
+            return;
+        }
+
+        modeDropdown.ClearOptions();
+        modeDropdown.AddOptions(new List<TMP_Dropdown.OptionData>
+        {
+            new TMP_Dropdown.OptionData("Replay"),
+            new TMP_Dropdown.OptionData("Capture Frames - Ground Truth"),
+            new TMP_Dropdown.OptionData("Capture Frames - Recevied")
+        });
+
+        modeDropdown.onValueChanged.AddListener(OnModeSelected);
+    }
+
+    private void OnModeSelected(int index)
+    {
+        Debug.Log($"Mode selected: {modeDropdown.options[index].text}");
+        if (index == 0)
+        {
+            // Replay
+            completeSceneObject.SetActive(false);
+
+        }
+        else if (index == 1)
+        {
+            // Capture Frames - Ground Truth
+            completeSceneObject.SetActive(true);
+            
+        }
+        else if (index == 2)
+        {
+            // Capture Frames - Recevied
+            completeSceneObject.SetActive(false);
+        }
+    }
+
+    private void InitializeFileDropdown()
+    {
+        if (fileSelectionDropdown == null)
+        {
+            Debug.LogError("File Selection Dropdown not assigned!");
+            return;
+        }
+
+        // Clear existing options
+        fileSelectionDropdown.ClearOptions();
+
+        // Get all JSONL files from the ClientLogData directory
+        string dataPath = Path.Combine(Application.dataPath, "Data", "ClientLogData");
+        string[] files = Directory.GetFiles(dataPath, "*.jsonl");
+
+        // Create dropdown options
+        List<TMP_Dropdown.OptionData> options = new List<TMP_Dropdown.OptionData>();
+        foreach (string file in files)
+        {
+            string fileName = Path.GetFileName(file);
+            options.Add(new TMP_Dropdown.OptionData(fileName));
+        }
+
+        // Add options to dropdown
+        fileSelectionDropdown.AddOptions(options);
+
+        // Add listener for dropdown value change
+        fileSelectionDropdown.onValueChanged.AddListener(OnFileSelected);
+    }
+
+    private void OnFileSelected(int index)
+    {
+        string selectedFile = fileSelectionDropdown.options[index].text;
+        jsonlFilePath = Path.Combine("Assets/Data/ClientLogData", selectedFile);
+        LoadJsonlData();
+    }
+
+    private void CaptureFrame()
+    {
+        if (cameraSetupManager == null)
+        {
+            Debug.LogError("CameraSetupManager not assigned!");
+            return;
+        }
+
+        // Determine screenshot directory based on mode
+        string modeFolder = modeDropdown.value switch
+        {
+            1 => "Screenshots_Ground_Truth",
+            2 => "Screenshots_Received",
+            _ => "Screenshots" // Default folder for replay mode
+        };
+
+        // Create screenshot directory if it doesn't exist
+        string screenshotDir = Path.Combine(Application.dataPath, "Data", modeFolder);
+        if (!Directory.Exists(screenshotDir))
+        {
+            Directory.CreateDirectory(screenshotDir);
+        }
+
+        // Get current timestamp from log entry and format it safely for filenames
+        string timestamp = logEntries[currentEntryIndex].originalTime;
+        string safeTimestamp = timestamp.Replace("/", "-").Replace(":", "-").Replace(" ", "_");
+        string filename = $"frame_{captureFrameCount:D4}_{safeTimestamp}.png";
+        string filepath = Path.Combine(screenshotDir, filename);
+
+        // Capture frame from the render texture
+        byte[] frameData = cameraSetupManager.CaptureFrameToBytes();
+        File.WriteAllBytes(filepath, frameData);
+        captureFrameCount++;
     }
 
     void Update()
@@ -113,6 +244,10 @@ public class SimulatorManager : MonoBehaviour
             currentEntryIndex = 0;
             cameraRig.position = new Vector3(-114f, 1.7f, -100f);
             cameraRig.rotation = Quaternion.Euler(0f, 0f, 0f);
+            if (packetLossText != null)
+            {
+                packetLossText.text = "Packet Loss Rate: --";
+            }
             return;
         }
 
@@ -127,11 +262,20 @@ public class SimulatorManager : MonoBehaviour
             cameraRig.position = entry.headset.position;
             cameraRig.rotation = Quaternion.Euler(entry.headset.rotationEuler);
 
-            // Process received chunks
-            ProcessReceivedChunks(entry.chunks);
-
-            // Update UI
-            logTimePerFrame.text = entry.originalTime;
+            // Simulate based on mode
+            if (modeDropdown.value == 0) // Replay
+            {
+                ProcessReceivedChunks(entry.chunks);
+            }
+            else if (modeDropdown.value == 1) // Capture Frames - Ground Truth
+            {
+                CaptureFrame();
+            }
+            else if (modeDropdown.value == 2) // Capture Frames - Recevied
+            {
+                ProcessReceivedChunks(entry.chunks);
+                CaptureFrame();
+            }
 
             // Calculate time until next frame
             if (currentEntryIndex < logEntries.Count - 1)
@@ -140,6 +284,10 @@ public class SimulatorManager : MonoBehaviour
                 float nextFrameTimeInLog = logEntries[currentEntryIndex + 1].time;
                 nextFrameTime = currentTime + (nextFrameTimeInLog - currentFrameTime);
             }
+
+            // Update UI
+            logTimePerFrame.text = entry.originalTime;
+            UpdatePacketLossDisplay();
 
             currentEntryIndex++;
         }
@@ -159,9 +307,19 @@ public class SimulatorManager : MonoBehaviour
                 continue;
             }
 
+            // Initialize tracking for this object if not already done
+            if (!totalExpectedChunks.ContainsKey(chunk.objectID))
+            {
+                var vertexChunks = chunkManager.GetVertexChunks(chunk.objectID);
+                var triangleChunks = chunkManager.GetTriangleChunks(chunk.objectID);
+                totalExpectedChunks[chunk.objectID] = (vertexChunks?.Count ?? 0) + (triangleChunks?.Count ?? 0);
+                totalReceivedChunks[chunk.objectID] = 0;
+            }
+
             // Get the chunk data from ObjectChunkManager
             if (chunkManager.HasChunk(chunk.objectID, chunk.chunkID))
             {
+                totalReceivedChunks[chunk.objectID]++;
                 byte[] packet = chunkManager.GetChunk(chunk.objectID, chunk.chunkID);
                 
                 // Parse the packet header
@@ -323,7 +481,10 @@ public class SimulatorManager : MonoBehaviour
 
     private void LoadJsonlData()
     {
-        logEntries = new List<LogEntry>();
+        if (logEntries == null)
+            logEntries = new List<LogEntry>();
+        
+        logEntries.Clear();
         
         if (!File.Exists(jsonlFilePath))
         {
@@ -377,11 +538,127 @@ public class SimulatorManager : MonoBehaviour
         }
     }
 
+    public void CalculateAndLogPacketLossRates()
+    {
+        float totalLossRate = 0f;
+        int totalObjects = totalExpectedChunks.Count;
+        
+        Debug.Log("=== Packet Loss Rate Analysis ===");
+        foreach (var objectId in totalExpectedChunks.Keys)
+        {
+            int expected = totalExpectedChunks[objectId];
+            int received = totalReceivedChunks[objectId];
+            float lossRate = 1f - ((float)received / expected);
+            
+            // Debug.Log($"Object {objectId}:");
+            // Debug.Log($"  Expected chunks: {expected}");
+            // Debug.Log($"  Received chunks: {received}");
+            // Debug.Log($"  Loss rate: {lossRate:P2}");
+            
+            totalLossRate += lossRate;
+        }
+        
+        if (totalObjects > 0)
+        {
+            float averageLossRate = totalLossRate / totalObjects;
+            Debug.Log($"=== Summary ===");
+            Debug.Log($"Total objects: {totalObjects}");
+            Debug.Log($"Average packet loss rate: {averageLossRate:P2}");
+        }
+    }
+
+    private void UpdatePacketLossDisplay()
+    {
+        if (packetLossText == null) return;
+
+        if (totalExpectedChunks.Count == 0)
+        {
+            packetLossText.text = "Packet Loss Rate: --";
+            return;
+        }
+
+        float totalLossRate = 0f;
+        int totalObjects = totalExpectedChunks.Count;
+        int totalExpected = 0;
+        int totalReceived = 0;
+
+        foreach (var objectId in totalExpectedChunks.Keys)
+        {
+            totalExpected += totalExpectedChunks[objectId];
+            totalReceived += totalReceivedChunks[objectId];
+        }
+
+        float overallLossRate = 1f - ((float)totalReceived / totalExpected);
+        packetLossText.text = $"Packet Loss Rate: {overallLossRate:P2}\n" +
+                             $"Objects: {totalObjects}\n" +
+                             $"Received: {totalReceived}/{totalExpected} chunks";
+    }
+
     public void StartSimulation()
     {
-        startSimulating = true;
-        startTime = Time.time;
-        currentEntryIndex = 0;
-        nextFrameTime = 0f; // First frame will be shown immediately
+        if (!startSimulating)
+        {
+            // Start simulation
+            startSimulating = true;
+            startTime = Time.time;
+            currentEntryIndex = 0;
+            nextFrameTime = 0f; // First frame will be shown immediately
+            captureFrameCount = 0; // Reset frame counter
+
+            // Reset packet loss tracking
+            totalExpectedChunks.Clear();
+            totalReceivedChunks.Clear();
+
+            // Reset packet loss display
+            if (packetLossText != null)
+            {
+                packetLossText.text = "Packet Loss Rate: --";
+            }
+
+            toggleSimulateButton.GetComponentInChildren<TMP_Text>().text = "Reset";
+        }
+        else
+        {
+            // Calculate and log packet loss rates before resetting
+            CalculateAndLogPacketLossRates();
+
+            // Reset simulation
+            startSimulating = false;
+            currentEntryIndex = 0;
+            
+            // Reset camera position
+            if (cameraRig != null)
+            {
+                cameraRig.position = new Vector3(-114f, 1.7f, -100f);
+                cameraRig.rotation = Quaternion.Euler(0f, 0f, 0f);
+            }
+
+            // Clear all visualized objects
+            foreach (var obj in visualizedObjects.Values)
+            {
+                if (obj != null)
+                {
+                    Destroy(obj);
+                }
+            }
+            visualizedObjects.Clear();
+
+            // Clear all data structures
+            verticesDict.Clear();
+            normalsDict.Clear();
+            trianglesDict.Clear();
+            receivedChunks.Clear();
+
+            // Reset UI
+            if (logTimePerFrame != null)
+            {
+                logTimePerFrame.text = "Time log......";
+                toggleSimulateButton.GetComponentInChildren<TMP_Text>().text = "Simulate";
+            }
+            if (packetLossText != null)
+            {
+                packetLossText.text = "Packet Loss Rate: --";
+            }
+        }
     }
 }
