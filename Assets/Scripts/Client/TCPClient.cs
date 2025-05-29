@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using Oculus.Platform;
 using UnityEngine;
 
 public class TCPClient : MonoBehaviour
@@ -10,45 +11,26 @@ public class TCPClient : MonoBehaviour
     [HideInInspector]
     public static TCPClient instance;
 
-
-    //[HideInInspector]
-    private string serverIPAddress = "192.168.1.188";  // 192.168.1.2
-    //public string serverIPAddress;
-
-    [SerializeField]
-    private int port = 13000;
-
-    //[SerializeField]
-    //private TextMeshProUGUI debugText;
+    private string serverIPAddress = "192.168.1.188";
+    [SerializeField] private int port = 13000;
 
     public TcpClient client;
-    private int messagestatus;
     private Thread listenerThread;
-    //private byte[] data;
 
-    // global variables for the table
-    [HideInInspector]
-    public ObjectHolder[] objectHolders;
-    private int currentBytes = 0;
-    private List<byte> table_data; // the initial length is 0
-    private int tcpType;
-    private int totalBytes;
-    private int totalObjectNum;
+    [HideInInspector] public ObjectHolder[] objectHolders;
+    private List<byte> table_data;
+    private int tcpType, totalBytes, totalObjectNum;
     private bool parsingTable;
+
     public GameObject centerEye;
     public bool isPuppet = false;
-
-    #region
+    public UDPBroadcastClientNew udpClient;
 
     public event Action OnReceivedServerTable;
 
-    #endregion
+    private byte[] receiveBuffer = new byte[1024 * 1024];
+    private int readPos = 0, writePos = 0;
 
-    // create Singleton object before threads are created. 
-    void Awake()
-    {
-
-    }
     void Start()
     {
         parsingTable = false;
@@ -57,37 +39,10 @@ public class TCPClient : MonoBehaviour
             client = new TcpClient(serverIPAddress, port);
             Debug.Log($"TCP client listening on port {port}");
         }
-        catch (Exception e)
-        {
-            Debug.Log(e);
-        }
-        listenerThread = new Thread(() =>
-        {
-            Thread.CurrentThread.IsBackground = true;
-            ListenToServer(client);
-        });
+        catch (Exception e) { Debug.Log(e); }
+
+        listenerThread = new Thread(() => ListenToServer(client)) { IsBackground = true };
         listenerThread.Start();
-    }
-
-    public string GetServerIP()
-    {
-        return serverIPAddress;
-    }
-
-    private void Message(int clientId, string message)
-    {
-        //Debug.Log($"{clientId} {message}");
-        //debugText.text += $"{message} \n";
-    }
-
-
-
-    public int GetReceivestatus()
-    {
-        return messagestatus;
-    }
-    public void ResetMessagestatus()
-    {
     }
 
     private void Update()
@@ -108,7 +63,7 @@ public class TCPClient : MonoBehaviour
 
     private void SendPuppetStateChange(bool isPuppet)
     {
-        List<byte> buffer = new List<byte>();
+        var buffer = new List<byte>();
         buffer.AddRange(BitConverter.GetBytes((int)TCPMessageType.PUPPET_TOGGLE));
         buffer.AddRange(BitConverter.GetBytes(isPuppet ? 1 : 0));
         SendMessage(buffer.ToArray());
@@ -116,8 +71,8 @@ public class TCPClient : MonoBehaviour
 
     private byte[] CreatePoseMessage(Vector3 pos, Quaternion rot)
     {
-        List<byte> buffer = new List<byte>();
-        buffer.AddRange(BitConverter.GetBytes((int)TCPMessageType.POSE_UPDATE));  // Use your enum
+        var buffer = new List<byte>();
+        buffer.AddRange(BitConverter.GetBytes((int)TCPMessageType.POSE_UPDATE));
         buffer.AddRange(BitConverter.GetBytes(pos.x));
         buffer.AddRange(BitConverter.GetBytes(pos.y));
         buffer.AddRange(BitConverter.GetBytes(pos.z));
@@ -127,56 +82,49 @@ public class TCPClient : MonoBehaviour
         buffer.AddRange(BitConverter.GetBytes(rot.w));
         return buffer.ToArray();
     }
-
-
-    /*** 
-     * Received Message format:
-     * 
-     * TCP message type - int
-     * object count - int
-     * total num of bytes of the table - int
-     * table data
-     * 
-     * ***/
     private void ListenToServer(TcpClient server)
     {
         try
         {
             NetworkStream stream = server.GetStream();
+            byte[] tempBuffer = new byte[8192];
 
             while (true)
             {
-                byte[] buffer = new byte[1024 * 1024]; // 1MB buffer
-                int byteCount = stream.Read(buffer, 0, buffer.Length);
-                byte[] dataTemp = new byte[byteCount];
-                Buffer.BlockCopy(buffer, 0, dataTemp, 0, byteCount);
+                int bytesRead = stream.Read(tempBuffer, 0, tempBuffer.Length);
+                if (bytesRead == 0) break;
 
-                // string response = System.Text.Encoding.ASCII.GetString(dataTemp, 0, bytes);
-                UnityDispatcher.Instance.Enqueue(() => HandleMessage(dataTemp));
+                Array.Copy(tempBuffer, 0, receiveBuffer, writePos, bytesRead);
+                writePos += bytesRead;
 
-                //Dispatcher.Instance.Enqueue(() => Message(clientId, $"Recieved : {byteCount}"));
-                //dispatcher.Enqueue(() => Message(clientId, $"Message : " +
-                //    $"{System.Text.Encoding.ASCII.GetString(dataTemp, 0, MessageType.MESSAGELENGTH)}"));
-                //nfClient.readyForNextData = false;
+                while (writePos - readPos >= 4)
+                {
+                    int messageLength = BitConverter.ToInt32(receiveBuffer, readPos);
+                    if (writePos - readPos < 4 + messageLength) break;
+
+                    byte[] message = new byte[messageLength];
+                    Buffer.BlockCopy(receiveBuffer, readPos + 4, message, 0, messageLength);
+                    UnityDispatcher.Instance.Enqueue(() => HandleMessage(message));
+
+                    readPos += 4 + messageLength;
+                }
+
+                if (readPos > 0 && (writePos == receiveBuffer.Length || readPos > receiveBuffer.Length / 2))
+                {
+                    Buffer.BlockCopy(receiveBuffer, readPos, receiveBuffer, 0, writePos - readPos);
+                    writePos -= readPos;
+                    readPos = 0;
+                }
             }
-            // Dispatcher.Instance.Enqueue(() => Message(clientId, $"Disconnects"));
-            // stream.Close();
-            // client.Close();
         }
-        catch (Exception e)
-        {
-            Debug.Log($"Exception : {e}");
-        }
-
-        Console.Read();
+        catch (Exception e) { Debug.Log($"Exception : {e}"); }
     }
 
     private void HandleMessage(byte[] message)
     {
         int cursor = 0;
-
         TCPMessageType mt = (TCPMessageType)BitConverter.ToInt32(message, cursor);
-        Debug.Log($"[+++++++++++++++] message type: {mt}");
+        //Debug.Log($"[+++++++++++++++] message type: {mt}");
 
         if (mt == TCPMessageType.TABLE && !parsingTable)
         {
@@ -209,7 +157,10 @@ public class TCPClient : MonoBehaviour
         if (parsingTable)
         {
             ParseTable(message);
+            return;
         }
+
+        udpClient.ParseMessageForChunks(message);
     }
 
     private void ParseTable(byte[] message)
