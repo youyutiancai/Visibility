@@ -54,7 +54,7 @@ public class TCPClient : MonoBehaviour
             Debug.Log($"Puppet mode toggled: {isPuppet}");
         }
 
-        if (!isPuppet && client != null && client.Connected && centerEye != null)
+        if (client != null && client.Connected && centerEye != null)
         {
             byte[] poseMessage = CreatePoseMessage(centerEye.transform.position, centerEye.transform.rotation);
             SendMessage(poseMessage);

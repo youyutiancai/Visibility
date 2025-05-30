@@ -137,7 +137,11 @@ public class TCPControl : MonoBehaviour
             switch (mt)
             {
                 case TCPMessageType.POSE_UPDATE:
-                    if (cursor + sizeof(float) * 7 > data.Length) return; // not enough data
+                    if (cursor + sizeof(float) * 7 > data.Length) {
+                        Debug.Log($"not enough data: {data.Length}");
+                        return;
+                    }
+                        
                     if (endpointToUser.TryGetValue(ep, out RealUser realUser) && !realUser.isPuppet)
                     {
                         float px = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
@@ -151,6 +155,7 @@ public class TCPControl : MonoBehaviour
                         realUser.latestPosition = new Vector3(px, py, pz);
                         realUser.latestRotation = new Quaternion(rx, ry, rz, rw);
 
+                        Debug.Log($"{realUser.latestPosition}, {realUser.latestRotation}");
                         if (realUser.transform != null)
                             realUser.transform.SetPositionAndRotation(realUser.latestPosition, realUser.latestRotation);
                     }
