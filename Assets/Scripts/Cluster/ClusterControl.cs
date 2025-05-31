@@ -139,46 +139,30 @@ public class ClusterControl : Singleton<ClusterControl>
             Debug.Log($"broadcasting: {nc.isBroadcast}. finished {sendingObjectIdx}, {objectsWaitToBeSent.Count - currentObjectToSend} is left");
         }
 
-        if (timeSinceLastUpdate >= updateInterval)
+        
+        if (users.Count == 0)
+            return;
+
+        switch (ss)
         {
-            timeSinceLastUpdate = 0f;
-            
-
-            //int missing = 0;
-            //int notDisplayed = 0;
-            //for (int i = 0; i < vc.objectsInScene.Count; i++)
-            //{
-            //    if (vc.objectsInScene[i].activeSelf && !objectsWaitToBeSent.Contains(i))
-            //    {
-            //        if (vc.objectsInScene[i].tag != "Terrain")
-            //        {
-            //            Debug.Log($"{vc.objectsInScene[i].name} not waiting to be sent");
-            //        }
-            //        missing++;
-            //    }
-            //    else if (!vc.objectsInScene[i].activeSelf && objectsWaitToBeSent.Contains(i))
-            //    {
-            //        notDisplayed++;
-            //    }
-            //}
-            //Debug.Log($"total waiting: {objectsWaitToBeSent.Count}, missing: {missing}, not displayed: {notDisplayed}");
-
-            if (users.Count == 0)
-                return;
-
-            switch (ss)
-            {
-                case IndiUserRandomSpawn:
+            case IndiUserRandomSpawn:
+                if (timeSinceLastUpdate >= updateInterval)
+                {
+                    timeSinceLastUpdate = 0f;
                     RunDBSCAN(); // Re-run DBSCAN clustering
                     ApplyClusterColors(); // Apply colors based on clustering
                     UpdateClusterParents(); // Update parents and scale clusters
                     SendObjectsToClusters();
                     SendObjectsToUsers();
                     UpdateMethodComparison();
-                    break;
+                }
+                break;
 
-                
-                case RealUserStrategy:
+
+            case RealUserStrategy:
+                if (timeSinceLastUpdate >= updateInterval)
+                {
+                    timeSinceLastUpdate = 0f;
                     RunDBSCAN();
                     ApplyClusterColors();
                     UpdateClusterParents();
@@ -212,93 +196,14 @@ public class ClusterControl : Singleton<ClusterControl>
                             objectsWaitToBeSent.Insert(low, i);
                         }
                     }
-
-                    SimulateAndSendPuppetPoses();
-                    break;
-                //case RealUserStrategy:
-                    //RunDBSCAN(); // Re-run DBSCAN clustering
-                    //ApplyClusterColors(); // Apply colors based on clustering
-                    //UpdateClusterParents(); // Update parents and scale clusters
-                    //int[] newObjectsToSend = SendObjectsToClusters();
-                    //for (int i = 0; i < users.Count; i++)
-                    //{
-                    //    users[i].UpdateVisibleObjectsIndi(newObjectsToSend, ref objectSentIndi, null);
-                    //}
-
-                    //for (int i = 0; i < newObjectsToSend.Length; i++)
-                    //{
-                    //    if (newObjectsToSend[i] > 0 && !objectsWaitToBeSent.Contains(i))
-                    //    {
-                    //        float newDistance = Vector3.Distance(vc.objectsInScene[i].transform.position, initialClusterCenter.transform.position);
-                    //        int low = 0;
-                    //        int high = objectsWaitToBeSent.Count;
-
-                    //        // Binary search for the correct insertion index
-                    //        while (low < high)
-                    //        {
-                    //            int mid = (low + high) / 2;
-                    //            int currentIndex = objectsWaitToBeSent[mid];
-                    //            float currentDistance = Vector3.Distance(vc.objectsInScene[currentIndex].transform.position, initialClusterCenter.transform.position);
-
-                    //            if (newDistance < currentDistance)
-                    //                high = mid;
-                    //            else
-                    //                low = mid + 1;
-                    //        }
-                    //        objectsWaitToBeSent.Insert(low, i);
-                    //    }
-                    //}
-                    //foreach (var user in users)
-                    //{
-                    //    if (user is RealUser realUser && realUser.isPuppet && realUser.tcpClient != null)
-                    //    {
-                    //        // Simulate pose
-                    //        float t = Time.time;
-                    //        float radius = 1.5f;
-                    //        float speed = 0.5f;
-                    //        float angle = t * speed;
-
-                    //        Vector3 position = new Vector3(Mathf.Cos(angle), 1.3f, Mathf.Sin(angle)) * radius + initialClusterCenterPos;
-                    //        Quaternion rotation = Quaternion.LookRotation(new Vector3(Mathf.Sin(angle), 0.05f, Mathf.Cos(angle)), Vector3.up);
-
-                    //        realUser.latestPosition = position;
-                    //        realUser.latestRotation = rotation;
-
-                    //        // Build TCP pose packet
-                    //        List<byte> buffer = new List<byte>();
-                    //        buffer.AddRange(BitConverter.GetBytes(100)); // Message type = 100 for puppet pose
-                    //        buffer.AddRange(BitConverter.GetBytes(position.x));
-                    //        buffer.AddRange(BitConverter.GetBytes(position.y));
-                    //        buffer.AddRange(BitConverter.GetBytes(position.z));
-                    //        buffer.AddRange(BitConverter.GetBytes(rotation.x));
-                    //        buffer.AddRange(BitConverter.GetBytes(rotation.y));
-                    //        buffer.AddRange(BitConverter.GetBytes(rotation.z));
-                    //        buffer.AddRange(BitConverter.GetBytes(rotation.w));
-
-                    //        // Send pose via TCP
-                    //        try
-                    //        {
-                    //            NetworkStream stream = realUser.tcpClient.GetStream();
-                    //            stream.Write(buffer.ToArray(), 0, buffer.Count);
-                    //        }
-                    //        catch (Exception e)
-                    //        {
-                    //            Debug.LogError($"Failed to send puppet pose to {realUser.tcpEndPoint}: {e.Message}");
-                    //        }
-                    //    }
-                    //}
-
-                    //break;
-            }
-
-            if (regularlySwapUsers || regularlySwapLeader)
-            {
-                ss.UpdateRegularly();
-            }
+                }
+                SimulateAndSendPuppetPoses();
+                break;
         }
-        
-        //long totalAllocatedMemory = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
-        //Debug.Log(totalAllocatedMemory);
+            //if (regularlySwapUsers || regularlySwapLeader)
+            //{
+            //    ss.UpdateRegularly();
+            //}
     }
 
     private void SimulateAndSendPuppetPoses()
@@ -307,22 +212,25 @@ public class ClusterControl : Singleton<ClusterControl>
         {
             if (user is RealUser realUser && realUser.isPuppet && realUser.tcpClient?.Connected == true)
             {
-                Debug.Log($"changing");
+                //Debug.Log($"changing");
                 float t = Time.time;
                 float radius = 1.5f;
                 float speed = 0.5f;
                 float angle = t * speed;
 
-                Vector3 position = new Vector3(Mathf.Cos(angle), 1.3f, Mathf.Sin(angle)) * radius + initialClusterCenterPos;
+                Vector3 position = realUser.latestPosition;
+                position = new Vector3(position.x, 1.3f, position.z);
+                //Vector3 position = new Vector3(Mathf.Cos(angle), 1.3f, Mathf.Sin(angle)) * radius + initialClusterCenterPos;
                 Quaternion rotation = Quaternion.LookRotation(new Vector3(Mathf.Sin(angle), 0.05f, Mathf.Cos(angle)), Vector3.up);
 
-                realUser.latestPosition = position;
-                realUser.latestRotation = rotation;
-                realUser.transform.SetPositionAndRotation(position, rotation);
+                //realUser.latestPosition = position;
+                //realUser.latestRotation = rotation;
+                //realUser.transform.SetPositionAndRotation(position, rotation);
 
                 try
                 {
                     List<byte> buffer = new List<byte>();
+                    buffer.AddRange(BitConverter.GetBytes(0));
                     buffer.AddRange(BitConverter.GetBytes((int)TCPMessageType.POSE_FROM_SERVER));
                     buffer.AddRange(BitConverter.GetBytes(position.x));
                     buffer.AddRange(BitConverter.GetBytes(position.y));
@@ -331,9 +239,10 @@ public class ClusterControl : Singleton<ClusterControl>
                     buffer.AddRange(BitConverter.GetBytes(rotation.y));
                     buffer.AddRange(BitConverter.GetBytes(rotation.z));
                     buffer.AddRange(BitConverter.GetBytes(rotation.w));
-
+                    byte[] message = buffer.ToArray();
+                    Buffer.BlockCopy(BitConverter.GetBytes(buffer.Count - sizeof(int)), 0, message, 0, sizeof(int));
                     NetworkStream stream = realUser.tcpClient.GetStream();
-                    stream.Write(buffer.ToArray(), 0, buffer.Count);
+                    stream.Write(message, 0, message.Length);
                 }
                 catch (Exception e)
                 {

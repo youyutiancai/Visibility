@@ -259,11 +259,10 @@ public class BroadcastControl : MonoBehaviour
         else
         {
             udpClient.EnableBroadcast = false;
-            IPAddress multicastAddress = IPAddress.Parse("192.168.1.240");
+            IPAddress multicastAddress = IPAddress.Parse("192.168.1.173");
             //IPAddress multicastAddress = IPAddress.Parse("230.0.0.1"); // pick any in 224.x.x.x - 239.x.x.x
             //IPEndPoint multicastEndPoint = new IPEndPoint(multicastAddress, PORT); // for udp
             //udpClient.Send(message, message.Length, multicastEndPoint);
-            //Debug.Log($"sending message udp");
 
             byte[] new_message = new byte[message.Length + sizeof(int)];
             Buffer.BlockCopy(BitConverter.GetBytes(message.Length), 0, new_message, 0, sizeof(int));
