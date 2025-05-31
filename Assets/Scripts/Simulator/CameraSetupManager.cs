@@ -2,16 +2,29 @@ using UnityEngine;
 using System.IO;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using TMPro;
+using UnityEngine.UI;
 
 [RequireComponent(typeof(Camera))]
 public class CameraSetupManager : MonoBehaviour
 {
     private float fx, fy, cx, cy;
     private int width, height;
-    private RenderTexture renderTexture;
+    private RenderTexture colorRenderTexture;
+    private RenderTexture depthRenderTexture;
     private Camera renderCamera;
-    private ConcurrentQueue<byte[]> frameQueue = new ConcurrentQueue<byte[]>();
-    private bool isProcessingFrames = false;
+    public TMP_Dropdown outputModeDropdown;
+    private Material depthMaterial;
+
+    public enum OutputMode
+    {
+        Depth,
+        RGB
+    }
+
+    [HideInInspector]
+    public OutputMode currentOutputMode = OutputMode.Depth;
 
     void Start()
     {
@@ -48,9 +61,32 @@ public class CameraSetupManager : MonoBehaviour
         }
 
         renderCamera = GetComponent<Camera>();
-        renderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
-        renderTexture.Create();
-        renderCamera.targetTexture = renderTexture;
+        
+        // Enable depth texture mode only if in depth mode
+        renderCamera.depthTextureMode = currentOutputMode == OutputMode.RGB ? DepthTextureMode.None : DepthTextureMode.Depth;
+        
+        // Create color render texture
+        colorRenderTexture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+        colorRenderTexture.Create();
+
+        // Create depth render texture
+        depthRenderTexture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32);
+        depthRenderTexture.Create();
+
+        // Create depth material
+        depthMaterial = new Material(Shader.Find("Hidden/DepthToLinear"));
+
+        // !! depth texture mode still first need to render to the screen, so we need to set the target texture to null
+        renderCamera.targetTexture = null;
+        if (currentOutputMode == OutputMode.Depth)
+        {
+            renderCamera.depthTextureMode = DepthTextureMode.Depth;
+        }
+        else if (currentOutputMode == OutputMode.RGB)
+        {
+            renderCamera.depthTextureMode = DepthTextureMode.None;
+        }
+
 
         float near = renderCamera.nearClipPlane;
         float far = renderCamera.farClipPlane;
@@ -66,7 +102,42 @@ public class CameraSetupManager : MonoBehaviour
         );
 
         renderCamera.projectionMatrix = proj;
+
+        // Initialize output mode dropdown if assigned
+        if (outputModeDropdown != null)
+        {
+            outputModeDropdown.ClearOptions();
+            outputModeDropdown.AddOptions(new List<TMP_Dropdown.OptionData>
+            {
+                new TMP_Dropdown.OptionData("Depth"),
+                new TMP_Dropdown.OptionData("RGB Color")
+            });
+            outputModeDropdown.onValueChanged.AddListener(OnOutputModeChanged);
+        }
     }
+
+    private void OnOutputModeChanged(int index)
+    {
+        currentOutputMode = (OutputMode)index;
+        renderCamera.depthTextureMode = currentOutputMode == OutputMode.RGB ? DepthTextureMode.None : DepthTextureMode.Depth;
+    }
+
+    void OnRenderImage(RenderTexture src, RenderTexture dest)
+    {
+        if (currentOutputMode == OutputMode.Depth)
+        {
+            RenderTexture.active = depthRenderTexture;
+            Graphics.Blit(null, depthRenderTexture, depthMaterial); // convert depth to linear
+            RenderTexture.active = null;
+        }
+        else if (currentOutputMode == OutputMode.RGB)
+        {
+            RenderTexture.active = colorRenderTexture;
+            Graphics.Blit(src, colorRenderTexture);
+            RenderTexture.active = null;
+        }
+    }
+
 
     Matrix4x4 PerspectiveOffCenter(float left, float right, float bottom, float top, float near, float far)
     {
@@ -90,7 +161,7 @@ public class CameraSetupManager : MonoBehaviour
     {
         // Create a temporary RenderTexture to read from
         RenderTexture currentRT = RenderTexture.active;
-        RenderTexture.active = renderTexture;
+        RenderTexture.active = currentOutputMode == OutputMode.RGB ? colorRenderTexture : depthRenderTexture;
 
         // Create a new Texture2D to read the pixels into
         Texture2D screenshot = new Texture2D(width, height, TextureFormat.RGB24, false);
@@ -105,5 +176,23 @@ public class CameraSetupManager : MonoBehaviour
         RenderTexture.active = currentRT;
 
         return bytes;
+    }
+
+    void OnDestroy()
+    {
+        if (colorRenderTexture != null)
+        {
+            colorRenderTexture.Release();
+            Destroy(colorRenderTexture);
+        }
+        if (depthRenderTexture != null)
+        {
+            depthRenderTexture.Release();
+            Destroy(depthRenderTexture);
+        }
+        if (depthMaterial != null)
+        {
+            Destroy(depthMaterial);
+        }
     }
 }

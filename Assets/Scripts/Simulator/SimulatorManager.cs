@@ -7,6 +7,7 @@ using System;
 using Newtonsoft.Json.Linq;
 using TMPro;
 using UnityEngine.UI;
+using System.Globalization;
 
 [RequireComponent(typeof(ObjectChunkManager))]
 [RequireComponent(typeof(ObjectTableManager))]
@@ -25,8 +26,11 @@ public class SimulatorManager : MonoBehaviour
     private bool startSimulating = false;
     private List<LogEntry> logEntries;
     private int currentEntryIndex = 0;
-    private float startTime;
-    private float nextFrameTime;
+    private double startTime;
+    private double nextFrameTime;
+    private double deltaTime;
+    private double logDeltaTime;
+    private double logBaseTime; // reference timestamp from first entry
     private ObjectChunkManager chunkManager;
     private ObjectTableManager objectTableManager;
     private ResourceLoader resourceLoader;
@@ -59,18 +63,18 @@ public class SimulatorManager : MonoBehaviour
     [Serializable]
     private class LogEntry
     {
-        [JsonProperty("time")]
-        private DateTime _time;
+        [JsonIgnore]
+        public double time;  // Use double for high-precision relative time
+
         private string _originalTimeString;
-        
-        public float time => (float)(_time - DateTime.UnixEpoch).TotalSeconds;
         public string originalTime => _originalTimeString;
+
         public HeadsetData headset;
         public List<ChunkData> chunks;
 
-        public LogEntry(DateTime time, string originalTimeStr, HeadsetData headsetData, List<ChunkData> chunkList)
+        public LogEntry(double relativeTime, string originalTimeStr, HeadsetData headsetData, List<ChunkData> chunkList)
         {
-            _time = time;
+            time = relativeTime;
             _originalTimeString = originalTimeStr;
             headset = headsetData;
             chunks = chunkList;
@@ -210,7 +214,7 @@ public class SimulatorManager : MonoBehaviour
             return;
         }
 
-        // Determine screenshot directory based on mode
+        // Determine screenshot directory based on mode and output type
         string modeFolder = modeDropdown.value switch
         {
             1 => "Screenshots_Ground_Truth",
@@ -218,8 +222,9 @@ public class SimulatorManager : MonoBehaviour
             _ => "Screenshots" // Default folder for replay mode
         };
 
-        // Create screenshot directory if it doesn't exist
-        string screenshotDir = Path.Combine(Application.dataPath, "Data", modeFolder);
+        // Add output type subfolder
+        string outputType = cameraSetupManager.currentOutputMode == CameraSetupManager.OutputMode.RGB ? "RGB" : "Depth";
+        string screenshotDir = Path.Combine(Application.dataPath, "Data", modeFolder, outputType);
         if (!Directory.Exists(screenshotDir))
         {
             Directory.CreateDirectory(screenshotDir);
@@ -251,11 +256,13 @@ public class SimulatorManager : MonoBehaviour
             return;
         }
 
-        float currentTime = Time.time - startTime;
+        deltaTime += Time.deltaTime;
 
         // Check if it's time to show the next frame
-        if (currentTime >= nextFrameTime && currentEntryIndex < logEntries.Count)
+        if (deltaTime >= logDeltaTime && currentEntryIndex < logEntries.Count)
         {
+            //Debug.Log($"Current Entry Index: {currentEntryIndex}, currentTime: {currentTime}, nextFrameTime: {nextFrameTime}");
+
             LogEntry entry = logEntries[currentEntryIndex];
 
             // Update head position and rotation
@@ -280,9 +287,11 @@ public class SimulatorManager : MonoBehaviour
             // Calculate time until next frame
             if (currentEntryIndex < logEntries.Count - 1)
             {
-                float currentFrameTime = entry.time;
-                float nextFrameTimeInLog = logEntries[currentEntryIndex + 1].time;
-                nextFrameTime = currentTime + (nextFrameTimeInLog - currentFrameTime);
+                // double currentFrameTime = entry.time;
+                // double nextFrameTimeInLog = logEntries[currentEntryIndex + 1].time;
+                // nextFrameTime = currentTime + (nextFrameTimeInLog - currentFrameTime);
+                logDeltaTime = logEntries[currentEntryIndex + 1].time - entry.time;
+                deltaTime = 0.0;
             }
 
             // Update UI
@@ -296,7 +305,7 @@ public class SimulatorManager : MonoBehaviour
     private void ProcessReceivedChunks(List<ChunkData> chunks)
     {
         if (chunks == null) return;
-
+        
         foreach (var chunk in chunks)
         {
             // Get object information from ObjectTableManager
@@ -483,9 +492,9 @@ public class SimulatorManager : MonoBehaviour
     {
         if (logEntries == null)
             logEntries = new List<LogEntry>();
-        
+
         logEntries.Clear();
-        
+
         if (!File.Exists(jsonlFilePath))
         {
             Debug.LogError($"JSONL file not found at path: {jsonlFilePath}");
@@ -495,48 +504,53 @@ public class SimulatorManager : MonoBehaviour
         try
         {
             string[] lines = File.ReadAllLines(jsonlFilePath);
-            foreach (string line in lines)
+
+            for (int i = 0; i < lines.Length; i++)
             {
+                string line = lines[i];
                 if (string.IsNullOrEmpty(line)) continue;
 
-                // Parse the JSON object
                 var jsonObj = JObject.Parse(line);
-                
-                // Extract headset data
                 var headsetData = jsonObj["headset"].ToObject<HeadsetData>();
-
-                string timeStr = jsonObj["time"].ToString();
-
-                // Extract chunks data
-                List<ChunkData> chunkList = null;
-                if (jsonObj["chunks"] != null)
+                string timeStr = ExtractRawTimeField(line);
+                
+                if (!DateTimeOffset.TryParseExact(
+                        timeStr,
+                        "yyyy-MM-ddTHH:mm:ss.fffffffZ",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                        out DateTimeOffset parsedTime))
                 {
-                    chunkList = jsonObj["chunks"].ToObject<List<ChunkData>>();
-                }
-                else
-                {
-                    chunkList = new List<ChunkData>();
+                    Debug.LogError($"Failed to parse: {timeStr}");
+                    continue;
                 }
 
-                // Create and add log entry
-                logEntries.Add(new LogEntry(
-                    DateTime.Parse(timeStr),
-                    timeStr,
-                    headsetData,
-                    chunkList
-                ));
+                // calculate the absolute time of the log entry
+                double absTime = (parsedTime - DateTimeOffset.UnixEpoch).TotalSeconds;
+                if (i == 0)
+                    logBaseTime = absTime;
+                double relativeTime = absTime - logBaseTime;
+
+                List<ChunkData> chunkList = jsonObj["chunks"]?.ToObject<List<ChunkData>>() ?? new List<ChunkData>();
+
+                logEntries.Add(new LogEntry(relativeTime, timeStr, headsetData, chunkList));
             }
 
-            if (logEntries.Count > 0)
-            {
-                Debug.Log($"Successfully loaded {logEntries.Count} log entries");
-            }
+            Debug.Log($"Successfully loaded {logEntries.Count} log entries");
         }
         catch (Exception e)
         {
             Debug.LogError($"Error loading JSONL file: {e.Message}");
         }
     }
+
+    // helper function to extract the raw time field from the json line
+    private string ExtractRawTimeField(string jsonLine)
+        {
+            int timeStart = jsonLine.IndexOf("\"time\":\"") + 8;
+            int timeEnd = jsonLine.IndexOf("\"", timeStart);
+            return jsonLine.Substring(timeStart, timeEnd - timeStart);
+        }
 
     public void CalculateAndLogPacketLossRates()
     {
@@ -600,9 +614,9 @@ public class SimulatorManager : MonoBehaviour
         {
             // Start simulation
             startSimulating = true;
-            startTime = Time.time;
             currentEntryIndex = 0;
-            nextFrameTime = 0f; // First frame will be shown immediately
+            deltaTime = 0.0;
+            logDeltaTime = 0.0;
             captureFrameCount = 0; // Reset frame counter
 
             // Reset packet loss tracking
