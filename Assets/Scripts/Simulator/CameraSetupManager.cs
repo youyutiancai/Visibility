@@ -91,6 +91,8 @@ public class CameraSetupManager : MonoBehaviour
         float near = renderCamera.nearClipPlane;
         float far = renderCamera.farClipPlane;
 
+        Debug.Log($"near={near}, far={far}");
+
         // Convert intrinsics to OpenGL projection matrix
         Matrix4x4 proj = PerspectiveOffCenter(
             -cx * near / fx,

@@ -224,7 +224,8 @@ public class SimulatorManager : MonoBehaviour
 
         // Add output type subfolder
         string outputType = cameraSetupManager.currentOutputMode == CameraSetupManager.OutputMode.RGB ? "RGB" : "Depth";
-        string screenshotDir = Path.Combine(Application.dataPath, "Data", modeFolder, outputType);
+        string selectedFile = Path.GetFileNameWithoutExtension(fileSelectionDropdown.options[fileSelectionDropdown.value].text);
+        string screenshotDir = Path.Combine(Application.dataPath, "Data", modeFolder, outputType, selectedFile);
         if (!Directory.Exists(screenshotDir))
         {
             Directory.CreateDirectory(screenshotDir);
