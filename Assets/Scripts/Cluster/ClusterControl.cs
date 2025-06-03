@@ -29,7 +29,8 @@ public class ClusterControl : Singleton<ClusterControl>
     [HideInInspector]
     public Vector3 initialClusterCenterPos;
     [HideInInspector]
-    public List<int> objectsWaitToBeSent;
+    //public List<int> objectsWaitToBeSent;
+    public PriorityQueue<int, float> objectsWaitToBeSent;
     private float timeSinceLastUpdate = 0f;
     public SimulationStrategyDropDown SimulationStrategy;
     private SimulationStrategy ss;
@@ -45,7 +46,6 @@ public class ClusterControl : Singleton<ClusterControl>
 
     private StreamWriter writer;
     private string filePath;
-    private int currentObjectToSend;
 
     void Start()
     {
@@ -65,10 +65,9 @@ public class ClusterControl : Singleton<ClusterControl>
         visibleObjectsInRegion = new int[vc.objectsInScene.Count];
         objectSentCluster = 0;
         objectSentIndi = 0;
-        currentObjectToSend = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
         initialClusterCenterPos = initialClusterCenter.transform.position;
-        objectsWaitToBeSent = new List<int>();
+        objectsWaitToBeSent = new PriorityQueue<int, float>();
         canSendObjects = false;
     }
 
@@ -124,19 +123,13 @@ public class ClusterControl : Singleton<ClusterControl>
         {
             canSendObjects = !canSendObjects;
             Debug.Log($"canSendObject changed to {canSendObjects}");
-            //nc.BroadcastObjectData(1);
-        } else if (SimulationStrategy == SimulationStrategyDropDown.RealUser && Keyboard.current.rKey.wasPressedThisFrame)
-        {
-            currentObjectToSend = 0;
         }
 
-        if (canSendObjects && nc.timeSinceLastBroadcast >= newChunkInterval && nc.readyForNextObject && currentObjectToSend < objectsWaitToBeSent.Count)
+        if (canSendObjects && nc.timeSinceLastBroadcast >= newChunkInterval && nc.readyForNextObject && objectsWaitToBeSent.Count > 0)
         {
-            int sendingObjectIdx = objectsWaitToBeSent[currentObjectToSend];
+            int sendingObjectIdx = objectsWaitToBeSent.Dequeue();
             nc.BroadcastObjectData(sendingObjectIdx, newChunkInterval);
-            currentObjectToSend++;
-            //objectsWaitToBeSent.RemoveAt(0);
-            Debug.Log($"broadcasting: {nc.isBroadcast}. finished {sendingObjectIdx}, {objectsWaitToBeSent.Count - currentObjectToSend} is left");
+            Debug.Log($"broadcasting: {nc.isBroadcast}. finished {sendingObjectIdx}, {objectsWaitToBeSent.Count} is left");
         }
 
         
@@ -178,22 +171,7 @@ public class ClusterControl : Singleton<ClusterControl>
                         if (newObjectsToSend[i] > 0 && !objectsWaitToBeSent.Contains(i))
                         {
                             float newDistance = Vector3.Distance(vc.objectsInScene[i].transform.position, initialClusterCenter.transform.position);
-                            int low = 0;
-                            int high = objectsWaitToBeSent.Count;
-
-                            // Binary search for the correct insertion index
-                            while (low < high)
-                            {
-                                int mid = (low + high) / 2;
-                                int currentIndex = objectsWaitToBeSent[mid];
-                                float currentDistance = Vector3.Distance(vc.objectsInScene[currentIndex].transform.position, initialClusterCenter.transform.position);
-
-                                if (newDistance < currentDistance)
-                                    high = mid;
-                                else
-                                    low = mid + 1;
-                            }
-                            objectsWaitToBeSent.Insert(low, i);
+                            objectsWaitToBeSent.Enqueue(i, newDistance);
                         }
                     }
                 }
@@ -541,5 +519,115 @@ public class ClusterControl : Singleton<ClusterControl>
             writer.Dispose();
             Debug.Log("CSV file closed.");
         }
+    }
+}
+
+public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TPriority>
+{
+    private List<(TElement Element, TPriority Priority)> _heap = new();
+    private Dictionary<TElement, int> _indexMap = new();
+
+    public int Count => _heap.Count;
+
+    public void Enqueue(TElement element, TPriority priority)
+    {
+        if (_indexMap.ContainsKey(element))
+            throw new InvalidOperationException("Element already exists. Use UpdatePriority instead.");
+
+        _heap.Add((element, priority));
+        int i = _heap.Count - 1;
+        _indexMap[element] = i;
+        HeapifyUp(i);
+    }
+
+    public TElement Dequeue()
+    {
+        if (_heap.Count == 0)
+            throw new InvalidOperationException("PriorityQueue is empty.");
+
+        var root = _heap[0].Element;
+        Swap(0, _heap.Count - 1);
+
+        _heap.RemoveAt(_heap.Count - 1);
+        _indexMap.Remove(root);
+
+        if (_heap.Count > 0)
+            HeapifyDown(0);
+
+        return root;
+    }
+
+    public TElement Peek()
+    {
+        if (_heap.Count == 0)
+            throw new InvalidOperationException("PriorityQueue is empty.");
+        return _heap[0].Element;
+    }
+
+    public void UpdatePriority(TElement element, TPriority newPriority)
+    {
+        if (!_indexMap.TryGetValue(element, out int index))
+            throw new KeyNotFoundException("Element not found in priority queue.");
+
+        var current = _heap[index];
+        int cmp = newPriority.CompareTo(current.Priority);
+        _heap[index] = (element, newPriority);
+
+        if (cmp < 0)
+            HeapifyUp(index);
+        else if (cmp > 0)
+            HeapifyDown(index);
+    }
+
+    public bool Contains(TElement element) => _indexMap.ContainsKey(element);
+
+    public void Clear()
+    {
+        _heap.Clear();
+        _indexMap.Clear();
+    }
+
+    private void HeapifyUp(int i)
+    {
+        while (i > 0)
+        {
+            int parent = (i - 1) / 2;
+            if (_heap[i].Priority.CompareTo(_heap[parent].Priority) >= 0)
+                break;
+
+            Swap(i, parent);
+            i = parent;
+        }
+    }
+
+    private void HeapifyDown(int i)
+    {
+        int last = _heap.Count - 1;
+        while (true)
+        {
+            int left = 2 * i + 1;
+            int right = 2 * i + 2;
+            int smallest = i;
+
+            if (left <= last && _heap[left].Priority.CompareTo(_heap[smallest].Priority) < 0)
+                smallest = left;
+            if (right <= last && _heap[right].Priority.CompareTo(_heap[smallest].Priority) < 0)
+                smallest = right;
+
+            if (smallest == i) break;
+
+            Swap(i, smallest);
+            i = smallest;
+        }
+    }
+
+    private void Swap(int i, int j)
+    {
+        var temp = _heap[i];
+        _heap[i] = _heap[j];
+        _heap[j] = temp;
+
+        _indexMap[_heap[i].Element] = i;
+        _indexMap[_heap[j].Element] = j;
     }
 }
