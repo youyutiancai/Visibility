@@ -22,7 +22,7 @@ public class TCPClient : MonoBehaviour
     private int tcpType, totalBytes, totalObjectNum;
     private bool parsingTable;
 
-    public GameObject centerEye;
+    public GameObject head, centerEye;
     public bool isPuppet = false;
     public UDPBroadcastClientNew udpClient;
 
@@ -146,9 +146,9 @@ public class TCPClient : MonoBehaviour
             Quaternion receivedRot = new Quaternion(rx, ry, rz, rw);
             Debug.Log($"[+++++++++++++++] {receivedPos}, {receivedRot}");
 
-            if (centerEye != null)
+            if (head != null)
             {
-                centerEye.transform.SetPositionAndRotation(receivedPos, receivedRot);
+                head.transform.SetPositionAndRotation(receivedPos, receivedRot);
             }
             return;
         }

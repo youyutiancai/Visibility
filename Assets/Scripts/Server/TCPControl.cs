@@ -142,7 +142,7 @@ public class TCPControl : MonoBehaviour
                         return;
                     }
                         
-                    if (endpointToUser.TryGetValue(ep, out RealUser realUser) && !realUser.isPuppet)
+                    if (endpointToUser.TryGetValue(ep, out RealUser realUser))
                     {
                         float px = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
                         float py = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
@@ -155,7 +155,13 @@ public class TCPControl : MonoBehaviour
                         realUser.latestPosition = new Vector3(px, py, pz);
                         realUser.latestRotation = new Quaternion(rx, ry, rz, rw);
 
-                        Debug.Log($"{realUser.latestPosition}, {realUser.latestRotation}");
+                        if (!realUser.isPuppet)
+                        {
+                            realUser.simulatedPosition = realUser.latestPosition;
+                            realUser.simulatedRotation = realUser.latestRotation;
+                        }
+
+                        //Debug.Log($"{realUser.simulatedPosition}, {realUser.simulatedRotation}, {realUser.latestPosition}, {realUser.latestRotation}");
                         if (realUser.transform != null)
                             realUser.transform.SetPositionAndRotation(realUser.latestPosition, realUser.latestRotation);
                     }
@@ -168,6 +174,8 @@ public class TCPControl : MonoBehaviour
                         bool newState = BitConverter.ToInt32(data, cursor) == 1;
                         cursor += sizeof(int);
                         realUser.isPuppet = newState;
+                        //realUser.simulatedPosition = transform.position;
+                        //realUser.simulatedRotation = transform.rotation;
                         Debug.Log($"User {ep} puppet mode set to: {newState}");
                     }
                     break;

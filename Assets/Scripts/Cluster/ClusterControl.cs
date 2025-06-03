@@ -218,11 +218,16 @@ public class ClusterControl : Singleton<ClusterControl>
                 float speed = 0.5f;
                 float angle = t * speed;
 
-                Vector3 position = realUser.latestPosition;
+                //Vector3 position = realUser.latestPosition;
+                Vector3 position = realUser.simulatedPosition;
                 position = new Vector3(position.x, 1.3f, position.z);
                 //Vector3 position = new Vector3(Mathf.Cos(angle), 1.3f, Mathf.Sin(angle)) * radius + initialClusterCenterPos;
                 Quaternion rotation = Quaternion.LookRotation(new Vector3(Mathf.Sin(angle), 0.05f, Mathf.Cos(angle)), Vector3.up);
+                //Quaternion rotation = realUser.simulatedRotation;
+                //Quaternion rotation = realUser.latestRotation;
 
+                realUser.simulatedPosition = position;
+                realUser.simulatedRotation = rotation;
                 //realUser.latestPosition = position;
                 //realUser.latestRotation = rotation;
                 //realUser.transform.SetPositionAndRotation(position, rotation);

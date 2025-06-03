@@ -178,7 +178,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
             }
         }
 
-        if (chunksThisFrame.Count > 0 && headsetTransform != null)
+        if (headsetTransform != null)
         {
             Vector3 pos = headsetTransform.position;
             Vector3 rot = headsetTransform.eulerAngles;
