@@ -194,6 +194,7 @@ public class TCPClient : MonoBehaviour
             for (int i = 0; i < totalObjectNum; i++)
             {
                 objectHolders[i] = new ObjectHolder();
+                objectHolders[i].objectID = i;
                 objectHolders[i].position = new Vector3(BitConverter.ToSingle(table_data.ToArray(), cursor), BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)),
                     BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)));
                 objectHolders[i].eulerAngles = new Vector3(BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)), BitConverter.ToSingle(table_data.ToArray(), cursor += sizeof(float)),

@@ -7,23 +7,37 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using TMPro;
+using Unity.Android.Gradle;
 using UnityEngine;
 using UnityEngine.XR;
 
 [Serializable]
 public class RetransmissionRequest
 {
-    public int bundleId;
+    public int objectID;
     public int[] missingChunks;
+}
+public class Chunk
+{
+    public int id;
+    public char type;
+    public int objectID;
+    public int subMeshIdx;
+    public DateTime chunkRecvTime;
+    public byte[] data;
 }
 
 public class ObjectHolder
 {
+    public int objectID;
     public Vector3 position, eulerAngles, scale;
     public string prefabName;
     public string[] materialNames;
     public int totalVertChunkNum, totalTriChunkNum, totalVertNum, submeshCount;
     public bool ifVisible, ifOwned;
+    public Dictionary<int, Chunk> chunks = new Dictionary<int, Chunk>();
+    public DateTime firstChunkTime, latestChunkTime;
+    public IPEndPoint remoteEP;
 }
 
 public class UDPBroadcastClientNew : MonoBehaviour
@@ -63,25 +77,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private float lastAdjustTime = 0f;
     private float adjustCooldown = 0.3f; // seconds
 
-    private class BundleTransmission
-    {
-        public int totalChunks;
-        public Dictionary<int, byte[]> chunks = new Dictionary<int, byte[]>();
-        public DateTime firstChunkTime;
-        public IPEndPoint remoteEP;
-    }
+    private static UdpClient retransmissionClient = new UdpClient();
 
-    private Dictionary<int, BundleTransmission> activeTransmissions = new Dictionary<int, BundleTransmission>();
-
-    public class Chunk
-    {
-        public int id;
-        public char type;
-        public int objectID;
-        public int subMeshIdx;
-        public DateTime chunkRecvTime;
-        public byte[] data;
-    }
     private class MeshTransmission
     {
         public int totalMeshChunks;
@@ -97,6 +94,10 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private List<string> chunksThisFrame = new List<string>();
     private string logFilePath;
 
+    private void Awake()
+    {
+        retransmissionClient = new UdpClient();
+    }
     private void Start()
     {
         string filename = $"ClientRuntimeLog_{DateTime.UtcNow:yyyyMMdd_HHmmss}.jsonl";
@@ -219,6 +220,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
             m_TextLog2.text = $"[+++++++] UDP client listening on the server, recvBuf-{recvBuf}, sendBuf-{sendBuf}";
 
             udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+            StartCoroutine(CheckRetransmissions());
         }
         catch (Exception ex)
         {
@@ -242,6 +244,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 return;
             }
 
+            //Debug.Log($"received {packet.Length} bytes from udp");
             // parse the packet header
             char submeshType = BitConverter.ToChar(packet, 0);
             int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
@@ -282,12 +285,25 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 data = chunkData
             };
 
-            lock (chunkQueueLock)
+            ObjectHolder objectHolder = m_TCPClient.objectHolders[objectId];
+            if (objectHolder.chunks.Count == 0)
             {
-                chunkQueue.Enqueue(newChunk);
+                objectHolder.ifVisible = true;
+                objectHolder.ifOwned = true;
+                objectHolder.remoteEP = remoteEP;
+                objectHolder.firstChunkTime = DateTime.UtcNow;
             }
-        }
-        catch (Exception ex)
+            objectHolder.latestChunkTime = DateTime.UtcNow;
+            if (!objectHolder.chunks.ContainsKey(chunkId))
+            {
+                objectHolder.chunks.Add(chunkId, newChunk);
+
+                lock (chunkQueueLock)
+                {
+                    chunkQueue.Enqueue(newChunk);
+                }
+            }
+        } catch (Exception ex)
         {
             Debug.LogError("ReceiveMeshChunks error: " + ex.Message);
         }
@@ -442,6 +458,47 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
     }
 
+    private IEnumerator CheckRetransmissions()
+    {
+        while (true)
+        {
+            yield return new WaitForSeconds(0.5f);
+
+            for (int i = 0; i < m_TCPClient.objectHolders.Length; i++)
+            {
+                ObjectHolder objectHolder = m_TCPClient.objectHolders[i];
+
+                if (objectHolder.ifVisible && (DateTime.UtcNow - objectHolder.latestChunkTime).TotalSeconds > 1f && 
+                    objectHolder.chunks.Count < objectHolder.totalVertChunkNum + objectHolder.totalTriChunkNum)
+                {
+                    List<int> missingChunks = new List<int>();
+                    for (int j = 0; j < objectHolder.totalVertChunkNum + objectHolder.totalTriChunkNum; j++)
+                    {
+                        if (!objectHolder.chunks.ContainsKey(j))
+                        {
+                            missingChunks.Add(j);
+                        }
+                    }
+
+                    if (missingChunks.Count > 0)
+                    {
+                        RetransmissionRequest req = new RetransmissionRequest
+                        {
+                            objectID = objectHolder.objectID,
+                            missingChunks = missingChunks.ToArray()
+                        };
+                        Debug.Log($"objectID {req.objectID}, chunks {req.missingChunks}");
+                        string jsonReq = JsonUtility.ToJson(req);
+                        byte[] reqData = Encoding.UTF8.GetBytes(jsonReq);
+
+                        retransmissionClient.Send(reqData, reqData.Length, objectHolder.remoteEP.Address.ToString(), portTCP);
+                        objectHolder.latestChunkTime = DateTime.UtcNow;
+                    }
+                }
+            }
+        }
+    }
+
     void OnDestroy()
     {
         if (udpClient != null)
@@ -457,6 +514,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
             logWriter.Flush();
             logWriter.Close();
         }
+        retransmissionClient?.Close();
+        retransmissionClient = null;
     }
 }
 

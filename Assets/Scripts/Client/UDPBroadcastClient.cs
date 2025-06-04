@@ -131,7 +131,7 @@ public class UDPBroadcastClient : MonoBehaviour
             {
                 RetransmissionRequest req = new RetransmissionRequest
                 {
-                    bundleId = bundleId,
+                    //bundleId = bundleId,
                     missingChunks = missingChunks.ToArray()
                 };
                 string jsonReq = JsonUtility.ToJson(req);
