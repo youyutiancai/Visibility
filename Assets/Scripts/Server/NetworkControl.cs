@@ -19,7 +19,7 @@ public class NetworkControl : Singleton<NetworkControl>
     public int totalChunkSent, totalBytesSent;
     public bool isBroadcast;
     [HideInInspector]
-    public float timeSinceLastBroadcast;
+    public float timeSinceLastChunkRequest;
 
     void Start()
     {
@@ -41,13 +41,18 @@ public class NetworkControl : Singleton<NetworkControl>
         if (cc.SimulationStrategy == SimulationStrategyDropDown.RealUser)
         {
             bcc.UpdateTime();
-            bcc.UpdateChunkSending();
+            //bcc.UpdateChunkSending();
         }
     }
 
     public void BroadcastObjectData(int objectID, float _sleepTime = 0.01f)
     {
         bcc.BroadcastObjectData(objectID, _sleepTime);
+    }
+
+    public void BroadcastChunk(byte[] chunk)
+    {
+        bcc.BroadcastChunk(chunk);
     }
 
     private void OnApplicationQuit()

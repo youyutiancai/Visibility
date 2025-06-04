@@ -9,9 +9,12 @@ using System;
 using Random = UnityEngine.Random;
 using UnityEngine.InputSystem;
 using System.Net.Sockets;
+using UnityEngine.Assertions;
 
 public class ClusterControl : Singleton<ClusterControl>
 {
+    private const int CHUNK_SIZE = 1400;
+
     public GameObject randomMovingUserPrefab, followUserPrefab, realUserPrefab, clusterPrefab, initialClusterCenter;  // clusterPrefab is used to represent a cluster visually
     //public SyntheticPathNode[] clusterInitPoses;
     //public SyntheticPathNode[] paths;
@@ -19,7 +22,7 @@ public class ClusterControl : Singleton<ClusterControl>
 
     public float epsilon = 10;  // Radius for clustering
     public int minPts = 2;      // Minimum points to form a cluster
-    public float updateInterval, newChunkInterval, timegapForSwapUsers;  // How often to update (in seconds)
+    public float updateInterval, newObjectInterval, newChunkInterval, timegapForSwapUsers;  // How often to update (in seconds)
     public bool regularlySwapUsers, regularlySwapLeader, writeToData;
 
     //[HideInInspector]
@@ -30,8 +33,13 @@ public class ClusterControl : Singleton<ClusterControl>
     public Vector3 initialClusterCenterPos;
     [HideInInspector]
     //public List<int> objectsWaitToBeSent;
+    private MeshVariant mv;
+    [HideInInspector]
     public PriorityQueue<int, float> objectsWaitToBeSent;
-    private float timeSinceLastUpdate = 0f;
+    [HideInInspector]
+    public PriorityQueue<byte[], float> chunksToSend;
+    public int chunksSentEachTime;
+    private float timeSinceLastUpdate = 0f, timeSinceLastChunksent = 0f;
     public SimulationStrategyDropDown SimulationStrategy;
     private SimulationStrategy ss;
     private Dictionary<int, Color> clusterColors = new Dictionary<int, Color>();  // Cluster ID to color mapping
@@ -68,7 +76,9 @@ public class ClusterControl : Singleton<ClusterControl>
         pathNodesRoot = GameObject.Find("PathNodes");
         initialClusterCenterPos = initialClusterCenter.transform.position;
         objectsWaitToBeSent = new PriorityQueue<int, float>();
+        chunksToSend = new PriorityQueue<byte[], float>();
         canSendObjects = false;
+        mv = new RandomizedMesh();
     }
 
     private void InitializeIndividualUserDataWriter()
@@ -117,7 +127,7 @@ public class ClusterControl : Singleton<ClusterControl>
     void Update()
     {
         timeSinceLastUpdate += Time.deltaTime;
-        nc.timeSinceLastBroadcast += Time.deltaTime;
+        nc.timeSinceLastChunkRequest += Time.deltaTime;
 
         if (SimulationStrategy == SimulationStrategyDropDown.RealUser && Keyboard.current.bKey.wasPressedThisFrame)
         {
@@ -125,14 +135,32 @@ public class ClusterControl : Singleton<ClusterControl>
             Debug.Log($"canSendObject changed to {canSendObjects}");
         }
 
-        if (canSendObjects && nc.timeSinceLastBroadcast >= newChunkInterval && nc.readyForNextObject && objectsWaitToBeSent.Count > 0)
+        if (canSendObjects && nc.timeSinceLastChunkRequest >= newObjectInterval && nc.readyForNextObject && objectsWaitToBeSent.Count > 0)
         {
+            float distance = objectsWaitToBeSent.GetPriority(objectsWaitToBeSent.Peek());
             int sendingObjectIdx = objectsWaitToBeSent.Dequeue();
-            nc.BroadcastObjectData(sendingObjectIdx, newChunkInterval);
+            List<byte[]> chunks = mv.RequestChunks(sendingObjectIdx, CHUNK_SIZE);
+            for (int i = 0; i < chunks.Count; i++)
+            {
+                chunksToSend.Enqueue(chunks[i], distance);
+            }
+            //nc.BroadcastObjectData(sendingObjectIdx, newChunkInterval);
+            nc.timeSinceLastChunkRequest = 0;
             Debug.Log($"broadcasting: {nc.isBroadcast}. finished {sendingObjectIdx}, {objectsWaitToBeSent.Count} is left");
         }
 
-        
+        timeSinceLastChunksent += Time.deltaTime;
+        //Debug.Log($"{Time.deltaTime * 1000}");
+        if (timeSinceLastChunksent >= newChunkInterval && chunksToSend.Count > 0)
+        {
+            int maxToSend = Mathf.Max(0, Mathf.Min(chunksToSend.Count, chunksSentEachTime));
+            for (int i = 0; i < maxToSend; i++)
+            {
+                nc.BroadcastChunk(chunksToSend.Dequeue());
+            }
+            timeSinceLastChunksent = 0;
+        }
+
         if (users.Count == 0)
             return;
 
@@ -629,5 +657,13 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
 
         _indexMap[_heap[i].Element] = i;
         _indexMap[_heap[j].Element] = j;
+    }
+
+    public TPriority GetPriority(TElement element)
+    {
+        if (!_indexMap.TryGetValue(element, out int index))
+            throw new KeyNotFoundException("Element not found in priority queue.");
+
+        return _heap[index].Priority;
     }
 }
