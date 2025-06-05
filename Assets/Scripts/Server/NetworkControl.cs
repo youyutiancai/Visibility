@@ -13,7 +13,8 @@ public class NetworkControl : Singleton<NetworkControl>
     BroadcastControl bcc;
     public TCPControl tc;
     private CancellationTokenSource cts;
-    ClusterControl cc;
+    public ClusterControl cc;
+    public VisibilityCheck vc;
     [HideInInspector]
     public bool readyForNextObject;
     public int totalChunkSent, totalBytesSent;
@@ -24,6 +25,7 @@ public class NetworkControl : Singleton<NetworkControl>
     void Start()
     {
         cc = ClusterControl.Instance;
+        vc = VisibilityCheck.Instance;
         if (cc.SimulationStrategy == SimulationStrategyDropDown.RealUser)
         {
             Dispatcher dispatcher = Dispatcher.Instance;
@@ -77,5 +79,6 @@ public enum TCPMessageType
     TABLE,
     POSE_UPDATE,
     POSE_FROM_SERVER,
+    INIT_POS_FROM_SERVER,
     PUPPET_TOGGLE
 }

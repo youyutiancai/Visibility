@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.tvOS;
 
 
 public class BroadcastControl : MonoBehaviour
@@ -61,8 +62,8 @@ public class BroadcastControl : MonoBehaviour
         //broadcastThread.Start();
 
         // Start the thread that listens for retransmission requests.
-        //retransmissionThread = new Thread(() => ListenForRetransmissionRequests());
-        //retransmissionThread.Start();
+        retransmissionThread = new Thread(() => ListenForRetransmissionRequests());
+        retransmissionThread.Start();
     }
 
     public void UpdateTime()
@@ -147,42 +148,56 @@ public class BroadcastControl : MonoBehaviour
     }
 
     // Listens for retransmission requests on RETRANSMISSION_PORT.
-    //private void ListenForRetransmissionRequests()
-    //{
-    //    UdpClient requestListener = new UdpClient(RETRANSMISSION_PORT);
-    //    IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, RETRANSMISSION_PORT);
-    //    Debug.Log("[Server] Retransmission listener started on port " + RETRANSMISSION_PORT);
-    //    while (appRunning)
-    //    {
-    //        byte[] reqData = requestListener.Receive(ref remoteEP);
-    //        string jsonReq = Encoding.UTF8.GetString(reqData);
-    //        RetransmissionRequest req = JsonUtility.FromJson<RetransmissionRequest>(jsonReq);
-    //        Debug.Log($"[Server] Received retransmission request for bundleId {req.bundleId} for missing chunks: {string.Join(",", req.missingChunks)}");
+    private void ListenForRetransmissionRequests()
+    {
+        UdpClient requestListener = new UdpClient(RETRANSMISSION_PORT);
+        IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, RETRANSMISSION_PORT);
+        Debug.Log("[Server] Retransmission listener started on port " + RETRANSMISSION_PORT);
+        while (appRunning)
+        {
+            byte[] reqData = requestListener.Receive(ref remoteEP);
+            string jsonReq = Encoding.UTF8.GetString(reqData);
+            RetransmissionRequest req = JsonUtility.FromJson<RetransmissionRequest>(jsonReq);
+            Debug.Log($"[Server] Received retransmission request for bundleId {req.objectID} for missing chunks: {string.Join(",", req.missingChunks)}");
+            Dispatcher.Instance.Enqueue(() => AddMissingChunks(req, remoteEP));
 
-    //        // Only process requests for the current bundle.
-    //        if (req.bundleId != bundleID)
-    //        {
-    //            Debug.Log($"[Server] Retransmission request bundleId {req.bundleId} does not match current bundleId {bundleID}. Ignoring.");
-    //            continue;
-    //        }
-    //        // Resend each missing chunk.
-    //        foreach (int chunkIndex in req.missingChunks)
-    //        {
-    //            if (chunks.ContainsKey(chunkIndex))
-    //            {
-    //                byte[] packet = chunks[chunkIndex];
-    //                Broadcast(packet);
-    //                Debug.Log($"[Server] Retransmitted chunk {chunkIndex}.");
-    //                Thread.Sleep(10); // Brief delay.
-    //            }
-    //            else
-    //            {
-    //                Debug.LogWarning($"[Server] Chunk {chunkIndex} not found for retransmission.");
-    //            }
-    //        }
-    //    }
-    //    requestListener.Close();
-    //}
+            // Only process requests for the current bundle.
+            //if (req.objectID != bundleID)
+            //{
+            //    Debug.Log($"[Server] Retransmission request bundleId {req.objectID} does not match current bundleId {bundleID}. Ignoring.");
+            //    continue;
+            //}
+            // Resend each missing chunk.
+            //foreach (int chunkIndex in req.missingChunks)
+            //{
+            //    if (chunks.ContainsKey(chunkIndex))
+            //    {
+            //        byte[] packet = chunks[chunkIndex];
+            //        Broadcast(packet);
+            //        Debug.Log($"[Server] Retransmitted chunk {chunkIndex}.");
+            //        Thread.Sleep(10); // Brief delay.
+            //    }
+            //    else
+            //    {
+            //        Debug.LogWarning($"[Server] Chunk {chunkIndex} not found for retransmission.");
+            //    }
+            //}
+        }
+        requestListener.Close();
+    }
+
+    public void AddMissingChunks(RetransmissionRequest req, IPEndPoint remoteEP)
+    {
+        float distance = Vector3.Distance(nc.vc.objectsInScene[req.objectID].transform.position, nc.tc.addressToUser[remoteEP.Address].transform.position);
+        for (int i = 0; i < req.missingChunks.Length; i++)
+        {
+            byte[] missingChunk = nc.cc.objectChunks[req.objectID][req.missingChunks[i]];
+            if (!nc.cc.chunksToSend.Contains(missingChunk))
+            {
+                nc.cc.chunksToSend.Enqueue(missingChunk, distance);
+            }
+        }
+    }
 
     void OnApplicationQuit()
     {

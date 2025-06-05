@@ -38,6 +38,7 @@ public class ClusterControl : Singleton<ClusterControl>
     public PriorityQueue<int, float> objectsWaitToBeSent;
     [HideInInspector]
     public PriorityQueue<byte[], float> chunksToSend;
+    public Dictionary<int, List<byte[]>> objectChunks;
     public int chunksSentEachTime;
     private float timeSinceLastUpdate = 0f, timeSinceLastChunksent = 0f;
     public SimulationStrategyDropDown SimulationStrategy;
@@ -79,6 +80,7 @@ public class ClusterControl : Singleton<ClusterControl>
         chunksToSend = new PriorityQueue<byte[], float>();
         canSendObjects = false;
         mv = new RandomizedMesh();
+        objectChunks = new Dictionary<int, List<byte[]>>();
     }
 
     private void InitializeIndividualUserDataWriter()
@@ -139,10 +141,17 @@ public class ClusterControl : Singleton<ClusterControl>
         {
             float distance = objectsWaitToBeSent.GetPriority(objectsWaitToBeSent.Peek());
             int sendingObjectIdx = objectsWaitToBeSent.Dequeue();
-            List<byte[]> chunks = mv.RequestChunks(sendingObjectIdx, CHUNK_SIZE);
+            if (!objectChunks.ContainsKey(sendingObjectIdx))
+            {
+                objectChunks.Add(sendingObjectIdx, mv.RequestChunks(sendingObjectIdx, CHUNK_SIZE));
+            }
+            List<byte[]> chunks = objectChunks[sendingObjectIdx];
             for (int i = 0; i < chunks.Count; i++)
             {
-                chunksToSend.Enqueue(chunks[i], distance);
+                if (!chunksToSend.Contains(chunks[i]))
+                {
+                    chunksToSend.Enqueue(chunks[i], distance);
+                }
             }
             //nc.BroadcastObjectData(sendingObjectIdx, newChunkInterval);
             nc.timeSinceLastChunkRequest = 0;
@@ -363,9 +372,6 @@ public class ClusterControl : Singleton<ClusterControl>
         }
     }
 
-
-
-
     List<User> GetNeighbors(User point)
     {
         List<User> neighbors = new List<User>();
@@ -446,6 +452,7 @@ public class ClusterControl : Singleton<ClusterControl>
 
                 // Set the position and scale of the cluster to ensure it circles all users
                 clusterObj.transform.position = clusterCenter;
+                Debug.Log(clusterObj.transform.position);
                 clusterObj.transform.localScale = new Vector3(finalRadius * 2 * 0.007f, 0.1f, finalRadius * 2 * 0.007f);
 
                 // Set the color of the cluster to match the cluster color
@@ -489,6 +496,11 @@ public class ClusterControl : Singleton<ClusterControl>
                 Transform child = transform.GetChild(i);
                 visibleObjectsInRegion = new int[vc.objectsInScene.Count];
                 vc.GetVisibleObjectsInRegion(child.position, epsilon, ref visibleObjectsInRegion);
+                int count = 0;
+                for (int j = 0; j < visibleObjectsInRegion.Length; j++) {
+                    count += visibleObjectsInRegion[j] > 0 ? 1 : 0;
+                }
+                Debug.Log($"visible object num: {count}");
                 for (int j = 0; j < child.childCount; j++)
                 {
                     child.GetChild(j).GetComponent<User>().UpdateVisibleObjects(visibleObjectsInRegion, ref newObjectCount);

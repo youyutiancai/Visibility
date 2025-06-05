@@ -16,11 +16,11 @@ public class TCPControl : MonoBehaviour
     private Task listenerTask;
     private static object _lock = new object();
     public static Dictionary<IPAddress, TcpClient> clients;
-    private static Dictionary<IPEndPoint, Task> clientTasks;
+    private static Dictionary<IPAddress, Task> clientTasks;
     private Dispatcher dispatcher;
     private VisibilityCheck visibilityCheck;
     private ClusterControl cc;
-    private static Dictionary<IPEndPoint, RealUser> endpointToUser;
+    public Dictionary<IPAddress, RealUser> addressToUser;
 
     public TCPControl(CancellationToken _ct, Dispatcher _dispatcher, VisibilityCheck _visibilityCheck, ClusterControl _clusterControl)
     {
@@ -30,8 +30,8 @@ public class TCPControl : MonoBehaviour
         cc = _clusterControl;
         iP4Address = IPAddress.Any;
         clients = new Dictionary<IPAddress, TcpClient>();
-        clientTasks = new Dictionary<IPEndPoint, Task>();
-        endpointToUser = new Dictionary<IPEndPoint, RealUser>();
+        clientTasks = new Dictionary<IPAddress, Task>();
+        addressToUser = new Dictionary<IPAddress, RealUser>();
         listenerTask = ListenTCPAsync();
     }
 
@@ -57,7 +57,7 @@ public class TCPControl : MonoBehaviour
                 lock (_lock)
                 {
                     clients[ep.Address] = newClient;
-                    clientTasks[ep] = HandleClientConnectionAsync(ep, ct);
+                    clientTasks[ep.Address] = HandleClientConnectionAsync(ep, ct);
                 }
             }
         }
@@ -116,8 +116,8 @@ public class TCPControl : MonoBehaviour
             lock (_lock)
             {
                 clients.Remove(ep.Address);
-                clientTasks.Remove(ep);
-                endpointToUser.Remove(ep);
+                clientTasks.Remove(ep.Address);
+                addressToUser.Remove(ep.Address);
                 Debug.Log($"Client {ep} has been removed");
             }
             client.Close();
@@ -142,7 +142,7 @@ public class TCPControl : MonoBehaviour
                         return;
                     }
                         
-                    if (endpointToUser.TryGetValue(ep, out RealUser realUser))
+                    if (addressToUser.TryGetValue(ep.Address, out RealUser realUser))
                     {
                         float px = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
                         float py = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
@@ -169,7 +169,7 @@ public class TCPControl : MonoBehaviour
 
                 case TCPMessageType.PUPPET_TOGGLE:
                     if (cursor + sizeof(int) > data.Length) return; // not enough data
-                    if (endpointToUser.TryGetValue(ep, out realUser))
+                    if (addressToUser.TryGetValue(ep.Address, out realUser))
                     {
                         bool newState = BitConverter.ToInt32(data, cursor) == 1;
                         cursor += sizeof(int);
@@ -207,7 +207,7 @@ public class TCPControl : MonoBehaviour
             var realUser = newUser.GetComponent<RealUser>();
             realUser.tcpClient = client;
             realUser.tcpEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
-            endpointToUser[realUser.tcpEndPoint] = realUser;
+            addressToUser[realUser.tcpEndPoint.Address] = realUser;
             client.GetStream().Write(visibilityCheck.objectTable);
             Debug.Log($"table size: {visibilityCheck.objectTable.Length}");
         }
