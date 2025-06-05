@@ -210,6 +210,30 @@ public class TCPControl : MonoBehaviour
             addressToUser[realUser.tcpEndPoint.Address] = realUser;
             client.GetStream().Write(visibilityCheck.objectTable);
             Debug.Log($"table size: {visibilityCheck.objectTable.Length}");
+
+            Vector3 position = realUser.transform.position;
+            Quaternion rotation = realUser.transform.rotation;
+            try
+            {
+                List<byte> buffer = new List<byte>();
+                buffer.AddRange(BitConverter.GetBytes(0));
+                buffer.AddRange(BitConverter.GetBytes((int)TCPMessageType.POSE_FROM_SERVER));
+                buffer.AddRange(BitConverter.GetBytes(position.x));
+                buffer.AddRange(BitConverter.GetBytes(position.y));
+                buffer.AddRange(BitConverter.GetBytes(position.z));
+                buffer.AddRange(BitConverter.GetBytes(rotation.x));
+                buffer.AddRange(BitConverter.GetBytes(rotation.y));
+                buffer.AddRange(BitConverter.GetBytes(rotation.z));
+                buffer.AddRange(BitConverter.GetBytes(rotation.w));
+                byte[] message = buffer.ToArray();
+                Buffer.BlockCopy(BitConverter.GetBytes(buffer.Count - sizeof(int)), 0, message, 0, sizeof(int));
+                NetworkStream stream = realUser.tcpClient.GetStream();
+                stream.Write(message, 0, message.Length);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Failed to send puppet pose to {realUser.tcpEndPoint}: {e.Message}");
+            }
         }
     }
 
