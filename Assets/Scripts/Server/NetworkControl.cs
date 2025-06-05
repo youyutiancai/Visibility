@@ -79,6 +79,5 @@ public enum TCPMessageType
     TABLE,
     POSE_UPDATE,
     POSE_FROM_SERVER,
-    INIT_POS_FROM_SERVER,
     PUPPET_TOGGLE
 }

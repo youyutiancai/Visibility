@@ -23,7 +23,7 @@ public class TCPClient : MonoBehaviour
     private bool parsingTable;
 
     public GameObject head, centerEye;
-    public bool isPuppet = false;
+    public bool isPuppet = false, receivedInitPos;
     public UDPBroadcastClientNew udpClient;
 
     public event Action OnReceivedServerTable;
@@ -34,6 +34,7 @@ public class TCPClient : MonoBehaviour
     void Start()
     {
         parsingTable = false;
+        receivedInitPos = false;
         try
         {
             client = new TcpClient(serverIPAddress, port);
@@ -54,7 +55,7 @@ public class TCPClient : MonoBehaviour
             Debug.Log($"Puppet mode toggled: {isPuppet}");
         }
 
-        if (client != null && client.Connected && centerEye != null)
+        if (client != null && client.Connected && centerEye != null && receivedInitPos)
         {
             byte[] poseMessage = CreatePoseMessage(centerEye.transform.position, centerEye.transform.rotation);
             SendMessage(poseMessage);
@@ -131,8 +132,10 @@ public class TCPClient : MonoBehaviour
             parsingTable = true;
         }
 
-        if (mt == TCPMessageType.POSE_FROM_SERVER && isPuppet)
+        if (mt == TCPMessageType.POSE_FROM_SERVER && (isPuppet || !receivedInitPos))
         {
+            if (!receivedInitPos)
+                receivedInitPos = true;
             cursor = sizeof(int);
             float px = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
             float py = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
