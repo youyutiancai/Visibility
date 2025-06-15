@@ -33,7 +33,7 @@ public class ClusterControl : Singleton<ClusterControl>
     public Vector3 initialClusterCenterPos;
     [HideInInspector]
     //public List<int> objectsWaitToBeSent;
-    private MeshVariant mv;
+    private MeshVariant mv, mv1;
     [HideInInspector]
     public PriorityQueue<int, float> objectsWaitToBeSent;
     [HideInInspector]
@@ -80,8 +80,104 @@ public class ClusterControl : Singleton<ClusterControl>
         chunksToSend = new PriorityQueue<byte[], float>();
         canSendObjects = false;
         mv = new RandomizedMesh();
+        mv1 = new GroupedMesh();
+        int object_toSerialize = 596;
+        List<byte[]> chunks_mv = mv.RequestChunks(object_toSerialize, CHUNK_SIZE);
+        List<byte[]> chunks_mv1 = mv1.RequestChunks(object_toSerialize, CHUNK_SIZE);
+        GameObject newObject = ReconstructFromChunks(vc.objectsInScene[object_toSerialize], chunks_mv1);
+        Debug.Log($"mv: {chunks_mv.Count}, mv1: {chunks_mv1.Count}");
         objectChunks = new Dictionary<int, List<byte[]>>();
     }
+
+    public static GameObject ReconstructFromChunks(GameObject original, List<byte[]> chunks)
+    {
+        Mesh originalMesh = original.GetComponent<MeshFilter>()?.sharedMesh;
+        if (originalMesh == null)
+        {
+            Debug.LogError("Original object has no mesh.");
+            return null;
+        }
+
+        int vertexCapacity = originalMesh.vertexCount;
+        int submeshCount = originalMesh.subMeshCount;
+
+        Vector3[] vertices = new Vector3[vertexCapacity];
+        Vector3[] normals = new Vector3[vertexCapacity];
+        List<int>[] submeshTriangles = new List<int>[submeshCount];
+        for (int i = 0; i < submeshCount; i++)
+            submeshTriangles[i] = new List<int>();
+
+        foreach (var chunk in chunks)
+        {
+            int offset = 0;
+            char type = BitConverter.ToChar(chunk, offset); offset += sizeof(char);
+            int objectID = BitConverter.ToInt32(chunk, offset); offset += sizeof(int);
+            int chunkID = BitConverter.ToInt32(chunk, offset); offset += sizeof(int);
+            int submeshID = BitConverter.ToInt32(chunk, offset); offset += sizeof(int);
+
+            int vertexCount = BitConverter.ToInt32(chunk, offset); offset += sizeof(int);
+            for (int i = 0; i < vertexCount; i++)
+            {
+                int index = BitConverter.ToInt32(chunk, offset); offset += sizeof(int);
+
+                // Skip decoding if already filled
+                if (vertices[index] != Vector3.zero)
+                {
+                    offset += 6 * sizeof(float); // skip position + normal
+                    continue;
+                }
+
+                float x = BitConverter.ToSingle(chunk, offset); offset += sizeof(float);
+                float y = BitConverter.ToSingle(chunk, offset); offset += sizeof(float);
+                float z = BitConverter.ToSingle(chunk, offset); offset += sizeof(float);
+                vertices[index] = new Vector3(x, y, z);
+
+                float nx = BitConverter.ToSingle(chunk, offset); offset += sizeof(float);
+                float ny = BitConverter.ToSingle(chunk, offset); offset += sizeof(float);
+                float nz = BitConverter.ToSingle(chunk, offset); offset += sizeof(float);
+                normals[index] = new Vector3(nx, ny, nz);
+            }
+
+
+            int triangleCount = BitConverter.ToInt32(chunk, offset); offset += sizeof(int);
+            for (int i = 0; i < triangleCount; i++)
+            {
+                int tri = BitConverter.ToInt32(chunk, offset); offset += sizeof(int);
+                submeshTriangles[submeshID].Add(tri);
+            }
+        }
+
+        // Rebuild mesh
+        Mesh newMesh = new Mesh();
+        newMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        newMesh.vertices = vertices;
+        newMesh.normals = normals;
+        newMesh.subMeshCount = submeshCount;
+
+        for (int i = 0; i < submeshCount; i++)
+            newMesh.SetTriangles(submeshTriangles[i], i);
+
+        newMesh.RecalculateBounds();
+
+        // Create new object
+        GameObject copy = Instantiate(original);
+        copy.name = original.name + "_Reconstructed";
+        copy.transform.position = original.transform.position;
+        copy.transform.rotation = original.transform.rotation;
+        copy.transform.localScale = original.transform.localScale;
+
+        MeshFilter filter = copy.GetComponent<MeshFilter>();
+        if (filter == null) filter = copy.AddComponent<MeshFilter>();
+        filter.sharedMesh = newMesh;
+
+        MeshRenderer renderer = copy.GetComponent<MeshRenderer>();
+        if (renderer == null) renderer = copy.AddComponent<MeshRenderer>();
+        renderer.sharedMaterials = original.GetComponent<MeshRenderer>().sharedMaterials;
+
+        return copy;
+    }
+
+
 
     private void InitializeIndividualUserDataWriter()
     {
