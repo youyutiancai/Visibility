@@ -38,7 +38,7 @@ public class ClusterControl : Singleton<ClusterControl>
     public PriorityQueue<int, float> objectsWaitToBeSent;
     [HideInInspector]
     public PriorityQueue<byte[], float> chunksToSend;
-    public Dictionary<int, List<byte[]>> objectChunks;
+    public Dictionary<int, List<byte[]>> objectChunksVTSeparate, objectChunksVTGrouped;
     public int chunksSentEachTime;
     private float timeSinceLastUpdate = 0f, timeSinceLastChunksent = 0f;
     public SimulationStrategyDropDown SimulationStrategy;
@@ -52,6 +52,7 @@ public class ClusterControl : Singleton<ClusterControl>
     private GameObject pathNodesRoot;
     private NetworkControl nc;
     private bool canSendObjects;
+    public MeshDecodeMethod meshDecodeMethod;
 
     private StreamWriter writer;
     private string filePath;
@@ -81,12 +82,83 @@ public class ClusterControl : Singleton<ClusterControl>
         canSendObjects = false;
         mv = new RandomizedMesh();
         mv1 = new GroupedMesh();
-        int object_toSerialize = 596;
-        List<byte[]> chunks_mv = mv.RequestChunks(object_toSerialize, CHUNK_SIZE);
-        List<byte[]> chunks_mv1 = mv1.RequestChunks(object_toSerialize, CHUNK_SIZE);
-        GameObject newObject = ReconstructFromChunks(vc.objectsInScene[object_toSerialize], chunks_mv1);
-        Debug.Log($"mv: {chunks_mv.Count}, mv1: {chunks_mv1.Count}");
-        objectChunks = new Dictionary<int, List<byte[]>>();
+        //int object_toSerialize = 596;
+        //List<byte[]> chunks_mv = mv.RequestChunks(object_toSerialize, CHUNK_SIZE);
+        //List<byte[]> chunks_mv1 = mv1.RequestChunks(object_toSerialize, CHUNK_SIZE);
+        //GameObject newObject = ReconstructFromChunks(vc.objectsInScene[object_toSerialize], chunks_mv1);
+        //Debug.Log($"mv: {chunks_mv.Count}, mv1: {chunks_mv1.Count}");
+        //objectChunksVTSeparate = new Dictionary<int, List<byte[]>>();
+        objectChunksVTGrouped = new Dictionary<int, List<byte[]>>();
+        LoadAllChunks();
+    }
+
+    private void LoadAllChunks()
+    {
+        string chunksDirectory = "Assets/Data/ObjectChunks";
+        objectChunksVTSeparate = new Dictionary<int, List<byte[]>>();
+
+        if (!Directory.Exists(chunksDirectory))
+        {
+            Debug.LogError($"Chunks directory not found at: {chunksDirectory}");
+            return;
+        }
+
+        try
+        {
+            // Get all files in the chunks directory
+            string[] files = Directory.GetFiles(chunksDirectory, "object_*.bin");
+
+            foreach (string file in files)
+            {
+                // Parse filename to get objectID
+                string fileName = Path.GetFileNameWithoutExtension(file);
+                string[] parts = fileName.Split('_');
+
+                if (parts.Length >= 2 && int.TryParse(parts[1], out int objectID))
+                {
+                    // Load chunks for this object
+                    List<byte[]> chunks = LoadChunksFromFile(file);
+                    if (chunks != null && chunks.Count > 0)
+                    {
+                        objectChunksVTSeparate[objectID] = chunks;
+                        //Debug.Log($"Loaded {chunks.Count} chunks for object {objectID}");
+                    }
+                }
+            }
+
+            Debug.Log($"Successfully loaded {objectChunksVTSeparate.Count} objects");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Error loading chunks: {e.Message}");
+        }
+    }
+
+    private List<byte[]> LoadChunksFromFile(string objectFilePath)
+    {
+        List<byte[]> chunks = new List<byte[]>();
+
+        try
+        {
+            using (BinaryReader reader = new BinaryReader(File.Open(objectFilePath, FileMode.Open)))
+            {
+                int chunkCount = reader.ReadInt32(); // First read number of chunks
+
+                for (int i = 0; i < chunkCount; i++)
+                {
+                    int chunkSize = reader.ReadInt32();          // Read chunk size
+                    byte[] chunk = reader.ReadBytes(chunkSize);  // Read chunk data
+                    chunks.Add(chunk);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Error reading chunks from {objectFilePath}: {e.Message}");
+            return null;
+        }
+
+        return chunks;
     }
 
     public static GameObject ReconstructFromChunks(GameObject original, List<byte[]> chunks)
@@ -237,11 +309,25 @@ public class ClusterControl : Singleton<ClusterControl>
         {
             float distance = objectsWaitToBeSent.GetPriority(objectsWaitToBeSent.Peek());
             int sendingObjectIdx = objectsWaitToBeSent.Dequeue();
-            if (!objectChunks.ContainsKey(sendingObjectIdx))
-            {
-                objectChunks.Add(sendingObjectIdx, mv.RequestChunks(sendingObjectIdx, CHUNK_SIZE));
+            List<byte[]> chunks = null;
+            switch (meshDecodeMethod) {
+                case MeshDecodeMethod.VTSeparate:
+                    //if (!objectChunksVTSeparate.ContainsKey(sendingObjectIdx))
+                    //{
+                    //    objectChunksVTSeparate.Add(sendingObjectIdx, mv.RequestChunks(sendingObjectIdx, CHUNK_SIZE));
+                    //}
+                    chunks = objectChunksVTSeparate[sendingObjectIdx];
+                    break;
+
+                case MeshDecodeMethod.VTGrouped:
+                    if (!objectChunksVTGrouped.ContainsKey(sendingObjectIdx))
+                    {
+                        objectChunksVTGrouped.Add(sendingObjectIdx, mv1.RequestChunks(sendingObjectIdx, CHUNK_SIZE));
+                    }
+                    chunks = objectChunksVTGrouped[sendingObjectIdx];
+                    
+                    break;
             }
-            List<byte[]> chunks = objectChunks[sendingObjectIdx];
             for (int i = 0; i < chunks.Count; i++)
             {
                 if (!chunksToSend.Contains(chunks[i]))

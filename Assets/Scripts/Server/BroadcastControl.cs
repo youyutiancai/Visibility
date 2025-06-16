@@ -122,29 +122,49 @@ public class BroadcastControl : MonoBehaviour
         nc.totalBytesSent += message.Length;
         //byte[] placeHolder = BitConverter.GetBytes('a');
         //udpClient.Send(placeHolder, placeHolder.Length, new IPEndPoint(IPAddress.Parse("192.168.1.137"), PORT));
-        if (nc.isBroadcast)
-        {
-            udpClient.EnableBroadcast = true;
-            IPEndPoint endPoint = new IPEndPoint(BROADCAST_IP, PORT);
-            udpClient.Send(message, message.Length, endPoint);
-        }
-        else
-        {
-            udpClient.EnableBroadcast = false;
-            //IPAddress multicastAddress = IPAddress.Parse("192.168.1.240");
-            IPAddress multicastAddress = IPAddress.Parse("230.0.0.1"); // pick any in 224.x.x.x - 239.x.x.x
-            IPEndPoint multicastEndPoint = new IPEndPoint(multicastAddress, PORT); // for udp
-            udpClient.Send(message, message.Length, multicastEndPoint);
+        switch (nc.sendingMode) {
 
-            //byte[] new_message = new byte[message.Length + sizeof(int)];
-            //Buffer.BlockCopy(BitConverter.GetBytes(message.Length), 0, new_message, 0, sizeof(int));
-            //Buffer.BlockCopy(message, 0, new_message, sizeof(int), message.Length);
-            //nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.173"), new_message); // for TCP
-            //nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.101"), new_message);
-            //nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.174"), new_message);
+            case SendingMode.BROADCAST:
+                udpClient.EnableBroadcast = true;
+                IPEndPoint endPoint = new IPEndPoint(BROADCAST_IP, PORT);
+                byte[] new_message = new byte[message.Length + sizeof(int)];
+                Buffer.BlockCopy(BitConverter.GetBytes((int) nc.cc.meshDecodeMethod), 0, new_message, 0, sizeof(int));
+                Buffer.BlockCopy(message, 0, new_message, sizeof(int), message.Length);
+                udpClient.Send(new_message, new_message.Length, endPoint);
+                break;
+
+            case SendingMode.MULTICAST:
+                udpClient.EnableBroadcast = false;
+                IPAddress multicastAddress = IPAddress.Parse("230.0.0.1"); // pick any in 224.x.x.x - 239.x.x.x
+                IPEndPoint multicastEndPoint = new IPEndPoint(multicastAddress, PORT);
+                new_message = new byte[message.Length + sizeof(int)];
+                Buffer.BlockCopy(BitConverter.GetBytes((int)nc.cc.meshDecodeMethod), 0, new_message, 0, sizeof(int));
+                Buffer.BlockCopy(message, 0, new_message, sizeof(int), message.Length);
+                udpClient.Send(new_message, new_message.Length, multicastEndPoint);
+                break;
+
+            case SendingMode.UNICAST_TCP:
+                new_message = new byte[message.Length + sizeof(int)];
+                Buffer.BlockCopy(BitConverter.GetBytes(message.Length), 0, new_message, 0, sizeof(int));
+                Buffer.BlockCopy(message, 0, new_message, sizeof(int), message.Length);
+                nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.173"), new_message);
+                nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.101"), new_message);
+                nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.174"), new_message);
+                break;
+
+            case SendingMode.UNICAST_UDP:
+                udpClient.EnableBroadcast = false;
+                IPAddress unicastAddress = IPAddress.Parse("192.168.1.240");
+                IPEndPoint unicastEndPoint = new IPEndPoint(unicastAddress, PORT);
+                new_message = new byte[message.Length + sizeof(int)];
+                Buffer.BlockCopy(BitConverter.GetBytes((int) nc.cc.meshDecodeMethod), 0, new_message, 0, sizeof(int));
+                Buffer.BlockCopy(message, 0, new_message, sizeof(int), message.Length);
+                udpClient.Send(new_message, new_message.Length, unicastEndPoint);
+                break;
+
+            default:
+                break;
         }
-        //IPEndPoint endPoint = new IPEndPoint(BROADCAST_IP, PORT);
-        //udpClient.Send(message, message.Length, endPoint);
     }
 
     // Listens for retransmission requests on RETRANSMISSION_PORT.
@@ -191,7 +211,7 @@ public class BroadcastControl : MonoBehaviour
         float distance = Vector3.Distance(nc.vc.objectsInScene[req.objectID].transform.position, nc.tc.addressToUser[remoteEP.Address].transform.position);
         for (int i = 0; i < req.missingChunks.Length; i++)
         {
-            byte[] missingChunk = nc.cc.objectChunks[req.objectID][req.missingChunks[i]];
+            byte[] missingChunk = nc.cc.objectChunksVTSeparate[req.objectID][req.missingChunks[i]];
             if (!nc.cc.chunksToSend.Contains(missingChunk))
             {
                 nc.cc.chunksToSend.Enqueue(missingChunk, distance);

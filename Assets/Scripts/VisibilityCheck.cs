@@ -23,8 +23,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     public Dictionary<Color, int> colorCount, colorRecordID, newColorCount;
     [HideInInspector]
     public List<GameObject> objectsInScene;
-    [HideInInspector]
-    public byte[] objectTable;
+    //[HideInInspector]
+    //public byte[] objectTable;
     [HideInInspector]
     public List<float> objectDataSize;
     private List<int> colors;
@@ -48,7 +48,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     {
         InitialValues();
         AddAllObjects(sceneRoot.transform);
-        objectTable = CreateObjectTable();
+        //objectTable = CreateObjectTable();
         //TestObjectTable();
         //Debug.Log(objectsInScene.Count);
         //GenerateMeshInfo();
@@ -121,7 +121,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         }
     }
 
-    private byte[] CreateObjectTable()
+    public byte[] CreateObjectTable()
     {
         int numVerticesPerChunk = 57;
         List<byte> objectTable = new List<byte>();
@@ -179,15 +179,15 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         Buffer.BlockCopy(BitConverter.GetBytes(objectTable.Count - sizeof(int)), 0, result, sizeof(int) * 2, sizeof(int));
         Buffer.BlockCopy(BitConverter.GetBytes(objectTable.Count - sizeof(int)), 0, result, 0, sizeof(int));
 
-        // Save the object table to a file
-        // string dataPath = Path.Combine(Application.dataPath, "Data");
-        // if (!Directory.Exists(dataPath))
-        // {
-        //     Directory.CreateDirectory(dataPath);
-        // }
-        // string filePath = Path.Combine(dataPath, "ObjectTable.bin");
-        // File.WriteAllBytes(filePath, result);
-        // Debug.Log($"Object table saved to: {filePath}");
+         //Save the object table to a file
+        //string dataPath = Path.Combine(Application.dataPath, "Data");
+        //if (!Directory.Exists(dataPath))
+        //{
+        //    Directory.CreateDirectory(dataPath);
+        //}
+        //string filePath = Path.Combine(dataPath, "ObjectTable.bin");
+        //File.WriteAllBytes(filePath, result);
+        //Debug.Log($"Object table saved to: {filePath}");
 
         return result;
     }

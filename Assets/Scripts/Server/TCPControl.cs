@@ -20,6 +20,7 @@ public class TCPControl : MonoBehaviour
     private Dispatcher dispatcher;
     private VisibilityCheck visibilityCheck;
     private ClusterControl cc;
+    private NetworkControl nc;
     public Dictionary<IPAddress, RealUser> addressToUser;
 
     public TCPControl(CancellationToken _ct, Dispatcher _dispatcher, VisibilityCheck _visibilityCheck, ClusterControl _clusterControl)
@@ -28,6 +29,7 @@ public class TCPControl : MonoBehaviour
         dispatcher = _dispatcher;
         visibilityCheck = _visibilityCheck;
         cc = _clusterControl;
+        nc = NetworkControl.Instance;
         iP4Address = IPAddress.Any;
         clients = new Dictionary<IPAddress, TcpClient>();
         clientTasks = new Dictionary<IPAddress, Task>();
@@ -208,8 +210,8 @@ public class TCPControl : MonoBehaviour
             realUser.tcpClient = client;
             realUser.tcpEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
             addressToUser[realUser.tcpEndPoint.Address] = realUser;
-            client.GetStream().Write(visibilityCheck.objectTable);
-            Debug.Log($"table size: {visibilityCheck.objectTable.Length}");
+            client.GetStream().Write(nc.objectTable);
+            Debug.Log($"table size: {nc.objectTable.Length}");
 
             Vector3 position = realUser.transform.position;
             Quaternion rotation = realUser.transform.rotation;

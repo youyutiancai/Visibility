@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -21,6 +22,13 @@ public class NetworkControl : Singleton<NetworkControl>
     public bool isBroadcast;
     [HideInInspector]
     public float timeSinceLastChunkRequest;
+    [HideInInspector]
+    public byte[] objectTable;
+    public SendingMode sendingMode;
+
+    private void Awake()
+    {
+    }
 
     void Start()
     {
@@ -36,6 +44,20 @@ public class NetworkControl : Singleton<NetworkControl>
         }
         readyForNextObject = true;
         totalChunkSent = 0;
+
+        LoadObjectTable();
+    }
+
+    private void LoadObjectTable()
+    {
+        string filePath = Path.Combine(Application.dataPath, "Data", "ObjectTable.bin");
+        if (!File.Exists(filePath))
+        {
+            Debug.LogError($"Object table file not found at: {filePath}");
+            return;
+        }
+
+        objectTable = File.ReadAllBytes(filePath);
     }
 
     private void Update()
@@ -80,4 +102,12 @@ public enum TCPMessageType
     POSE_UPDATE,
     POSE_FROM_SERVER,
     PUPPET_TOGGLE
+}
+
+public enum SendingMode
+{
+    BROADCAST,
+    MULTICAST,
+    UNICAST_TCP,
+    UNICAST_UDP
 }
