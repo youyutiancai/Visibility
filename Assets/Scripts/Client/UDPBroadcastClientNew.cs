@@ -27,6 +27,12 @@ public class Chunk
     public byte[] data;
 }
 
+public enum MeshDecodeMethod
+{
+    VTSeparate,
+    VTGrouped
+}
+
 public class ObjectHolder
 {
     public int objectID;
@@ -220,7 +226,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
             m_TextLog2.text = $"[+++++++] UDP client listening on the server, recvBuf-{recvBuf}, sendBuf-{sendBuf}";
 
             udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
-            StartCoroutine(CheckRetransmissions());
+            //StartCoroutine(CheckRetransmissions());
         }
         catch (Exception ex)
         {
@@ -244,23 +250,24 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 return;
             }
 
-            //Debug.Log($"received {packet.Length} bytes from udp");
-            // parse the packet header
-            char submeshType = BitConverter.ToChar(packet, 0);
+            int cursor = 0;
+            //MeshDecodeMethod method = (MeshDecodeMethod) BitConverter.ToInt32(packet, cursor);
+            //cursor += sizeof(int);
+            char submeshType = BitConverter.ToChar(packet, cursor);
             int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
 
             if (submeshType == 'V')
             {
-                objectId = BitConverter.ToInt32(packet, 2);
-                chunkId = BitConverter.ToInt32(packet, 6);
-                headerSize = 10;
+                objectId = BitConverter.ToInt32(packet, cursor += 2);
+                chunkId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+                headerSize = cursor += sizeof(int);
             }
             else if (submeshType == 'T')
             {
-                objectId = BitConverter.ToInt32(packet, 2);
-                chunkId = BitConverter.ToInt32(packet, 6);
-                submeshId = BitConverter.ToInt32(packet, 10);
-                headerSize = 14;
+                objectId = BitConverter.ToInt32(packet, cursor += 2);
+                chunkId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+                submeshId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+                headerSize = cursor += sizeof(int);
             }
             else
             {
