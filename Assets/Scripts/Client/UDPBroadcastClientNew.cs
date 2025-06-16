@@ -9,6 +9,7 @@ using System.Text;
 using TMPro;
 using Unity.Android.Gradle;
 using UnityEngine;
+using UnityEngine.tvOS;
 using UnityEngine.XR;
 
 [Serializable]
@@ -19,6 +20,7 @@ public class RetransmissionRequest
 }
 public class Chunk
 {
+    public MeshDecodeMethod meshDecodeMethod;
     public int id;
     public char type;
     public int objectID;
@@ -41,7 +43,8 @@ public class ObjectHolder
     public string[] materialNames;
     public int totalVertChunkNum, totalTriChunkNum, totalVertNum, submeshCount;
     public bool ifVisible, ifOwned;
-    public Dictionary<int, Chunk> chunks = new Dictionary<int, Chunk>();
+    public Dictionary<int, Chunk> chunks_VTSeparate = new Dictionary<int, Chunk>();
+    public Dictionary<int, Chunk> chunks_VTGrouped = new Dictionary<int, Chunk>();
     public DateTime firstChunkTime, latestChunkTime;
     public IPEndPoint remoteEP;
 }
@@ -178,7 +181,17 @@ public class UDPBroadcastClientNew : MonoBehaviour
                     recevTotalChunkN++;
 
                     transmission.chunks[chunk.id] = chunk;
-                    UpdateObjectSubMeshes(chunk);
+                    switch (chunk.meshDecodeMethod)
+                    {
+                        case MeshDecodeMethod.VTSeparate:
+                            DecodeChunkVRSeparate(chunk);
+                            break;
+
+                        case MeshDecodeMethod.VTGrouped:
+                            DecodeChunkVRGrouped(chunk);
+                            break;
+                    }
+                    
                 }
 
                 processed++;
@@ -249,66 +262,15 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
                 return;
             }
+            MeshDecodeMethod method = (MeshDecodeMethod)BitConverter.ToInt32(packet, 0);
+            switch (method) {
+                case MeshDecodeMethod.VTSeparate:
+                    DecodePacketMeshSeparate(packet, remoteEP); 
+                    break;
 
-            int cursor = 0;
-            //MeshDecodeMethod method = (MeshDecodeMethod) BitConverter.ToInt32(packet, cursor);
-            //cursor += sizeof(int);
-            char submeshType = BitConverter.ToChar(packet, cursor);
-            int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
-
-            if (submeshType == 'V')
-            {
-                objectId = BitConverter.ToInt32(packet, cursor += 2);
-                chunkId = BitConverter.ToInt32(packet, cursor += sizeof(int));
-                headerSize = cursor += sizeof(int);
-            }
-            else if (submeshType == 'T')
-            {
-                objectId = BitConverter.ToInt32(packet, cursor += 2);
-                chunkId = BitConverter.ToInt32(packet, cursor += sizeof(int));
-                submeshId = BitConverter.ToInt32(packet, cursor += sizeof(int));
-                headerSize = cursor += sizeof(int);
-            }
-            else
-            {
-                Debug.LogError("Unknown packet type.");
-                udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
-                return;
-            }
-
-            // parse the packet data
-            int dataSize = packet.Length - headerSize;
-            byte[] chunkData = new byte[dataSize];
-            Buffer.BlockCopy(packet, headerSize, chunkData, 0, dataSize);
-
-            // init the chunk in the client
-            var newChunk = new Chunk
-            {
-                id = chunkId,
-                type = submeshType,
-                objectID = objectId,
-                subMeshIdx = submeshId,
-                chunkRecvTime = DateTime.UtcNow,
-                data = chunkData
-            };
-
-            ObjectHolder objectHolder = m_TCPClient.objectHolders[objectId];
-            if (objectHolder.chunks.Count == 0)
-            {
-                objectHolder.ifVisible = true;
-                objectHolder.ifOwned = true;
-                objectHolder.remoteEP = remoteEP;
-                objectHolder.firstChunkTime = DateTime.UtcNow;
-            }
-            objectHolder.latestChunkTime = DateTime.UtcNow;
-            if (!objectHolder.chunks.ContainsKey(chunkId))
-            {
-                objectHolder.chunks.Add(chunkId, newChunk);
-
-                lock (chunkQueueLock)
-                {
-                    chunkQueue.Enqueue(newChunk);
-                }
+                case MeshDecodeMethod.VTGrouped:
+                    DecodePacketMeshGrouped(packet, remoteEP);
+                    break;
             }
         } catch (Exception ex)
         {
@@ -316,6 +278,124 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
 
         udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+    }
+
+    private void DecodePacketMeshSeparate(byte[] packet, IPEndPoint remoteEP)
+    {
+        int cursor = 0;
+        MeshDecodeMethod method = (MeshDecodeMethod)BitConverter.ToInt32(packet, cursor);
+        cursor += sizeof(int);
+
+        char submeshType = BitConverter.ToChar(packet, cursor);
+        int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
+
+        if (submeshType == 'V')
+        {
+            objectId = BitConverter.ToInt32(packet, cursor += 2);
+            chunkId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+            headerSize = cursor += sizeof(int);
+        }
+        else if (submeshType == 'T')
+        {
+            objectId = BitConverter.ToInt32(packet, cursor += 2);
+            chunkId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+            submeshId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+            headerSize = cursor += sizeof(int);
+        }
+        else
+        {
+            Debug.LogError("Unknown packet type.");
+            udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+            return;
+        }
+
+        // parse the packet data
+        int dataSize = packet.Length - headerSize;
+        byte[] chunkData = new byte[dataSize];
+        Buffer.BlockCopy(packet, headerSize, chunkData, 0, dataSize);
+
+        // init the chunk in the client
+        var newChunk = new Chunk
+        {
+            meshDecodeMethod = method,
+            id = chunkId,
+            type = submeshType,
+            objectID = objectId,
+            subMeshIdx = submeshId,
+            chunkRecvTime = DateTime.UtcNow,
+            data = chunkData
+        };
+
+        ObjectHolder objectHolder = m_TCPClient.objectHolders[objectId];
+        if (objectHolder.chunks_VTSeparate.Count == 0)
+        {
+            objectHolder.ifVisible = true;
+            objectHolder.ifOwned = true;
+            objectHolder.remoteEP = remoteEP;
+            objectHolder.firstChunkTime = DateTime.UtcNow;
+        }
+        objectHolder.latestChunkTime = DateTime.UtcNow;
+        if (!objectHolder.chunks_VTSeparate.ContainsKey(chunkId))
+        {
+            objectHolder.chunks_VTSeparate.Add(chunkId, newChunk);
+
+            lock (chunkQueueLock)
+            {
+                chunkQueue.Enqueue(newChunk);
+            }
+        }
+    }
+
+    private void DecodePacketMeshGrouped(byte[] packet, IPEndPoint remoteEP)
+    {
+        //Debug.Log($"grouped");
+        int cursor = 0;
+        MeshDecodeMethod method = (MeshDecodeMethod)BitConverter.ToInt32(packet, cursor);
+        cursor += sizeof(int);
+
+        char submeshType = BitConverter.ToChar(packet, cursor);
+
+        int objectId = BitConverter.ToInt32(packet, cursor += 2);
+        int chunkId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+        int submeshId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+        int headerSize = cursor += sizeof(int);
+
+        // parse the packet data
+        int dataSize = packet.Length - headerSize;
+        byte[] chunkData = new byte[dataSize];
+        Buffer.BlockCopy(packet, headerSize, chunkData, 0, dataSize);
+
+        //Debug.Log($"{chunkId}, {submeshType}, {objectId}, {submeshId}");
+        // init the chunk in the client
+        var newChunk = new Chunk
+        {
+            meshDecodeMethod = method,
+            id = chunkId,
+            type = submeshType,
+            objectID = objectId,
+            subMeshIdx = submeshId,
+            chunkRecvTime = DateTime.UtcNow,
+            data = chunkData
+        };
+
+        ObjectHolder objectHolder = m_TCPClient.objectHolders[objectId];
+        if (objectHolder.chunks_VTGrouped.Count == 0)
+        {
+            objectHolder.ifVisible = true;
+            objectHolder.ifOwned = true;
+            objectHolder.remoteEP = remoteEP;
+            objectHolder.firstChunkTime = DateTime.UtcNow;
+        }
+        objectHolder.latestChunkTime = DateTime.UtcNow;
+        if (!objectHolder.chunks_VTGrouped.ContainsKey(chunkId))
+        {
+            objectHolder.chunks_VTGrouped.Add(chunkId, newChunk);
+
+            lock (chunkQueueLock)
+            {
+                chunkQueue.Enqueue(newChunk);
+            }
+        }
     }
 
     public void ParseMessageForChunks(byte[] packet)
@@ -367,7 +447,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
     }
 
-    private void UpdateObjectSubMeshes(Chunk chunk)
+    private void DecodeChunkVRSeparate(Chunk chunk)
     {
         int chunkID = chunk.id;
         char vorT = chunk.type;
@@ -465,6 +545,111 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
     }
 
+    private void DecodeChunkVRGrouped(Chunk chunk)
+    {
+        int objectID = chunk.objectID;
+        byte[] chunk_data = chunk.data;
+
+        var holder = m_TCPClient.objectHolders[objectID];
+        int totalVertexNum = holder.totalVertNum;
+        int subMeshCount = holder.submeshCount;
+        string[] materialNames = holder.materialNames;
+        Vector3 position = holder.position;
+        Vector3 eulerAngles = holder.eulerAngles;
+        Vector3 scale = holder.scale;
+
+        if (!recGameObjects.ContainsKey(objectID))
+        {
+            Vector3[] vertices = new Vector3[totalVertexNum];
+            Vector3[] normals = new Vector3[totalVertexNum];
+            verticesDict[objectID] = vertices;
+            normalsDict[objectID] = normals;
+
+            List<List<int>> triangles = new List<List<int>>();
+            for (int i = 0; i < subMeshCount; i++)
+            {
+                triangles.Add(new List<int>());
+            }
+            trianglesDict[objectID] = triangles;
+        }
+
+        var verticesArr = verticesDict[objectID];
+        var normalsArr = normalsDict[objectID];
+        var trianglesArr = trianglesDict[objectID];
+
+        int cursor = 0;
+        int vertexCount = BitConverter.ToInt32(chunk_data, cursor); cursor += sizeof(int);
+        for (int i = 0; i < vertexCount; i++)
+        {
+            int index = BitConverter.ToInt32(chunk_data, cursor); cursor += sizeof(int);
+
+            // Skip decoding if already filled
+            if (verticesArr[index] != Vector3.zero)
+            {
+                cursor += 6 * sizeof(float); // skip position + normal
+                continue;
+            }
+
+            float x = BitConverter.ToSingle(chunk_data, cursor); cursor += sizeof(float);
+            float y = BitConverter.ToSingle(chunk_data, cursor); cursor += sizeof(float);
+            float z = BitConverter.ToSingle(chunk_data, cursor); cursor += sizeof(float);
+            verticesArr[index] = new Vector3(x, y, z);
+
+            float nx = BitConverter.ToSingle(chunk_data, cursor); cursor += sizeof(float);
+            float ny = BitConverter.ToSingle(chunk_data, cursor); cursor += sizeof(float);
+            float nz = BitConverter.ToSingle(chunk_data, cursor); cursor += sizeof(float);
+            normalsArr[index] = new Vector3(nx, ny, nz);
+        }
+
+
+        int triangleCount = BitConverter.ToInt32(chunk_data, cursor); cursor += sizeof(int);
+        for (int i = 0; i < triangleCount; i++)
+        {
+            int tri = BitConverter.ToInt32(chunk_data, cursor); cursor += sizeof(int);
+            trianglesArr[chunk.subMeshIdx].Add(tri);
+        }
+
+        if (!recGameObjects.ContainsKey(objectID))
+        {
+            GameObject recGameObject = new GameObject();
+            recGameObject.AddComponent<MeshFilter>();
+
+            Mesh newMesh = new Mesh();
+            newMesh.vertices = verticesArr;
+            newMesh.normals = normalsArr;
+            newMesh.subMeshCount = subMeshCount;
+            for (int i = 0; i < subMeshCount; i++)
+            {
+                newMesh.SetTriangles(trianglesArr[i], i);
+            }
+            recGameObject.GetComponent<MeshFilter>().mesh = newMesh;
+            recGameObject.AddComponent<MeshRenderer>();
+
+            List<Material> materials = new List<Material>();
+            foreach (string matName in materialNames)
+            {
+                materials.Add(m_ResourceLoader.LoadMaterialByName(matName));
+            }
+            recGameObject.GetComponent<MeshRenderer>().materials = materials.ToArray();
+
+            recGameObject.transform.position = position;
+            recGameObject.transform.eulerAngles = eulerAngles;
+            recGameObject.transform.localScale = scale;
+
+            recGameObjects[objectID] = recGameObject;
+        }
+        else
+        {
+            Mesh mesh = recGameObjects[objectID].GetComponent<MeshFilter>().mesh;
+            mesh.vertices = verticesArr;
+            mesh.normals = normalsArr;
+            for (int i = 0; i < subMeshCount; i++)
+            {
+                mesh.SetTriangles(trianglesArr[i], i);
+            }
+        }
+    }
+
     private IEnumerator CheckRetransmissions()
     {
         while (true)
@@ -476,12 +661,12 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 ObjectHolder objectHolder = m_TCPClient.objectHolders[i];
 
                 if (objectHolder.ifVisible && (DateTime.UtcNow - objectHolder.latestChunkTime).TotalSeconds > 1f && 
-                    objectHolder.chunks.Count < objectHolder.totalVertChunkNum + objectHolder.totalTriChunkNum)
+                    objectHolder.chunks_VTSeparate.Count < objectHolder.totalVertChunkNum + objectHolder.totalTriChunkNum)
                 {
                     List<int> missingChunks = new List<int>();
                     for (int j = 0; j < objectHolder.totalVertChunkNum + objectHolder.totalTriChunkNum; j++)
                     {
-                        if (!objectHolder.chunks.ContainsKey(j))
+                        if (!objectHolder.chunks_VTSeparate.ContainsKey(j))
                         {
                             missingChunks.Add(j);
                         }
@@ -597,7 +782,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
 //            UnityDispatcher.Instance.Enqueue(() =>
 //            {
-//                UpdateObjectSubMeshes(transmission.chunks[chunkId]);
+//                DecodeChunkVRSeparate(transmission.chunks[chunkId]);
 //            });
 //        }
 //    }
