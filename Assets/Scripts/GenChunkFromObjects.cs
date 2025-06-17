@@ -15,7 +15,8 @@ public class GenChunkFromObjects : MonoBehaviour
 
     void Start()
     {
-        mv = new RandomizedMesh();
+        //mv = new RandomizedMesh();
+        mv = new GroupedMesh();
     }
 
     void Update()
@@ -32,7 +33,8 @@ public class GenChunkFromObjects : MonoBehaviour
 
         Debug.Log($"Scene Object N: {sceneObjects.Count}");
 
-        string baseFolder = Path.Combine(Application.dataPath, "Data/ObjectChunks");
+        //string baseFolder = Path.Combine(Application.dataPath, "Data/ObjectChunks");
+        string baseFolder = Path.Combine(Application.dataPath, "Data/ObjectChunksGrouped");
         if (!Directory.Exists(baseFolder))
         {
             Directory.CreateDirectory(baseFolder);

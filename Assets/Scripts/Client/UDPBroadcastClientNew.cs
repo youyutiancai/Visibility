@@ -7,9 +7,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using TMPro;
-using Unity.Android.Gradle;
+//using Unity.Android.Gradle;
 using UnityEngine;
-using UnityEngine.tvOS;
+//using UnityEngine.tvOS;
 using UnityEngine.XR;
 
 [Serializable]
@@ -239,7 +239,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
             m_TextLog2.text = $"[+++++++] UDP client listening on the server, recvBuf-{recvBuf}, sendBuf-{sendBuf}";
 
             udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
-            //StartCoroutine(CheckRetransmissions());
+            StartCoroutine(CheckRetransmissions());
         }
         catch (Exception ex)
         {

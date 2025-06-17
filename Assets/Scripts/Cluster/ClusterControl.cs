@@ -87,15 +87,17 @@ public class ClusterControl : Singleton<ClusterControl>
         //List<byte[]> chunks_mv1 = mv1.RequestChunks(object_toSerialize, CHUNK_SIZE);
         //GameObject newObject = ReconstructFromChunks(vc.objectsInScene[object_toSerialize], chunks_mv1);
         //Debug.Log($"mv: {chunks_mv.Count}, mv1: {chunks_mv1.Count}");
-        //objectChunksVTSeparate = new Dictionary<int, List<byte[]>>();
+        objectChunksVTSeparate = new Dictionary<int, List<byte[]>>();
         objectChunksVTGrouped = new Dictionary<int, List<byte[]>>();
-        LoadAllChunks();
+        LoadAllChunks("Assets/Data/objectChunksGrouped", ref objectChunksVTGrouped);
+        LoadAllChunks("Assets/Data/ObjectChunks", ref objectChunksVTSeparate);
     }
 
-    private void LoadAllChunks()
+    private void LoadAllChunks(string chunksDirectory, ref Dictionary<int, List<byte[]>> chunkDic)
     {
-        string chunksDirectory = "Assets/Data/ObjectChunks";
-        objectChunksVTSeparate = new Dictionary<int, List<byte[]>>();
+        //string chunksDirectory = "Assets/Data/ObjectChunks";
+        //objectChunksVTSeparate = new Dictionary<int, List<byte[]>>();
+        chunkDic = new Dictionary<int, List<byte[]>>();
 
         if (!Directory.Exists(chunksDirectory))
         {
@@ -120,13 +122,13 @@ public class ClusterControl : Singleton<ClusterControl>
                     List<byte[]> chunks = LoadChunksFromFile(file);
                     if (chunks != null && chunks.Count > 0)
                     {
-                        objectChunksVTSeparate[objectID] = chunks;
+                        chunkDic[objectID] = chunks;
                         //Debug.Log($"Loaded {chunks.Count} chunks for object {objectID}");
                     }
                 }
             }
 
-            Debug.Log($"Successfully loaded {objectChunksVTSeparate.Count} objects");
+            Debug.Log($"Successfully loaded {chunkDic.Count} objects");
         }
         catch (Exception e)
         {
@@ -312,10 +314,10 @@ public class ClusterControl : Singleton<ClusterControl>
             List<byte[]> chunks = null;
             switch (meshDecodeMethod) {
                 case MeshDecodeMethod.VTSeparate:
-                    //if (!objectChunksVTSeparate.ContainsKey(sendingObjectIdx))
-                    //{
-                    //    objectChunksVTSeparate.Add(sendingObjectIdx, mv.RequestChunks(sendingObjectIdx, CHUNK_SIZE));
-                    //}
+                    if (!objectChunksVTSeparate.ContainsKey(sendingObjectIdx))
+                    {
+                        objectChunksVTSeparate.Add(sendingObjectIdx, mv.RequestChunks(sendingObjectIdx, CHUNK_SIZE));
+                    }
                     chunks = objectChunksVTSeparate[sendingObjectIdx];
                     break;
 
