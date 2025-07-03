@@ -609,6 +609,9 @@ public class UDPBroadcastClientNew : MonoBehaviour
             trianglesArr[chunk.subMeshIdx].Add(tri);
         }
 
+        string tEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunk.id},\"type\":\"T\",\"subMeshIdx\":{chunk.subMeshIdx},\"chunkRecvTime\":\"{chunk.chunkRecvTime}\"}}";
+        chunksThisFrame.Add(tEntry);
+
         if (!recGameObjects.ContainsKey(objectID))
         {
             GameObject recGameObject = new GameObject();

@@ -350,6 +350,7 @@ public class ClusterControl : Singleton<ClusterControl>
             for (int i = 0; i < maxToSend; i++)
             {
                 nc.BroadcastChunk(chunksToSend.Dequeue());
+                //Debug.Log($"sending out chunk");
             }
             timeSinceLastChunksent = 0;
         }

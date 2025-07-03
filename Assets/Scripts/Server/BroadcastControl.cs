@@ -225,13 +225,14 @@ public class BroadcastControl : MonoBehaviour
         if (broadcastThread != null && broadcastThread.IsAlive)
         {
             //broadcastThread.Join();
-            broadcastThread.Abort();
+            broadcastThread.Join();
         }
         if (retransmissionThread != null && retransmissionThread.IsAlive)
         {
-            retransmissionThread.Abort();
+            retransmissionThread.Join();
         }
         udpClient.Close();
+        udpClient.Dispose();
     }
 
     private IEnumerator WaitOneSecond()
