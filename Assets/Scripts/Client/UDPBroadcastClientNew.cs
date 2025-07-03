@@ -517,6 +517,10 @@ public class UDPBroadcastClientNew : MonoBehaviour
             {
                 newMesh.SetTriangles(trianglesArr[i], i);
             }
+
+            // IMPORTANT: Set the recompute the mesh bounds to avoid camera culling issues
+            newMesh.RecalculateBounds();
+
             recGameObject.GetComponent<MeshFilter>().mesh = newMesh;
             recGameObject.AddComponent<MeshRenderer>();
 
@@ -542,6 +546,9 @@ public class UDPBroadcastClientNew : MonoBehaviour
             {
                 mesh.SetTriangles(trianglesArr[i], i);
             }
+
+            // IMPORTANT: Set the recompute the mesh bounds to avoid camera culling issues
+            mesh.RecalculateBounds();
         }
     }
 
@@ -609,9 +616,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
             trianglesArr[chunk.subMeshIdx].Add(tri);
         }
 
-        string tEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunk.id},\"type\":\"T\",\"subMeshIdx\":{chunk.subMeshIdx},\"chunkRecvTime\":\"{chunk.chunkRecvTime}\"}}";
-        chunksThisFrame.Add(tEntry);
-
         if (!recGameObjects.ContainsKey(objectID))
         {
             GameObject recGameObject = new GameObject();
@@ -625,6 +629,10 @@ public class UDPBroadcastClientNew : MonoBehaviour
             {
                 newMesh.SetTriangles(trianglesArr[i], i);
             }
+
+            // IMPORTANT: Set the recompute the mesh bounds to avoid camera culling issues
+            newMesh.RecalculateBounds();
+
             recGameObject.GetComponent<MeshFilter>().mesh = newMesh;
             recGameObject.AddComponent<MeshRenderer>();
 
@@ -650,6 +658,9 @@ public class UDPBroadcastClientNew : MonoBehaviour
             {
                 mesh.SetTriangles(trianglesArr[i], i);
             }
+
+            // IMPORTANT: Set the recompute the mesh bounds to avoid camera culling issues
+            mesh.RecalculateBounds();
         }
     }
 
