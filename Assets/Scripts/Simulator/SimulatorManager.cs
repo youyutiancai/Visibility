@@ -175,7 +175,7 @@ public class SimulatorManager : MonoBehaviour
         {
             // Capture Frames - Ground Truth (noted: the current ground truth is based on the visibility check table)
             sceneRoot.SetActive(true);
-            //simulatorVisibility.SetVisibilityObjectsInScene(cameraRig.position, epsilon);
+            simulatorVisibility.SetVisibilityObjectsInScene(cameraRig.position, epsilon);
         }
         else if (index == 2)
         {
@@ -437,6 +437,9 @@ public class SimulatorManager : MonoBehaviour
             {
                 newMesh.SetTriangles(trianglesDict[objectID][i], i);
             }
+
+            // IMPORTANT: Set the recompute the mesh bounds to avoid camera culling issues
+            newMesh.RecalculateBounds();
             
             newObject.GetComponent<MeshFilter>().mesh = newMesh;
 
@@ -468,6 +471,9 @@ public class SimulatorManager : MonoBehaviour
             {
                 mesh.SetTriangles(trianglesDict[objectID][i], i);
             }
+
+            // IMPORTANT: Set the recompute the mesh bounds to avoid camera culling issues
+            mesh.RecalculateBounds();
         }
     }
 
