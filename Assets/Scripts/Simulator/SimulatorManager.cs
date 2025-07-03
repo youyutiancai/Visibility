@@ -15,7 +15,8 @@ using System.Globalization;
 public class SimulatorManager : MonoBehaviour
 {
     public Transform cameraRig;
-    public GameObject completeSceneObject;
+    public GameObject sceneRoot;
+    public GridDivide gd;
     public string jsonlFilePath = "Assets/Data/ClientLogData/with_interrupt.jsonl";
     public TMP_Text logTimePerFrame;
     public Button toggleSimulateButton;
@@ -44,6 +45,10 @@ public class SimulatorManager : MonoBehaviour
     private int captureFrameCount = 0;
     private Dictionary<int, int> totalExpectedChunks = new Dictionary<int, int>();
     private Dictionary<int, int> totalReceivedChunks = new Dictionary<int, int>();
+    private SimulatorVisibility simulatorVisibility;
+
+    // visibility check variables
+    private float epsilon = 10f;    // Radius for clustering
 
     [Serializable]
     private class ChunkData
@@ -119,6 +124,16 @@ public class SimulatorManager : MonoBehaviour
         }
         receivedChunks = new Dictionary<int, bool[]>();
         
+        // Initialize SimulatorVisibility 
+        if (sceneRoot != null && gd != null)
+        {
+            sceneRoot.SetActive(true);
+            simulatorVisibility = new SimulatorVisibility(sceneRoot, gd);
+            sceneRoot.SetActive(false);
+        }
+        else
+            Debug.LogError("sceneRoot or gd not assigned! SimulatorVisibility cannot be initialized.");
+        
         // Initialize the dropdown
         InitializeFileDropdown();
         InitializeModeDropdown();
@@ -153,19 +168,19 @@ public class SimulatorManager : MonoBehaviour
         if (index == 0)
         {
             // Replay
-            completeSceneObject.SetActive(false);
+            sceneRoot.SetActive(false);
 
         }
         else if (index == 1)
         {
-            // Capture Frames - Ground Truth
-            completeSceneObject.SetActive(true);
-            
+            // Capture Frames - Ground Truth (noted: the current ground truth is based on the visibility check table)
+            sceneRoot.SetActive(true);
+            simulatorVisibility.SetVisibilityObjectsInScene(cameraRig.position, epsilon);
         }
         else if (index == 2)
         {
             // Capture Frames - Recevied
-            completeSceneObject.SetActive(false);
+            sceneRoot.SetActive(false);
         }
     }
 
@@ -247,6 +262,7 @@ public class SimulatorManager : MonoBehaviour
     {
         if (!startSimulating || logEntries == null || logEntries.Count == 0)
         {
+            // noted: the current user position is hardcoded (fixed), not updatd per frame
             currentEntryIndex = 0;
             cameraRig.position = new Vector3(-114f, 1.7f, -100f);
             cameraRig.rotation = Quaternion.Euler(0f, 0f, 0f);
@@ -421,6 +437,9 @@ public class SimulatorManager : MonoBehaviour
             {
                 newMesh.SetTriangles(trianglesDict[objectID][i], i);
             }
+
+            // IMPORTANT: Set the recompute the mesh bounds to avoid camera culling issues
+            newMesh.RecalculateBounds();
             
             newObject.GetComponent<MeshFilter>().mesh = newMesh;
 
@@ -452,6 +471,9 @@ public class SimulatorManager : MonoBehaviour
             {
                 mesh.SetTriangles(trianglesDict[objectID][i], i);
             }
+
+            // IMPORTANT: Set the recompute the mesh bounds to avoid camera culling issues
+            mesh.RecalculateBounds();
         }
     }
 
