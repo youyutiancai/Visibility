@@ -6,6 +6,7 @@ using UnityEngine;
 public class SimulatorVisibility
 {
     private List<GameObject> objectsInScene;
+    private int[] visibleObjects;
     private Dictionary<string, int[]> diffInfoAdd, visibleObjectsInGrid;
     private float numInUnitX = 10f, numInUnitZ = 10f;
     private GridDivide gd;
@@ -36,13 +37,18 @@ public class SimulatorVisibility
 
     public void SetVisibilityObjectsInScene(Vector3 head_position, float radius)
     {
-        int[] visibleObjects = new int[objectsInScene.Count];
+        visibleObjects = new int[objectsInScene.Count];
         GetVisibleObjectsInRegionProg_Internal(head_position, radius, ref visibleObjects);
         
         for (int i = 0; i < objectsInScene.Count; i++)
         {
             objectsInScene[i].SetActive(visibleObjects[i] > 0 || objectsInScene[i].tag == "Terrain");
         }
+    }
+
+    public int[] GetVisibleObjectInRegion()
+    {
+        return visibleObjects;
     }
 
     private void GetVisibleObjectsInRegionProg_Internal(Vector3 position, float radius, ref int[] objectVisibility)

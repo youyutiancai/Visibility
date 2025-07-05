@@ -2,15 +2,19 @@ using UnityEngine;
 using System.IO;
 using System.Collections.Generic;
 using System;
+using Newtonsoft.Json;
 
 public class ObjectChunkManager : MonoBehaviour
 {
     private Dictionary<int, List<byte[]>> objectChunks; // objectID -> list of chunks
     private string chunksDirectory = "Assets/Data/ObjectChunks";
+    private int totalChunkCount = 0; // Cached total chunk count
 
     // Chunk type identifiers
     private const char VERTEX_CHUNK = 'V';
     private const char TRIANGLE_CHUNK = 'T';
+
+    // total number of chunks
 
     public struct ChunkHeader
     {
@@ -28,6 +32,7 @@ public class ObjectChunkManager : MonoBehaviour
     private void LoadAllChunks()
     {
         objectChunks = new Dictionary<int, List<byte[]>>();
+        totalChunkCount = 0; // Reset total chunk count
 
         if (!Directory.Exists(chunksDirectory))
         {
@@ -53,19 +58,19 @@ public class ObjectChunkManager : MonoBehaviour
                     if (chunks != null && chunks.Count > 0)
                     {
                         objectChunks[objectID] = chunks;
-                        Debug.Log($"Loaded {chunks.Count} chunks for object {objectID}");
+                        totalChunkCount += chunks.Count; // Accumulate total chunk count
+                        // Debug.Log($"Loaded {chunks.Count} chunks for object {objectID}");
                     }
                 }
             }
 
-            Debug.Log($"Successfully loaded {objectChunks.Count} objects");
+            Debug.Log($"Successfully loaded {totalChunkCount} chunks for {objectChunks.Count} objects");
         }
         catch (Exception e)
         {
             Debug.LogError($"Error loading chunks: {e.Message}");
         }
     }
-
     private List<byte[]> LoadChunksFromFile(string objectFilePath)
     {
         List<byte[]> chunks = new List<byte[]>();
@@ -91,6 +96,74 @@ public class ObjectChunkManager : MonoBehaviour
         }
 
         return chunks;
+    }
+
+    // Save received chunks data to file
+    public void SaveReceivedChunksData(Dictionary<int, bool[]> isReceivedChunks, string filename = null)
+    {
+        if (filename == null)
+        {
+            string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            filename = $"received_chunks_{timestamp}.json";
+        }
+
+        string filePath = Path.Combine(Application.dataPath, "Data", "ChunkSetLog", filename);
+        
+        try
+        {
+            // Convert Dictionary<int, bool[]> to serializable format
+            var serializableData = new Dictionary<string, bool[]>();
+            foreach (var kvp in isReceivedChunks)
+            {
+                serializableData[kvp.Key.ToString()] = kvp.Value;
+            }
+
+            // Serialize to JSON
+            string jsonData = JsonConvert.SerializeObject(serializableData, Formatting.Indented);
+            File.WriteAllText(filePath, jsonData);
+            
+            Debug.Log($"Received chunks data saved to: {filePath}");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Error saving received chunks data: {e.Message}");
+        }
+    }
+
+    // Load received chunks data from file
+    public void LoadReceivedChunksData(Dictionary<int, bool[]> isReceivedChunks, string filename)
+    {
+        string filePath = Path.Combine(Application.dataPath, "Data", "ChunkSetLog", filename);
+        
+        if (!File.Exists(filePath))
+        {
+            Debug.LogError($"Received chunks file not found: {filePath}");
+            return;
+        }
+
+        try
+        {
+            // Read and deserialize JSON
+            string jsonData = File.ReadAllText(filePath);
+            var serializableData = JsonConvert.DeserializeObject<Dictionary<string, bool[]>>(jsonData);
+            
+            // Convert back to Dictionary<int, bool[]>
+            isReceivedChunks.Clear();
+            foreach (var kvp in serializableData)
+            {
+                if (int.TryParse(kvp.Key, out int objectId))
+                {
+                    isReceivedChunks[objectId] = kvp.Value;
+                }
+            }
+            
+            Debug.Log($"Received chunks data loaded from: {filePath}");
+            Debug.Log($"Loaded data for {isReceivedChunks.Count} objects");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Error loading received chunks data: {e.Message}");
+        }
     }
 
     public ChunkHeader? GetChunkHeader(int objectID, int chunkID)
@@ -176,6 +249,17 @@ public class ObjectChunkManager : MonoBehaviour
             return objectChunks[objectID].Count;
         }
         return 0;
+    }
+
+    // Get total number of chunks for all objects
+    public int GetTotalChunkCount()
+    {
+        return totalChunkCount;
+    }
+
+    public int GetTotalObjectCount()
+    {
+        return objectChunks.Count;
     }
 
     // Helper method to get all vertex chunks for an object
