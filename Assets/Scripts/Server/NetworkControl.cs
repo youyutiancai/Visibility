@@ -79,7 +79,7 @@ public class NetworkControl : Singleton<NetworkControl>
         bcc.BroadcastChunk(chunk);
     }
 
-    private void OnApplicationQuit()
+    private async void OnApplicationQuit()
     {
         Debug.Log($"Cancelling the ct OnApplicationQuit");
 
@@ -90,7 +90,7 @@ public class NetworkControl : Singleton<NetworkControl>
 
         if (tc != null)
         {
-            tc.OnQuit(); // Create a public cleanup method instead of relying on OnApplicationQuit
+            await tc.OnQuit(); // Create a public cleanup method instead of relying on OnApplicationQuit
         }
     }
 

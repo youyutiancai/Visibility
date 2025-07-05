@@ -10,6 +10,8 @@ using UnityTCPClient.Assets.Scripts;
 using System.Collections;
 using System.Text;
 using UnityEngine.InputSystem;
+using UnityEngine.UIElements;
+using System.Linq;
 
 public class VisibilityCheck : Singleton<VisibilityCheck>
 {
@@ -28,7 +30,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     [HideInInspector]
     public List<float> objectDataSize;
     private List<int> colors;
-    private int colorID, cameraPosID, preGridX, preGridZ, stepCount;
+    private int colorID, cameraPosIDX, cameraPosIDZ, preGridX, preGridZ, stepCount;
     private bool[] fpcameraFinished;
     private bool preAutoMove, preShowAll, preProgBased;
     private Texture2D destinationTexture;
@@ -36,9 +38,10 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     private Color color;
     private string meshInfo;
     private GameObject visTarget, preVisTarget;
-    private Dictionary<string, int[]> diffInfoAdd, diffInfoRemove, visibleObjectsInGrid;
+    private Dictionary<string, int[]> diffInfoAdd, diffInfoRemove, visibleObjectsInGrid, objectFootprintsInGrid;
 
-    public float frameUpdatePace, numInUnitX = 10f, numInUnitZ = 10f;
+    public float frameUpdatePace;
+    public int numInUnitX = 10, numInUnitZ = 10;
     public Vector3 pathStartPos, pathEndPos;
 
     private RenderTexture reusableRenderTexture;
@@ -48,11 +51,48 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     {
         InitialValues();
         AddAllObjects(sceneRoot.transform);
+        StartCoroutine(Test());
         //objectTable = CreateObjectTable();
         //TestObjectTable();
         //Debug.Log(objectsInScene.Count);
         //GenerateMeshInfo();
         //ColorObjects();
+    }
+
+    private IEnumerator Test()
+    {
+        yield return new WaitForSeconds(1f);
+        Vector3 pos = ClusterControl.Instance.initialClusterCenter.transform.position;
+        int xStartIndex = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        int zStartIndex = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+        //Debug.Log($"{pos}, {gd.gridCornerParent.transform.position}, {xStartIndex}, {zStartIndex}");
+        //int[] footprints = ReadFootprintGridUnit(xStartIndex, zStartIndex);
+        ////int[] footprints = ReadFootprintsGrid(xStartIndex, zStartIndex);
+        //Debug.Log($"current: {string.Join(", ", footprints)}");
+        //int xoffset = 0, zoffset = 0;
+        //int[] corner0 = ReadFootprintsGrid(xStartIndex + xoffset, zStartIndex + zoffset);
+        //int[] corner1 = ReadFootprintsGrid(xStartIndex + xoffset + 1, zStartIndex + zoffset);
+        //int[] corner2 = ReadFootprintsGrid(xStartIndex + xoffset, zStartIndex + zoffset + 1);
+        //int[] corner3 = ReadFootprintsGrid(xStartIndex + xoffset + 1, zStartIndex + zoffset + 1);
+        //List<int> unit = new List<int>();
+        //for (int k = 0; k < corner0.Length; k++)
+        //{
+        //    unit.Add(corner0[k] + corner1[k] + corner2[k] + corner3[k]);
+        //}
+        //int[] unitRead = ReadFootprintGridUnit(xStartIndex, zStartIndex);
+        int[] unitRead = new int[objectsInScene.Count];
+        GetVisibleObjectsInRegionProg(pos, 10f, ref unitRead);
+        int totalChunkCount = 0, count = 0;
+        for (int k = 0; k < objectsInScene.Count; k++)
+        {
+            if (unitRead[k] > 0)
+            {
+                totalChunkCount += ClusterControl.Instance.objectChunksVTSeparate[k].Count;
+                count++;
+            }
+            objectsInScene[k].SetActive(unitRead[k] > 0 || objectsInScene[k].tag == "Terrain" || showAll);
+        }
+        Debug.Log($"total object num: {count}, total chunk count: {totalChunkCount}");
     }
 
     private void GenerateMeshInfo()
@@ -76,7 +116,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             {
                 writer.WriteLine($"{name},{mf.sharedMesh.vertices.Length},{mf.sharedMesh.triangles.Length}," +
                     $"{48 * mf.sharedMesh.vertices.Length + 2 * mf.sharedMesh.triangles.Length}");
-            } else
+            }
+            else
             {
                 writer.WriteLine($"{name},0,0,0");
             }
@@ -100,6 +141,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         preVisTarget = visTarget;
         diffInfoAdd = new Dictionary<string, int[]>();
         visibleObjectsInGrid = new Dictionary<string, int[]>();
+        objectFootprintsInGrid = new Dictionary<string, int[]>();
     }
 
     private void AddAllObjects(Transform child)
@@ -179,7 +221,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         Buffer.BlockCopy(BitConverter.GetBytes(objectTable.Count - sizeof(int)), 0, result, sizeof(int) * 2, sizeof(int));
         Buffer.BlockCopy(BitConverter.GetBytes(objectTable.Count - sizeof(int)), 0, result, 0, sizeof(int));
 
-         //Save the object table to a file
+        //Save the object table to a file
         //string dataPath = Path.Combine(Application.dataPath, "Data");
         //if (!Directory.Exists(dataPath))
         //{
@@ -337,7 +379,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             {
                 objectsInScene[i].SetActive(visibleObjects[i] > 0 || objectsInScene[i].tag == "Terrain" || showAll);
             }
-        } else if (visTarget.GetComponent<Camera>() != null)
+        }
+        else if (visTarget.GetComponent<Camera>() != null)
         {
             //Debug.Log(visTarget.name);
             User user = visTarget.GetComponent<User>();
@@ -348,7 +391,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 {
                     objectsInScene[i].SetActive(visibileObjects[i] == 1 || objectsInScene[i].tag == "Terrain" || showAll);
                 }
-            } else
+            }
+            else
             {
                 int[] visibleObjects = new int[objectsInScene.Count];
                 GetVisibleObjectsInRegion(visTarget.transform.position, ClusterControl.Instance.epsilon / 2, ref visibleObjects);
@@ -374,13 +418,13 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             autoMove = true;
             stepCount = 0;
         }
-        if (autoMove)
-        {
-            UpdateCameraPosOnPath();
-        }
-        CheckObjectSelection();
-        CheckGridsVis();
-        UpdateGrids();
+        //if (autoMove)
+        //{
+        //    UpdateCameraPosOnPath();
+        //}
+        //CheckObjectSelection();
+        //CheckGridsVis();
+        //UpdateGrids();
     }
 
     private void UpdateCameraPosOnPath()
@@ -466,7 +510,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         }
     }
 
-        private void CheckGridsVis()
+    private void CheckGridsVis()
     {
         if (visTarget == null)
             return;
@@ -505,9 +549,10 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
 
     public void GetVisibleObjectsInRegionProg(Vector3 position, float radius, ref int[] objectVisibility)
     {
+
         int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
         int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-
+        //Debug.Log($"{position}, {gd.gridCornerParent.transform.position}, {xStartIndex}, {zStartIndex}");
         //int[] footprints = ReadFootprintsGrid(xStartIndex, zStartIndex);
         //List<int> visibleObjects = new List<int>();
         //for (int i = 0; i < objectsInScene.Count; i++)
@@ -519,7 +564,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         //    }
         //}
         //Debug.Log($"old: {string.Join(',', visibleObjects)}");
-        int[] footprints = ReadFootprintGridUnit(xStartIndex, zStartIndex);
+        int[] footprints = ReadVisibilityGridUnit(xStartIndex, zStartIndex);
         //Debug.Log($"unit: {string.Join(", ", footprints)}");
         for (int i = 0; i < footprints.Length; i++)
         {
@@ -534,6 +579,27 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             UpdateVisOnLine(i, zStartIndex, i, zStartIndex - gridNumToInclude, 0, -1, ref objectVisibility);
             UpdateVisOnLine(i, zStartIndex, i, zStartIndex + gridNumToInclude, 0, 1, ref objectVisibility);
+        }
+    }
+
+    public void GetFootprintsInRegion(Vector3 position, float radius, ref int[] objectFootprints)
+    {
+        int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+
+        objectFootprints = new int[objectsInScene.Count];
+        int gridNumToInclude = Mathf.FloorToInt(radius / gd.gridSize);
+
+        for (int i = xStartIndex - gridNumToInclude; i < xStartIndex + gridNumToInclude + 1; i++)
+        {
+            for (int j = zStartIndex - gridNumToInclude; j < zStartIndex + gridNumToInclude + 1; j++)
+            {
+                int[] footprints = ReadFootprintGridUnit(i, j);
+                for (int k = 0; k < objectFootprints.Length; k++)
+                {
+                    objectFootprints[k] += footprints[k];
+                }
+            }
         }
     }
 
@@ -575,16 +641,18 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         if (Keyboard.current.spaceKey.wasPressedThisFrame)
         {
             //Debug.Log($"{gd.numGridX}, {gd.numGridZ}");
-            //cameraPosID = 0;
-            //ResetFootprintCount();
+            cameraPosIDX = 120;
+            cameraPosIDZ = 439;
+            ResetFootprintCount();
+            //StartCoroutine(WriteFootPrintsFromCornerToGridUnit());
             //WriteFromCornerToGrid();
             //WriteGridDifferences();
             //StartCoroutine(CombineGridDifferences());
             //StartCoroutine(ShrinkGridLevelVis());
             //StartCoroutine(CombineGrids());
-        } else if (Keyboard.current.qKey.wasPressedThisFrame)
+        }
+        else if (Keyboard.current.qKey.wasPressedThisFrame)
         {
-            UpdateVisibleObjects();
             //CreateUI();
         }
     }
@@ -611,7 +679,13 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         }
         //colorCount = newColorCount;
         fpcameraFinished = new bool[6];
-        footprintCameras.transform.position = gd.gridCornerParent.transform.GetChild(cameraPosID).position;
+        //footprintCameras.transform.position = gd.gridCornerParent.transform.GetChild(cameraPosID).position;
+        Vector3 cameraPos = gd.gridCornerParent.transform.position + new Vector3(cameraPosIDX * gd.gridSize, 0, cameraPosIDZ * gd.gridSize);
+        footprintCameras.transform.position = new Vector3(cameraPos.x, 1, cameraPos.z);
+        foreach (Color c in colorRecordID.Keys)
+        {
+            objectsInScene[colorRecordID[c]].SetActive(true);
+        }
     }
 
     private void CountFootprints(Camera cam)
@@ -653,15 +727,20 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
 
     private void Serialize()
     {
-        Debug.Log($"serialized {cameraPosID}");
-        //foreach(Color c in colorRecordID.Keys)
-        //{
-        //    objectsInScene[colorRecordID[c]].SetActive(colorCount[c] > 0);
-        //}
-        WriteFootprints();
-        if (cameraPosID < gd.gridCornerParent.transform.childCount - 2)
+        Debug.Log($"serialized {cameraPosIDX}, {cameraPosIDZ}");
+        foreach (Color c in colorRecordID.Keys)
         {
-            cameraPosID++;
+            objectsInScene[colorRecordID[c]].SetActive(colorCount[c] > 0);
+        }
+        WriteFootprints();
+        cameraPosIDZ++;
+        if (cameraPosIDZ > gd.numGridZ) //
+        {
+            cameraPosIDX++;
+            cameraPosIDZ = 0;
+        }
+        if (cameraPosIDX <= gd.numGridX)
+        {
             ResetFootprintCount();
         }
     }
@@ -673,9 +752,9 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             footprintCount[colorRecordID[c]] = colorCount[c];
         }
-        string filePath = "C:\\Users\\zhou1168\\VRAR\\Visibility\\Assets\\GridData\\ObjectVisibility/";
+        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\CornerLevelFootprints\\";
         //Vector3 pos = footprintCameras.transform.position;
-        string fileName = $"{filePath}{cameraPosID}.bin";
+        string fileName = $"{filePath}{cameraPosIDX}_{cameraPosIDZ}.bin";
         byte[] bytes = ConvertIntArrayToByteArray(footprintCount);
         File.WriteAllBytes(fileName, bytes);
     }
@@ -690,7 +769,14 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         return result;
     }
 
-    private int[] ReadFootprintGridUnit(int x, int z)
+    static byte[] ConvertIntArrayToByteArrayNoHeader(int[] ints)
+    {
+        byte[] bytes = new byte[ints.Length * sizeof(int)];
+        Buffer.BlockCopy(ints, 0, bytes, 0, bytes.Length);
+        return bytes;
+    }
+
+    private int[] ReadVisibilityGridUnit(int x, int z)
     {
         string indiGrid = $"{x}_{z}";
         if (visibleObjectsInGrid.ContainsKey(indiGrid))
@@ -729,6 +815,39 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             }
         }
         return visibleObjectsInGrid[indiGrid];
+    }
+
+    private int[] ReadFootprintGridUnit(int x, int z)
+    {
+        string indiGrid = $"{x}_{z}";
+        if (objectFootprintsInGrid.ContainsKey(indiGrid))
+        {
+            return objectFootprintsInGrid[indiGrid];
+        }
+        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelFootprintsUnit\\";
+        int unitX = x / (int)numInUnitX, unitZ = z / (int)numInUnitZ;
+        string fileName = $"{filePath}{unitX}_{unitZ}.bin";
+        if (!File.Exists(fileName))
+        {
+            Debug.LogError($"{fileName} does not exist");
+            return new int[objectsInScene.Count];
+        }
+        byte[] bytes_read = File.ReadAllBytes(fileName);
+        int[] visInfo = ConvertByteArrayToIntArrayNoHeader(bytes_read);
+
+        Debug.Log($"{bytes_read.Length}, {visInfo.Length}");
+        for (int k = 0; k < numInUnitX; k++)
+        {
+            for (int l = 0; l < numInUnitZ; l++)
+            {
+                int gridX = unitX * (int)numInUnitX + k, gridZ = unitZ * (int)numInUnitZ + l;
+                int objectCount = VisibilityCheck.Instance.objectsInScene.Count;
+                int[] newGridLevelFootprintInfo = new int[objectCount];
+                Array.Copy(visInfo, objectCount * (k * numInUnitX + l), newGridLevelFootprintInfo, 0, objectCount);
+                objectFootprintsInGrid.Add($"{gridX}_{gridZ}", newGridLevelFootprintInfo);
+            }
+        }
+        return objectFootprintsInGrid[indiGrid];
     }
 
 
@@ -787,12 +906,84 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         cursor += numToRemove;
     }
 
+    private int[] ReadFootprintsGrid(int x, int z)
+    {
+        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\CornerLevelFootprints\\";
+        string fileName = $"{filePath}{x}_{z}.bin";
+        if (!File.Exists(fileName))
+        {
+            Debug.Log($"{fileName} does not exist");
+            return new int[objectsInScene.Count];
+        }
+        byte[] bytes_read = File.ReadAllBytes(fileName);
+        int[] result = ConvertByteArrayToIntArray(bytes_read);
+        if (result.Length == 0)
+        {
+            Debug.Log($"length 0 {x}, {z}");
+        }
+        return result;
+    }
+
+    private byte[] ReadFootprintsGridBytes(int x, int z)
+    {
+        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\CornerLevelFootprints\\";
+        string fileName = $"{filePath}{x}_{z}.bin";
+        if (!File.Exists(fileName))
+        {
+            Debug.Log($"{fileName} does not exist");
+            return new byte[objectsInScene.Count * sizeof(int)];
+        }
+        return File.ReadAllBytes(fileName);
+    }
+
+    private IEnumerator WriteFootPrintsFromCornerToGridUnit()
+    {
+        int numUnitX = Mathf.CeilToInt(gd.numGridX / numInUnitX);
+        int numUnitZ = Mathf.CeilToInt(gd.numGridZ / numInUnitZ);
+        string UnitFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelFootprintsUnit\\";
+        for (int i = 0; i < numUnitX; i++)
+        {
+            for (int j = 0; j < numUnitZ; j++)
+            {
+                List<byte> infoToWrite = new List<byte>();
+                for (int k = 0; k < numInUnitX; k++)
+                {
+                    for (int l = 0; l < numInUnitZ; l++)
+                    {
+                        int gridX = i * (int)numInUnitX + k, gridZ = j * (int)numInUnitZ + l;
+                        int[] corner0 = ReadFootprintsGrid(gridX, gridZ);
+                        int[] corner1 = ReadFootprintsGrid(gridX + 1, gridZ);
+                        int[] corner2 = ReadFootprintsGrid(gridX, gridZ + 1);
+                        int[] corner3 = ReadFootprintsGrid(gridX + 1, gridZ + 1);
+                        int[] sum = new int[objectsInScene.Count];
+                        for (int d = 0; d < objectsInScene.Count; d++)
+                        {
+                            sum[d] = corner0[d] + corner1[d] + corner2[d] + corner3[d];
+                        }
+                        infoToWrite.AddRange(ConvertIntArrayToByteArrayNoHeader(sum));
+                    }
+                }
+                string fileName = $"{UnitFilePath}{i}_{j}.bin";
+                File.WriteAllBytes(fileName, infoToWrite.ToArray());
+                Debug.Log($"finished {i}_{j}");
+                yield return null;
+            }
+        }
+    }
+
     static int[] ConvertByteArrayToIntArray(byte[] byteArray)
     {
         int length = BitConverter.ToInt32(byteArray, 0);
         int[] array = new int[length];
         Buffer.BlockCopy(byteArray, 4, array, 0, length * 4);
         return array;
+    }
+
+    static int[] ConvertByteArrayToIntArrayNoHeader(byte[] byteArray)
+    {
+        int[] ints = new int[byteArray.Length / sizeof(int)];
+        Buffer.BlockCopy(byteArray, 0, ints, 0, byteArray.Length);
+        return ints;
     }
 }
 

@@ -239,7 +239,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
             m_TextLog2.text = $"[+++++++] UDP client listening on the server, recvBuf-{recvBuf}, sendBuf-{sendBuf}";
 
             udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
-            StartCoroutine(CheckRetransmissions());
+            //StartCoroutine(CheckRetransmissions());
         }
         catch (Exception ex)
         {

@@ -38,12 +38,13 @@ public abstract class User : MonoBehaviour
 
     public void UpdateVisibleObjects(int[] visibleObjects, ref int[] newObjectsCount)
     {
-        for (int i = 0; i < visibleObjects.Length; i++)
+        Debug.Log($"{vc}, {vc.objectsInScene.Count}");
+        for (int i = 0; i < vc.objectsInScene.Count; i++)
         {
-            if (visibleObjects[i] == 1 && clusterReceived[i] == 0)
+            if (visibleObjects[i] > 0 && clusterReceived[i] == 0)
             {
                 clusterReceived[i] = 1;
-                newObjectsCount[i] = 1;
+                newObjectsCount[i] = visibleObjects[i];
                 //Debug.Log(i);
             }
         }
@@ -60,7 +61,7 @@ public abstract class User : MonoBehaviour
         List<int> newObjects = new List<int>();
         for (int i = 0; i < visibleObjects.Length; i++)
         {
-            if (visibleObjects[i] == 1 && indiReceived[i] == 0)
+            if (visibleObjects[i] > 0 && indiReceived[i] == 0)
             {
                 indiReceived[i] = 1;
                 newObjects.Add(i);

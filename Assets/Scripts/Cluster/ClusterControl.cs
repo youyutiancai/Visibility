@@ -48,7 +48,7 @@ public class ClusterControl : Singleton<ClusterControl>
     private VisibilityCheck vc;
     private int[] visibleObjectsInRegion;
     private GridDivide gd;
-    private int objectSentCluster, objectSentIndi;
+    private int objectSentIndi;
     private GameObject pathNodesRoot;
     private NetworkControl nc;
     private bool canSendObjects;
@@ -73,7 +73,6 @@ public class ClusterControl : Singleton<ClusterControl>
         nc = NetworkControl.Instance;
         gd = GridDivide.Instance;
         visibleObjectsInRegion = new int[vc.objectsInScene.Count];
-        objectSentCluster = 0;
         objectSentIndi = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
         initialClusterCenterPos = initialClusterCenter.transform.position;
@@ -309,7 +308,7 @@ public class ClusterControl : Singleton<ClusterControl>
 
         if (canSendObjects && nc.timeSinceLastChunkRequest >= newObjectInterval && nc.readyForNextObject && objectsWaitToBeSent.Count > 0)
         {
-            float distance = objectsWaitToBeSent.GetPriority(objectsWaitToBeSent.Peek());
+            float priority = objectsWaitToBeSent.GetPriority(objectsWaitToBeSent.Peek());
             int sendingObjectIdx = objectsWaitToBeSent.Dequeue();
             List<byte[]> chunks = null;
             switch (meshDecodeMethod) {
@@ -334,7 +333,7 @@ public class ClusterControl : Singleton<ClusterControl>
             {
                 if (!chunksToSend.Contains(chunks[i]))
                 {
-                    chunksToSend.Enqueue(chunks[i], distance);
+                    chunksToSend.Enqueue(chunks[i], priority, 3);
                 }
             }
             //nc.BroadcastObjectData(sendingObjectIdx, newChunkInterval);
@@ -383,17 +382,17 @@ public class ClusterControl : Singleton<ClusterControl>
                     UpdateClusterParents();
                     int[] newObjectsToSend = SendObjectsToClusters();
 
-                    foreach (var user in users)
-                    {
-                        user.UpdateVisibleObjectsIndi(newObjectsToSend, ref objectSentIndi, null);
-                    }
+                    //foreach (var user in users)
+                    //{
+                    //    user.UpdateVisibleObjectsIndi(newObjectsToSend, ref objectSentIndi, null);
+                    //}
 
                     for (int i = 0; i < newObjectsToSend.Length; i++)
                     {
                         if (newObjectsToSend[i] > 0 && !objectsWaitToBeSent.Contains(i))
                         {
-                            float newDistance = Vector3.Distance(vc.objectsInScene[i].transform.position, initialClusterCenter.transform.position);
-                            objectsWaitToBeSent.Enqueue(i, newDistance);
+                            //float newDistance = Vector3.Distance(vc.objectsInScene[i].transform.position, initialClusterCenter.transform.position);
+                            objectsWaitToBeSent.Enqueue(i, 1024 * 1024 * 6 - newObjectsToSend[i], 1);
                         }
                     }
                 }
@@ -680,7 +679,8 @@ public class ClusterControl : Singleton<ClusterControl>
             {
                 Transform child = transform.GetChild(i);
                 visibleObjectsInRegion = new int[vc.objectsInScene.Count];
-                vc.GetVisibleObjectsInRegion(child.position, epsilon, ref visibleObjectsInRegion);
+                //vc.GetVisibleObjectsInRegion(child.position, epsilon, ref visibleObjectsInRegion);
+                vc.GetFootprintsInRegion(child.position, epsilon, ref visibleObjectsInRegion);
                 int count = 0;
                 for (int j = 0; j < visibleObjectsInRegion.Length; j++) {
                     count += visibleObjectsInRegion[j] > 0 ? 1 : 0;
@@ -690,7 +690,6 @@ public class ClusterControl : Singleton<ClusterControl>
                 {
                     child.GetChild(j).GetComponent<User>().UpdateVisibleObjects(visibleObjectsInRegion, ref newObjectCount);
                 }
-                objectSentCluster += newObjectCount.Sum();
             }
 
             if (transform.GetChild(i).tag == "User")
@@ -701,7 +700,7 @@ public class ClusterControl : Singleton<ClusterControl>
                 int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
                 if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
                 visibleObjectsInRegion = new int[vc.objectsInScene.Count];
-                vc.GetVisibleObjectsInRegion(user.transform.position, epsilon / 2, ref visibleObjectsInRegion);
+                vc.GetFootprintsInRegion(user.transform.position, epsilon / 2, ref visibleObjectsInRegion);
                 user.UpdateVisibleObjects(visibleObjectsInRegion, ref newObjectCount);
             }
         }
@@ -730,9 +729,9 @@ public class ClusterControl : Singleton<ClusterControl>
      
     private void UpdateMethodComparison()
     {
-        displayText.text = "";
-        displayText.text += $"# of objects sent based on clusters: {objectSentCluster}\n" +
-            $"# of objects sent based on individuals: {objectSentIndi}";
+        //displayText.text = "";
+        //displayText.text += $"# of objects sent based on clusters: {objectSentCluster}\n" +
+        //    $"# of objects sent based on individuals: {objectSentIndi}";
     }
 
     void OnApplicationQuit()
@@ -749,20 +748,37 @@ public class ClusterControl : Singleton<ClusterControl>
 
 public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TPriority>
 {
-    private List<(TElement Element, TPriority Priority)> _heap = new();
+    private List<(TElement Element, TPriority Priority, int Count)> _heap = new();
     private Dictionary<TElement, int> _indexMap = new();
 
     public int Count => _heap.Count;
 
-    public void Enqueue(TElement element, TPriority priority)
+    public void Enqueue(TElement element, TPriority priority, int count)
     {
-        if (_indexMap.ContainsKey(element))
-            throw new InvalidOperationException("Element already exists. Use UpdatePriority instead.");
+        if (_indexMap.TryGetValue(element, out int i))
+        {
+            _heap[i] = (element, _heap[i].Priority, count);
+            return;
+        }
 
-        _heap.Add((element, priority));
-        int i = _heap.Count - 1;
-        _indexMap[element] = i;
-        HeapifyUp(i);
+        _heap.Add((element, priority, count));
+        int index = _heap.Count - 1;
+        _indexMap[element] = index;
+        HeapifyUp(index);
+    }
+
+    public void AddTimes(TElement element, TPriority priority, int count)
+    {
+        if (_indexMap.TryGetValue(element, out int i))
+        {
+            _heap[i] = (element, _heap[i].Priority, _heap[i].Count + count);
+            return;
+        }
+
+        _heap.Add((element, priority, count));
+        int index = _heap.Count - 1;
+        _indexMap[element] = index;
+        HeapifyUp(index);
     }
 
     public TElement Dequeue()
@@ -770,17 +786,24 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
         if (_heap.Count == 0)
             throw new InvalidOperationException("PriorityQueue is empty.");
 
-        var root = _heap[0].Element;
-        Swap(0, _heap.Count - 1);
+        var root = _heap[0];
 
+        if (root.Count > 1)
+        {
+            _heap[0] = (root.Element, root.Priority, root.Count - 1);
+            return root.Element;
+        }
+
+        Swap(0, _heap.Count - 1);
         _heap.RemoveAt(_heap.Count - 1);
-        _indexMap.Remove(root);
+        _indexMap.Remove(root.Element);
 
         if (_heap.Count > 0)
             HeapifyDown(0);
 
-        return root;
+        return root.Element;
     }
+
 
     public TElement Peek()
     {
@@ -796,7 +819,7 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
 
         var current = _heap[index];
         int cmp = newPriority.CompareTo(current.Priority);
-        _heap[index] = (element, newPriority);
+        _heap[index] = (element, newPriority, current.Count);
 
         if (cmp < 0)
             HeapifyUp(index);
@@ -855,6 +878,7 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
         _indexMap[_heap[i].Element] = i;
         _indexMap[_heap[j].Element] = j;
     }
+
 
     public TPriority GetPriority(TElement element)
     {

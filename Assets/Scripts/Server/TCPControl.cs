@@ -201,9 +201,10 @@ public class TCPControl : MonoBehaviour
         lock (_lock)
         {
             GameObject newUser = Instantiate(cc.realUserPrefab);
-            newUser.transform.position = cc.initialClusterCenterPos +
-                new Vector3(Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f), 1.3f,
-                Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f));
+            newUser.transform.position = cc.initialClusterCenterPos + new Vector3(0, 1.3f, 0);
+            //newUser.transform.position = cc.initialClusterCenterPos +
+            //    new Vector3(Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f), 1.3f,
+            //    Random.Range(-cc.epsilon / 4.0f, cc.epsilon / 4.0f));
             newUser.transform.parent = cc.transform;
             cc.users.Add(newUser.GetComponent<RealUser>());
             var realUser = newUser.GetComponent<RealUser>();
@@ -245,7 +246,7 @@ public class TCPControl : MonoBehaviour
         clients[clientEndPoint].GetStream().Write(message, 0, message.Length);
     }
 
-    public async void OnQuit()
+    public async Task OnQuit()
     {
         Debug.Log("Shutting down TCPControl...");
 
