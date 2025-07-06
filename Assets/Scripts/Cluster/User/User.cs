@@ -21,7 +21,6 @@ public abstract class User : MonoBehaviour
 
     public User(Vector3 initialPos)
     {
-        Start();
     }
 
     private void Start()
@@ -38,14 +37,16 @@ public abstract class User : MonoBehaviour
 
     public void UpdateVisibleObjects(int[] visibleObjects, ref int[] newObjectsCount)
     {
-        Debug.Log($"{vc}, {vc.objectsInScene.Count}");
+        if (vc == null)
+        {
+            Start ();
+        }
         for (int i = 0; i < vc.objectsInScene.Count; i++)
         {
             if (visibleObjects[i] > 0 && clusterReceived[i] == 0)
             {
                 clusterReceived[i] = 1;
                 newObjectsCount[i] = visibleObjects[i];
-                //Debug.Log(i);
             }
         }
     }

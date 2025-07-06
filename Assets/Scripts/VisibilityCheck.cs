@@ -51,12 +51,13 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     {
         InitialValues();
         AddAllObjects(sceneRoot.transform);
-        StartCoroutine(Test());
+        //sceneRoot.SetActive(false);
+        //StartCoroutine(Test());
         //objectTable = CreateObjectTable();
         //TestObjectTable();
         //Debug.Log(objectsInScene.Count);
         //GenerateMeshInfo();
-        //ColorObjects();
+        ColorObjects();
     }
 
     private IEnumerator Test()
@@ -65,7 +66,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         Vector3 pos = ClusterControl.Instance.initialClusterCenter.transform.position;
         int xStartIndex = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
         int zStartIndex = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-        //Debug.Log($"{pos}, {gd.gridCornerParent.transform.position}, {xStartIndex}, {zStartIndex}");
+        Debug.Log($"{pos}, {gd.gridCornerParent.transform.position}, {xStartIndex}, {zStartIndex}");
         //int[] footprints = ReadFootprintGridUnit(xStartIndex, zStartIndex);
         ////int[] footprints = ReadFootprintsGrid(xStartIndex, zStartIndex);
         //Debug.Log($"current: {string.Join(", ", footprints)}");
@@ -81,7 +82,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         //}
         //int[] unitRead = ReadFootprintGridUnit(xStartIndex, zStartIndex);
         int[] unitRead = new int[objectsInScene.Count];
-        GetVisibleObjectsInRegionProg(pos, 10f, ref unitRead);
+        GetFootprintsInRegion(pos, 10f, ref unitRead);
         int totalChunkCount = 0, count = 0;
         for (int k = 0; k < objectsInScene.Count; k++)
         {
@@ -641,8 +642,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         if (Keyboard.current.spaceKey.wasPressedThisFrame)
         {
             //Debug.Log($"{gd.numGridX}, {gd.numGridZ}");
-            cameraPosIDX = 120;
-            cameraPosIDZ = 439;
+            cameraPosIDX = 122;
+            cameraPosIDZ = 456;
             ResetFootprintCount();
             //StartCoroutine(WriteFootPrintsFromCornerToGridUnit());
             //WriteFromCornerToGrid();

@@ -30,11 +30,14 @@ public class TCPClient : MonoBehaviour
 
     private byte[] receiveBuffer = new byte[1024 * 1024];
     private int readPos = 0, writePos = 0;
+    private float poseSendingGap, lastPoseSentTime;
 
     void Start()
     {
         parsingTable = false;
         receivedInitPos = false;
+        poseSendingGap = 0.1f;
+        lastPoseSentTime = Time.time;
         try
         {
             client = new TcpClient(serverIPAddress, port);
@@ -55,10 +58,11 @@ public class TCPClient : MonoBehaviour
             Debug.Log($"Puppet mode toggled: {isPuppet}");
         }
 
-        if (client != null && client.Connected && centerEye != null && receivedInitPos)
+        if (client != null && client.Connected && centerEye != null && receivedInitPos && Time.time - lastPoseSentTime > poseSendingGap)
         {
             byte[] poseMessage = CreatePoseMessage(centerEye.transform.position, centerEye.transform.rotation);
             SendMessage(poseMessage);
+            lastPoseSentTime = Time.time;
         }
     }
 

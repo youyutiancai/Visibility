@@ -338,7 +338,7 @@ public class ClusterControl : Singleton<ClusterControl>
             }
             //nc.BroadcastObjectData(sendingObjectIdx, newChunkInterval);
             nc.timeSinceLastChunkRequest = 0;
-            Debug.Log($"broadcasting: {nc.isBroadcast}. finished {sendingObjectIdx}, {objectsWaitToBeSent.Count} is left");
+            //Debug.Log($"broadcasting: {nc.isBroadcast}. finished {sendingObjectIdx}, {objectsWaitToBeSent.Count} is left");
         }
 
         timeSinceLastChunksent += Time.deltaTime;
@@ -685,7 +685,6 @@ public class ClusterControl : Singleton<ClusterControl>
                 for (int j = 0; j < visibleObjectsInRegion.Length; j++) {
                     count += visibleObjectsInRegion[j] > 0 ? 1 : 0;
                 }
-                Debug.Log($"visible object num: {count}");
                 for (int j = 0; j < child.childCount; j++)
                 {
                     child.GetChild(j).GetComponent<User>().UpdateVisibleObjects(visibleObjectsInRegion, ref newObjectCount);
@@ -700,7 +699,7 @@ public class ClusterControl : Singleton<ClusterControl>
                 int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
                 if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
                 visibleObjectsInRegion = new int[vc.objectsInScene.Count];
-                vc.GetFootprintsInRegion(user.transform.position, epsilon / 2, ref visibleObjectsInRegion);
+                vc.GetFootprintsInRegion(user.transform.position, epsilon, ref visibleObjectsInRegion);
                 user.UpdateVisibleObjects(visibleObjectsInRegion, ref newObjectCount);
             }
         }
