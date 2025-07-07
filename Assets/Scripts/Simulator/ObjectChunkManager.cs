@@ -131,7 +131,7 @@ public class ObjectChunkManager : MonoBehaviour
     }
 
     // Load received chunks data from file
-    public void LoadReceivedChunksData(Dictionary<int, bool[]> isReceivedChunks, string filename)
+    public void LoadReceivedChunksData(ref Dictionary<int, bool[]> isReceivedChunks, string filename)
     {
         string filePath = Path.Combine(Application.dataPath, "Data", "ChunkSetLog", filename);
         

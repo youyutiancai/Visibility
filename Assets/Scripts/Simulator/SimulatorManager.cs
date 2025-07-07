@@ -619,7 +619,7 @@ public class SimulatorManager : MonoBehaviour
             Debug.Log($"Received Objects: {receivedObjects}");
             Debug.Log($"Object Reception Rate: {(float)receivedObjects / totalObjectsSent:P2}");
             Debug.Log($"Total Available Chunks: {totalChunksSent}");
-            Debug.Log($"Total Received Chunks: {totalReceivedChunksCount}");
+            Debug.Log($"Total Loss Chunks: {totalChunksSent - totalReceivedChunksCount}");
             Debug.Log($"Packet Loss Rate: {packetLossRate:P2}");
             Debug.Log($"Chunk Reception Rate: {(float)totalReceivedChunksCount / totalChunksSent:P2}");
 
