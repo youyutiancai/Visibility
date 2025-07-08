@@ -30,7 +30,7 @@ public class SimulatorManager : MonoBehaviour
     public string logFileNameForRecvChunk = "chunkset_x";
 
     [Header("Server Send Head Position")]
-    public Vector3 serverSendHeadPosition = new Vector3(-114f, 1.7f, -100f);
+    public Vector3 serverSendHeadPosition = new Vector3(0f, 0f, 0f);
 
     private bool startSimulating = false;
     private List<LogEntry> logEntries;
@@ -298,7 +298,7 @@ public class SimulatorManager : MonoBehaviour
         {
             // noted: the current user position is hardcoded (fixed), not updatd per frame
             currentEntryIndex = 0;
-            cameraRig.position = new Vector3(-114f, 1.7f, -100f);
+            cameraRig.position = serverSendHeadPosition;
             cameraRig.rotation = Quaternion.Euler(0f, 0f, 0f);
             if (packetLossText != null)
             {
@@ -682,11 +682,15 @@ public class SimulatorManager : MonoBehaviour
             captureFrameCount = 0; // Reset frame counter
 
             // trick to get the total objects and chunks sent
-            sceneRoot.SetActive(true);
-            simulatorVisibility.SetVisibilityObjectsInScene(serverSendHeadPosition, epsilon);
-            int[] visibility = simulatorVisibility.GetVisibleObjectInRegion();
-            ComputeChunkSentByVisibility(visibility);
-            sceneRoot.SetActive(false);
+            // sceneRoot.SetActive(true);
+            // simulatorVisibility.SetVisibilityObjectsInScene(serverSendHeadPosition, epsilon);
+            // int[] visibility = simulatorVisibility.GetVisibleObjectInRegion();
+            // ComputeChunkSentByVisibility(visibility);
+            // sceneRoot.SetActive(false);
+
+            // currently fixed number, once Simulator Visibility is updated, this will be deleted
+            totalObjectsSent = 250;
+            totalChunksSent = 28443;
 
             // Reset packet loss tracking
             totalReceivedChunks.Clear();
@@ -722,7 +726,7 @@ public class SimulatorManager : MonoBehaviour
             // Reset camera position
             if (cameraRig != null)
             {
-                cameraRig.position = new Vector3(-114f, 1.7f, -100f);
+                cameraRig.position = serverSendHeadPosition;
                 cameraRig.rotation = Quaternion.Euler(0f, 0f, 0f);
             }
 
