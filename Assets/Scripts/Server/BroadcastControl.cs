@@ -147,6 +147,8 @@ public class BroadcastControl : MonoBehaviour
                 new_message = new byte[message.Length + sizeof(int)];
                 Buffer.BlockCopy(BitConverter.GetBytes(message.Length), 0, new_message, 0, sizeof(int));
                 Buffer.BlockCopy(message, 0, new_message, sizeof(int), message.Length);
+                //Debug.Log($"{nc}");
+                //Debug.Log($"{nc.tc}");
                 nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.173"), new_message);
                 nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.101"), new_message);
                 nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.174"), new_message);

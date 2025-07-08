@@ -13,12 +13,18 @@ using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
 using System.Linq;
 
+public enum CityPreprocessSteps
+{
+    CalculateFootprintCorner, CombineFootprintToUnit, NoPreProcessStep
+}
+
 public class VisibilityCheck : Singleton<VisibilityCheck>
 {
     public Camera mainCamera;
     public GameObject sceneRoot, footprintCameras, grids, pathStart, pathEnd, testObject;
     public bool showAll, progBased, autoMove;
     public GridDivide gd;
+    public CityPreprocessSteps step;
     [HideInInspector]
     public bool captureAndCount;
     [HideInInspector]
@@ -51,13 +57,18 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     {
         InitialValues();
         AddAllObjects(sceneRoot.transform);
-        //sceneRoot.SetActive(false);
+        if (step == CityPreprocessSteps.NoPreProcessStep)
+        {
+            sceneRoot.SetActive(false);
+        }
         //StartCoroutine(Test());
         //objectTable = CreateObjectTable();
         //TestObjectTable();
         //Debug.Log(objectsInScene.Count);
         //GenerateMeshInfo();
-        ColorObjects();
+        if (step == CityPreprocessSteps.CalculateFootprintCorner) {
+            ColorObjects();
+        }
     }
 
     private IEnumerator Test()
@@ -81,7 +92,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         //    unit.Add(corner0[k] + corner1[k] + corner2[k] + corner3[k]);
         //}
         //int[] unitRead = ReadFootprintGridUnit(xStartIndex, zStartIndex);
-        int[] unitRead = new int[objectsInScene.Count];
+        long[] unitRead = new long[objectsInScene.Count];
         GetFootprintsInRegion(pos, 10f, ref unitRead);
         int totalChunkCount = 0, count = 0;
         for (int k = 0; k < objectsInScene.Count; k++)
@@ -93,6 +104,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             }
             objectsInScene[k].SetActive(unitRead[k] > 0 || objectsInScene[k].tag == "Terrain" || showAll);
         }
+        Debug.Log($"{string.Join(", ", unitRead)}");
         Debug.Log($"total object num: {count}, total chunk count: {totalChunkCount}");
     }
 
@@ -583,25 +595,40 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         }
     }
 
-    public void GetFootprintsInRegion(Vector3 position, float radius, ref int[] objectFootprints)
+    public void GetFootprintsInRegion(Vector3 position, float radius, ref long[] objectFootprints)
     {
         int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
         int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
 
-        objectFootprints = new int[objectsInScene.Count];
+        objectFootprints = new long[objectsInScene.Count];
         int gridNumToInclude = Mathf.FloorToInt(radius / gd.gridSize);
 
+        int count = 0;
         for (int i = xStartIndex - gridNumToInclude; i < xStartIndex + gridNumToInclude + 1; i++)
         {
             for (int j = zStartIndex - gridNumToInclude; j < zStartIndex + gridNumToInclude + 1; j++)
             {
+                count++;
                 int[] footprints = ReadFootprintGridUnit(i, j);
                 for (int k = 0; k < objectFootprints.Length; k++)
                 {
                     objectFootprints[k] += footprints[k];
                 }
+                //int countObject = 0;
+                //for (int k = 0; k < objectFootprints.Length; k++)
+                //{
+                //    if (objectFootprints[k] > 0)
+                //    {
+                //        countObject++;
+                //    }
+                //}
+                //Debug.Log($"{i}-{j}, {countObject}");
             }
         }
+        //for (int i = 0; i < objectFootprints.Length; i++)
+        //{
+        //    objectFootprints[i] = objectFootprints[i] / count;
+        //}
     }
 
     private void UpdateVisOnLine(int fromX, int fromZ, int toX, int toZ, int xStep, int zStep, ref int[] visibility)
@@ -642,10 +669,18 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         if (Keyboard.current.spaceKey.wasPressedThisFrame)
         {
             //Debug.Log($"{gd.numGridX}, {gd.numGridZ}");
-            cameraPosIDX = 122;
-            cameraPosIDZ = 456;
-            ResetFootprintCount();
-            //StartCoroutine(WriteFootPrintsFromCornerToGridUnit());
+            switch (step)
+            {
+                case CityPreprocessSteps.CalculateFootprintCorner:
+                    cameraPosIDX = 122;
+                    cameraPosIDZ = 597;
+                    ResetFootprintCount();
+                    break;
+
+                case CityPreprocessSteps.CombineFootprintToUnit:
+                    StartCoroutine(WriteFootPrintsFromCornerToGridUnit());
+                    break;
+            }
             //WriteFromCornerToGrid();
             //WriteGridDifferences();
             //StartCoroutine(CombineGridDifferences());
@@ -825,7 +860,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             return objectFootprintsInGrid[indiGrid];
         }
-        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\GridLevelFootprintsUnit\\";
+        string filePath = "C:/Users/zhou1168/VRAR/Visibility/Assets/Data/GridLevelFootprintsUnit/";
         int unitX = x / (int)numInUnitX, unitZ = z / (int)numInUnitZ;
         string fileName = $"{filePath}{unitX}_{unitZ}.bin";
         if (!File.Exists(fileName))

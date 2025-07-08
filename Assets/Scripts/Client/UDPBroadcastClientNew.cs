@@ -447,6 +447,72 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
     }
 
+    //private void DecodePacketMeshSeparate(byte[] packet, IPEndPoint remoteEP)
+    //{
+    //    int cursor = 0;
+    //    MeshDecodeMethod method = (MeshDecodeMethod)BitConverter.ToInt32(packet, cursor);
+    //    cursor += sizeof(int);
+
+    //    char submeshType = BitConverter.ToChar(packet, cursor);
+    //    int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
+
+    //    if (submeshType == 'V')
+    //    {
+    //        objectId = BitConverter.ToInt32(packet, cursor += 2);
+    //        chunkId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+    //        headerSize = cursor += sizeof(int);
+    //    }
+    //    else if (submeshType == 'T')
+    //    {
+    //        objectId = BitConverter.ToInt32(packet, cursor += 2);
+    //        chunkId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+    //        submeshId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+    //        headerSize = cursor += sizeof(int);
+    //    }
+    //    else
+    //    {
+    //        Debug.LogError("Unknown packet type.");
+    //        udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+    //        return;
+    //    }
+
+    //    // parse the packet data
+    //    int dataSize = packet.Length - headerSize;
+    //    byte[] chunkData = new byte[dataSize];
+    //    Buffer.BlockCopy(packet, headerSize, chunkData, 0, dataSize);
+
+    //    // init the chunk in the client
+    //    var newChunk = new Chunk
+    //    {
+    //        meshDecodeMethod = method,
+    //        id = chunkId,
+    //        type = submeshType,
+    //        objectID = objectId,
+    //        subMeshIdx = submeshId,
+    //        chunkRecvTime = DateTime.UtcNow,
+    //        data = chunkData
+    //    };
+
+    //    ObjectHolder objectHolder = m_TCPClient.objectHolders[objectId];
+    //    if (objectHolder.chunks_VTSeparate.Count == 0)
+    //    {
+    //        objectHolder.ifVisible = true;
+    //        objectHolder.ifOwned = true;
+    //        objectHolder.remoteEP = remoteEP;
+    //        objectHolder.firstChunkTime = DateTime.UtcNow;
+    //    }
+    //    objectHolder.latestChunkTime = DateTime.UtcNow;
+    //    if (!objectHolder.chunks_VTSeparate.ContainsKey(chunkId))
+    //    {
+    //        objectHolder.chunks_VTSeparate.Add(chunkId, newChunk);
+
+    //        lock (chunkQueueLock)
+    //        {
+    //            chunkQueue.Enqueue(newChunk);
+    //        }
+    //    }
+    //}
+
     private void DecodeChunkVRSeparate(Chunk chunk)
     {
         int chunkID = chunk.id;

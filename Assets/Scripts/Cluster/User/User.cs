@@ -35,7 +35,7 @@ public abstract class User : MonoBehaviour
         preZ = 0;
     }
 
-    public void UpdateVisibleObjects(int[] visibleObjects, ref int[] newObjectsCount)
+    public void UpdateVisibleObjects(long[] visibleObjects, ref long[] newObjectsCount)
     {
         if (vc == null)
         {

@@ -243,6 +243,10 @@ public class TCPControl : MonoBehaviour
     public void SendMessageToClient(IPAddress clientEndPoint, byte[] message)
     {
         //Debug.Log($"Sending message to client {clients[clientEndPoint].Available} of size {BitConverter.ToInt32(message, 0)}");
+        if (!clients.ContainsKey(clientEndPoint))
+        {
+            return;
+        }
         clients[clientEndPoint].GetStream().Write(message, 0, message.Length);
     }
 

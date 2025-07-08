@@ -21,6 +21,7 @@ public class ClusterControl : Singleton<ClusterControl>
     public TextMeshProUGUI displayText;
 
     public float epsilon = 10;  // Radius for clustering
+    public int numChunkRepeat;
     public int minPts = 2;      // Minimum points to form a cluster
     public float updateInterval, newObjectInterval, newChunkInterval, timegapForSwapUsers;  // How often to update (in seconds)
     public bool regularlySwapUsers, regularlySwapLeader, writeToData;
@@ -47,6 +48,7 @@ public class ClusterControl : Singleton<ClusterControl>
     private Dictionary<int, GameObject> clusterGameObjects = new Dictionary<int, GameObject>(); // Cluster ID to GameObject mapping
     private VisibilityCheck vc;
     private int[] visibleObjectsInRegion;
+    private long[] objectFootPrintsInRegion;
     private GridDivide gd;
     private int objectSentIndi;
     private GameObject pathNodesRoot;
@@ -73,6 +75,7 @@ public class ClusterControl : Singleton<ClusterControl>
         nc = NetworkControl.Instance;
         gd = GridDivide.Instance;
         visibleObjectsInRegion = new int[vc.objectsInScene.Count];
+        objectFootPrintsInRegion = new long[vc.objectsInScene.Count];
         objectSentIndi = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
         initialClusterCenterPos = initialClusterCenter.transform.position;
@@ -85,7 +88,6 @@ public class ClusterControl : Singleton<ClusterControl>
         //List<byte[]> chunks_mv = mv.RequestChunks(object_toSerialize, CHUNK_SIZE);
         //List<byte[]> chunks_mv1 = mv1.RequestChunks(object_toSerialize, CHUNK_SIZE);
         //GameObject newObject = ReconstructFromChunks(vc.objectsInScene[object_toSerialize], chunks_mv1);
-        //Debug.Log($"mv: {chunks_mv.Count}, mv1: {chunks_mv1.Count}");
         objectChunksVTSeparate = new Dictionary<int, List<byte[]>>();
         objectChunksVTGrouped = new Dictionary<int, List<byte[]>>();
         LoadAllChunks("Assets/Data/objectChunksGrouped", ref objectChunksVTGrouped);
@@ -122,7 +124,6 @@ public class ClusterControl : Singleton<ClusterControl>
                     if (chunks != null && chunks.Count > 0)
                     {
                         chunkDic[objectID] = chunks;
-                        //Debug.Log($"Loaded {chunks.Count} chunks for object {objectID}");
                     }
                 }
             }
@@ -333,23 +334,19 @@ public class ClusterControl : Singleton<ClusterControl>
             {
                 if (!chunksToSend.Contains(chunks[i]))
                 {
-                    chunksToSend.Enqueue(chunks[i], priority, 3);
+                    chunksToSend.Enqueue(chunks[i], priority, numChunkRepeat);
                 }
             }
-            //nc.BroadcastObjectData(sendingObjectIdx, newChunkInterval);
             nc.timeSinceLastChunkRequest = 0;
-            //Debug.Log($"broadcasting: {nc.isBroadcast}. finished {sendingObjectIdx}, {objectsWaitToBeSent.Count} is left");
         }
 
         timeSinceLastChunksent += Time.deltaTime;
-        //Debug.Log($"{Time.deltaTime * 1000}");
         if (timeSinceLastChunksent >= newChunkInterval && chunksToSend.Count > 0)
         {
             int maxToSend = Mathf.Max(0, Mathf.Min(chunksToSend.Count, chunksSentEachTime));
             for (int i = 0; i < maxToSend; i++)
             {
                 nc.BroadcastChunk(chunksToSend.Dequeue());
-                //Debug.Log($"sending out chunk");
             }
             timeSinceLastChunksent = 0;
         }
@@ -380,7 +377,7 @@ public class ClusterControl : Singleton<ClusterControl>
                     RunDBSCAN();
                     ApplyClusterColors();
                     UpdateClusterParents();
-                    int[] newObjectsToSend = SendObjectsToClusters();
+                    long[] newObjectsToSend = SendObjectsToClusters();
 
                     //foreach (var user in users)
                     //{
@@ -392,7 +389,8 @@ public class ClusterControl : Singleton<ClusterControl>
                         if (newObjectsToSend[i] > 0 && !objectsWaitToBeSent.Contains(i))
                         {
                             //float newDistance = Vector3.Distance(vc.objectsInScene[i].transform.position, initialClusterCenter.transform.position);
-                            objectsWaitToBeSent.Enqueue(i, 1024 * 1024 * 6 - newObjectsToSend[i], 1);
+                            objectsWaitToBeSent.Enqueue(i, 1024 * 1024 * 6 * 4 - newObjectsToSend[i] / 441f, 1);
+                            //Debug.Log($"{i}: {newObjectsToSend[i]}, {newObjectsToSend[i] * 100f / 1024 / 1024 / 6 / 4}");
                         }
                     }
                 }
@@ -411,7 +409,6 @@ public class ClusterControl : Singleton<ClusterControl>
         {
             if (user is RealUser realUser && realUser.isPuppet && realUser.tcpClient?.Connected == true)
             {
-                //Debug.Log($"changing");
                 float t = Time.time;
                 float radius = 1.5f;
                 float speed = 0.5f;
@@ -671,23 +668,19 @@ public class ClusterControl : Singleton<ClusterControl>
         return new Color(Random.value, Random.value, Random.value);
     }
 
-    private int[] SendObjectsToClusters()
+    private long[] SendObjectsToClusters()
     {
-        int[] newObjectCount = new int[vc.objectsInScene.Count];
+        long[] newObjectCount = new long[vc.objectsInScene.Count];
         for (int i = 0; i < transform.childCount; i++) {
             if (transform.GetChild(i).tag == "Cluster")
             {
                 Transform child = transform.GetChild(i);
-                visibleObjectsInRegion = new int[vc.objectsInScene.Count];
+                objectFootPrintsInRegion = new long[vc.objectsInScene.Count];
                 //vc.GetVisibleObjectsInRegion(child.position, epsilon, ref visibleObjectsInRegion);
-                vc.GetFootprintsInRegion(child.position, epsilon, ref visibleObjectsInRegion);
-                int count = 0;
-                for (int j = 0; j < visibleObjectsInRegion.Length; j++) {
-                    count += visibleObjectsInRegion[j] > 0 ? 1 : 0;
-                }
+                vc.GetFootprintsInRegion(initialClusterCenterPos, epsilon, ref objectFootPrintsInRegion);
                 for (int j = 0; j < child.childCount; j++)
                 {
-                    child.GetChild(j).GetComponent<User>().UpdateVisibleObjects(visibleObjectsInRegion, ref newObjectCount);
+                    child.GetChild(j).GetComponent<User>().UpdateVisibleObjects(objectFootPrintsInRegion, ref newObjectCount);
                 }
             }
 
@@ -698,9 +691,9 @@ public class ClusterControl : Singleton<ClusterControl>
                 int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
                 int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
                 if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
-                visibleObjectsInRegion = new int[vc.objectsInScene.Count];
-                vc.GetFootprintsInRegion(user.transform.position, epsilon, ref visibleObjectsInRegion);
-                user.UpdateVisibleObjects(visibleObjectsInRegion, ref newObjectCount);
+                objectFootPrintsInRegion = new long[vc.objectsInScene.Count];
+                vc.GetFootprintsInRegion(initialClusterCenterPos, epsilon, ref objectFootPrintsInRegion);
+                user.UpdateVisibleObjects(objectFootPrintsInRegion, ref newObjectCount);
             }
         }
         return newObjectCount;
@@ -720,7 +713,7 @@ public class ClusterControl : Singleton<ClusterControl>
         int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
         if (xStartIndex == user.preX && zStartIndex == user.preZ) { return; }
         visibleObjectsInRegion = new int[vc.objectsInScene.Count];
-        vc.GetVisibleObjectsInRegion(user.transform.position, epsilon / 2, ref visibleObjectsInRegion);
+        vc.GetVisibleObjectsInRegion(user.transform.position, epsilon, ref visibleObjectsInRegion);
         user.UpdateVisibleObjectsIndi(visibleObjectsInRegion, ref objectSentIndi, writer);
         user.preX = xStartIndex;
         user.preZ = zStartIndex;
