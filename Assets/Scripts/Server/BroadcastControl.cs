@@ -216,7 +216,7 @@ public class BroadcastControl : MonoBehaviour
             byte[] missingChunk = nc.cc.objectChunksVTSeparate[req.objectID][req.missingChunks[i]];
             if (!nc.cc.chunksToSend.Contains(missingChunk))
             {
-                nc.cc.chunksToSend.AddTimes(missingChunk, distance, 1);
+                //nc.cc.chunksToSend.AddTimes(missingChunk, distance, 1);
             }
         }
     }

@@ -334,7 +334,7 @@ public class ClusterControl : Singleton<ClusterControl>
             {
                 if (!chunksToSend.Contains(chunks[i]))
                 {
-                    chunksToSend.Enqueue(chunks[i], priority, numChunkRepeat);
+                    chunksToSend.Enqueue(chunks[i], $"{sendingObjectIdx}_{i}", priority, numChunkRepeat);
                 }
             }
             nc.timeSinceLastChunkRequest = 0;
@@ -346,6 +346,8 @@ public class ClusterControl : Singleton<ClusterControl>
             int maxToSend = Mathf.Max(0, Mathf.Min(chunksToSend.Count, chunksSentEachTime));
             for (int i = 0; i < maxToSend; i++)
             {
+                //byte[] chunk = chunksToSend.Peek();
+                //Debug.Log($"next chunk: {chunksToSend.GetID(chunk)}, {chunksToSend.GetPriority(chunk)}, {chunksToSend.GetCount(chunk)}");
                 nc.BroadcastChunk(chunksToSend.Dequeue());
             }
             timeSinceLastChunksent = 0;
@@ -389,7 +391,7 @@ public class ClusterControl : Singleton<ClusterControl>
                         if (newObjectsToSend[i] > 0 && !objectsWaitToBeSent.Contains(i))
                         {
                             //float newDistance = Vector3.Distance(vc.objectsInScene[i].transform.position, initialClusterCenter.transform.position);
-                            objectsWaitToBeSent.Enqueue(i, 1024 * 1024 * 6 * 4 - newObjectsToSend[i] / 441f, 1);
+                            objectsWaitToBeSent.Enqueue(i, $"{i}", 1024 * 1024 * 6 * 4 - newObjectsToSend[i] / 441f, 1);
                             //Debug.Log($"{i}: {newObjectsToSend[i]}, {newObjectsToSend[i] * 100f / 1024 / 1024 / 6 / 4}");
                         }
                     }
@@ -740,38 +742,42 @@ public class ClusterControl : Singleton<ClusterControl>
 
 public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TPriority>
 {
-    private List<(TElement Element, TPriority Priority, int Count)> _heap = new();
+    private List<(TElement Element, string id, TPriority Priority, int Count)> _heap = new();
     private Dictionary<TElement, int> _indexMap = new();
 
     public int Count => _heap.Count;
 
-    public void Enqueue(TElement element, TPriority priority, int count)
+    public void Enqueue(TElement element, string id, TPriority priority, int count)
     {
-        if (_indexMap.TryGetValue(element, out int i))
+        int index = 0;
+        if (_indexMap.TryGetValue(element, out index))
         {
-            _heap[i] = (element, _heap[i].Priority, count);
-            return;
+            _heap[index] = (element, id, _heap[index].Priority, count);
         }
-
-        _heap.Add((element, priority, count));
-        int index = _heap.Count - 1;
-        _indexMap[element] = index;
+        else
+        {
+            _heap.Add((element, id, priority, count));
+            index = _heap.Count - 1;
+            _indexMap[element] = index;
+        }
         HeapifyUp(index);
     }
 
-    public void AddTimes(TElement element, TPriority priority, int count)
-    {
-        if (_indexMap.TryGetValue(element, out int i))
-        {
-            _heap[i] = (element, _heap[i].Priority, _heap[i].Count + count);
-            return;
-        }
-
-        _heap.Add((element, priority, count));
-        int index = _heap.Count - 1;
-        _indexMap[element] = index;
-        HeapifyUp(index);
-    }
+    //public void AddTimes(TElement element, TPriority priority, int count)
+    //{
+    //    int index = 0;
+    //    if (_indexMap.TryGetValue(element, out index))
+    //    {
+    //        _heap[index] = (element, _heap[index].Priority, _heap[index].Count + count);
+    //    }
+    //    else
+    //    {
+    //        _heap.Add((element, priority, count));
+    //        index = _heap.Count - 1;
+    //        _indexMap[element] = index;
+    //    }
+    //    HeapifyUp(index);
+    //}
 
     public TElement Dequeue()
     {
@@ -782,7 +788,8 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
 
         if (root.Count > 1)
         {
-            _heap[0] = (root.Element, root.Priority, root.Count - 1);
+            _heap[0] = (root.Element,root.id, root.Priority, root.Count - 1);
+            HeapifyDown(0);
             return root.Element;
         }
 
@@ -810,13 +817,16 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
             throw new KeyNotFoundException("Element not found in priority queue.");
 
         var current = _heap[index];
-        int cmp = newPriority.CompareTo(current.Priority);
-        _heap[index] = (element, newPriority, current.Count);
+        var updated = (element, current.id, newPriority, current.Count);
+        bool moveUp = IsHigherPriority(updated, current);
 
-        if (cmp < 0)
+        _heap[index] = updated;
+
+        if (moveUp)
             HeapifyUp(index);
-        else if (cmp > 0)
+        else
             HeapifyDown(index);
+
     }
 
     public bool Contains(TElement element) => _indexMap.ContainsKey(element);
@@ -832,12 +842,21 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
         while (i > 0)
         {
             int parent = (i - 1) / 2;
-            if (_heap[i].Priority.CompareTo(_heap[parent].Priority) >= 0)
+            if (!IsHigherPriority(_heap[i], _heap[parent]))
                 break;
 
             Swap(i, parent);
             i = parent;
         }
+    }
+
+    private bool IsHigherPriority((TElement Element, string id, TPriority Priority, int Count) a,
+                              (TElement Element, string id, TPriority Priority, int Count) b)
+    {
+        if (a.Count != b.Count)
+            return a.Count > b.Count; // Higher count = higher priority
+
+        return a.Priority.CompareTo(b.Priority) < 0; // Lower priority value = higher priority
     }
 
     private void HeapifyDown(int i)
@@ -847,19 +866,20 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
         {
             int left = 2 * i + 1;
             int right = 2 * i + 2;
-            int smallest = i;
+            int best = i;
 
-            if (left <= last && _heap[left].Priority.CompareTo(_heap[smallest].Priority) < 0)
-                smallest = left;
-            if (right <= last && _heap[right].Priority.CompareTo(_heap[smallest].Priority) < 0)
-                smallest = right;
+            if (left <= last && IsHigherPriority(_heap[left], _heap[best]))
+                best = left;
+            if (right <= last && IsHigherPriority(_heap[right], _heap[best]))
+                best = right;
 
-            if (smallest == i) break;
+            if (best == i) break;
 
-            Swap(i, smallest);
-            i = smallest;
+            Swap(i, best);
+            i = best;
         }
     }
+
 
     private void Swap(int i, int j)
     {
@@ -879,4 +899,165 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
 
         return _heap[index].Priority;
     }
+
+    public int GetCount(TElement element)
+    {
+        if (!_indexMap.TryGetValue(element, out int index))
+            throw new KeyNotFoundException("Element not found in priority queue.");
+
+        return _heap[index].Count;
+    }
+
+    public string GetID(TElement element)
+    {
+        if (!_indexMap.TryGetValue(element, out int index))
+            throw new KeyNotFoundException("Element not found in priority queue.");
+
+        return _heap[index].id;
+    }
 }
+
+//public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TPriority>
+//{
+//    private List<(TElement Element, string id, TPriority Priority, int Count)> _heap = new();
+//    private Dictionary<TElement, int> _indexMap = new();
+
+//    public int Count => _heap.Count;
+
+//    public void Enqueue(TElement element, string objectID, TPriority priority, int count)
+//    {
+//        if (_indexMap.TryGetValue(element, out int i))
+//        {
+//            _heap[i] = (element, objectID, _heap[i].Priority, count);
+//            return;
+//        }
+
+//        _heap.Add((element, objectID, priority, count));
+//        int index = _heap.Count - 1;
+//        _indexMap[element] = index;
+//        HeapifyUp(index);
+//    }
+
+//    public TElement Dequeue()
+//    {
+//        if (_heap.Count == 0)
+//            throw new InvalidOperationException("PriorityQueue is empty.");
+
+//        var root = _heap[0];
+
+//        if (root.Count > 1)
+//        {
+//            _heap[0] = (root.Element, root.id, root.Priority, root.Count - 1);
+//            return root.Element;
+//        }
+
+//        Swap(0, _heap.Count - 1);
+//        _heap.RemoveAt(_heap.Count - 1);
+//        _indexMap.Remove(root.Element);
+
+//        if (_heap.Count > 0)
+//            HeapifyDown(0);
+
+//        return root.Element;
+//    }
+
+
+//    public TElement Peek()
+//    {
+//        if (_heap.Count == 0)
+//            throw new InvalidOperationException("PriorityQueue is empty.");
+//        return _heap[0].Element;
+//    }
+
+//    public void UpdatePriority(TElement element, TPriority newPriority)
+//    {
+//        if (!_indexMap.TryGetValue(element, out int index))
+//            throw new KeyNotFoundException("Element not found in priority queue.");
+
+//        var current = _heap[index];
+//        int cmp = newPriority.CompareTo(current.Priority);
+//        _heap[index] = (element, current.id, newPriority, current.Count);
+
+//        if (cmp < 0)
+//            HeapifyUp(index);
+//        else if (cmp > 0)
+//            HeapifyDown(index);
+//    }
+
+//    public bool Contains(TElement element) => _indexMap.ContainsKey(element);
+
+//    public void Clear()
+//    {
+//        _heap.Clear();
+//        _indexMap.Clear();
+//    }
+
+//    private void HeapifyUp(int i)
+//    {
+//        while (i > 0)
+//        {
+//            int parent = (i - 1) / 2;
+//            if (_heap[i].Priority.CompareTo(_heap[parent].Priority) >= 0)
+//                break;
+
+//            Swap(i, parent);
+//            i = parent;
+//        }
+//    }
+
+//    private void HeapifyDown(int i)
+//    {
+//        int last = _heap.Count - 1;
+//        while (true)
+//        {
+//            int left = 2 * i + 1;
+//            int right = 2 * i + 2;
+//            int smallest = i;
+
+//            if (left <= last && _heap[left].Priority.CompareTo(_heap[smallest].Priority) < 0)
+//                smallest = left;
+//            if (right <= last && _heap[right].Priority.CompareTo(_heap[smallest].Priority) < 0)
+//                smallest = right;
+
+//            if (smallest == i) break;
+
+//            Swap(i, smallest);
+//            i = smallest;
+//        }
+//    }
+
+//    private void Swap(int i, int j)
+//    {
+//        var temp = _heap[i];
+//        _heap[i] = _heap[j];
+//        _heap[j] = temp;
+
+//        _indexMap[_heap[i].Element] = i;
+//        _indexMap[_heap[j].Element] = j;
+//    }
+
+
+//    public TPriority GetPriority(TElement element)
+//    {
+//        if (!_indexMap.TryGetValue(element, out int index))
+//            throw new KeyNotFoundException("Element not found in priority queue.");
+
+//        return _heap[index].Priority;
+//    }
+
+//    public int GetCount(TElement element)
+//    {
+//        if (!_indexMap.TryGetValue(element, out int index))
+//            throw new KeyNotFoundException("Element not found in priority queue.");
+
+//        return _heap[index].Count;
+//    }
+
+//    public string GetID(TElement element)
+//    {
+//        if (!_indexMap.TryGetValue(element, out int index))
+//            throw new KeyNotFoundException("Element not found in priority queue.");
+
+//        return _heap[index].id;
+//    }
+//}
