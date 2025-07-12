@@ -12,10 +12,25 @@ using System.Text;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
 using System.Linq;
+using System.Reflection;
 
 public enum CityPreprocessSteps
 {
     CalculateFootprintCorner, CombineFootprintToUnit, NoPreProcessStep, CalculateFootprintChunk
+}
+
+[Serializable]
+public class FootprintRecord
+{
+    public int objectID;
+    public int chunkID;
+    public int footprintCount;
+}
+
+[Serializable]
+public class FootprintWrapper
+{
+    public List<FootprintRecord> records;
 }
 
 public class VisibilityCheck : Singleton<VisibilityCheck>
@@ -68,8 +83,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         if (step == CityPreprocessSteps.CalculateFootprintChunk)
         {
             sceneRoot.SetActive(false);
-            //StartCoroutine(CopyObjectsPerChunk());
-            StartCoroutine(ColorObjectsByChunks());
+            //StartCoroutine(ColorObjectsByChunks());
+            StartCoroutine(TestReadChunks());
         }
         if (step == CityPreprocessSteps.CalculateFootprintCorner) {
             ColorObjects();
@@ -114,6 +129,43 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         }
         Debug.Log($"{string.Join(", ", unitRead)}");
         Debug.Log($"total object num: {count}, total chunk count: {totalChunkCount}");
+    }
+
+    private IEnumerator TestReadChunks()
+    {
+        yield return new WaitForSeconds(1f);
+        Vector3 pos = ClusterControl.Instance.initialClusterCenter.transform.position;
+        int xStartIndex = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        int zStartIndex = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+        Dictionary<int, int[]> chunkFootprintInfo = ReadFootprintByChunk(xStartIndex, zStartIndex);
+
+        for (int i = 0; i < objectsInScene.Count; i++)
+        {
+            GameObject go = chunkObjectsRoot.transform.GetChild(i).gameObject;
+            if (!chunkFootprintInfo.ContainsKey(i))
+            {
+                go.SetActive(false);
+                continue;
+            }
+            go.SetActive(true);
+            MeshRenderer mr = go.GetComponent<MeshRenderer>();
+            Material[] materials = mr.sharedMaterials;
+            for (int j = 0; j < materials.Length; j++)
+            {
+                if (materials[j] == null)
+                {
+                    continue;
+                }
+                float cutoff = materials[j].GetFloat("_Cutoff");
+                //Debug.Log($"{i}, {j}, {chunkFootprintInfo[i][j]}, {cutoff}");
+                materials[j].SetFloat("_Cutoff", chunkFootprintInfo[i][j] > 0 ? cutoff : 1);
+                if (chunkFootprintInfo[i][j] == 0)
+                {
+                    materials[j].SetColor("_Color", Color.clear);
+                }
+            }
+            //mr.materials = materials;
+        }
     }
 
     private void GenerateMeshInfo()
@@ -851,6 +903,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                     int index = colorRecordIDChunk[c].Item2;
                     float cutoff = materials[index].GetFloat("_Cutoff");
                     materials[index].SetFloat("_Cutoff", colorCount[c] > 0 ? cutoff : 1);
+                    //Debug.Log($"{colorRecordIDChunk[c].Item1}, {colorRecordIDChunk[c].Item2}, {colorCount[c]}");
                     if (colorCount[c] == 0)
                     {
                         materials[index].SetColor("_Color", Color.clear);
@@ -859,8 +912,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                     {
                         materials[index].SetColor("_Color", c);
                     }
-                    //mr.materials = materials;
                 }
+                WriteFootprintByChunk();
                 break;
         }
     }
@@ -872,27 +925,78 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             footprintCount[colorRecordID[c]] = colorCount[c];
         }
-        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\CornerLevelFootprints\\";
+        string filePath = "C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprints";
         //Vector3 pos = footprintCameras.transform.position;
         string fileName = $"{filePath}{cameraPosIDX}_{cameraPosIDZ}.bin";
         byte[] bytes = ConvertIntArrayToByteArray(footprintCount);
         File.WriteAllBytes(fileName, bytes);
     }
 
-    private void WriteFootprintsChunk()
+    public void WriteFootprintByChunk()
     {
-        int[] footprintCount = new int[objectsInScene.Count];
-        foreach (Color c in colorRecordID.Keys)
+        Dictionary<int, int[]> objectFootprints = new Dictionary<int, int[]>();
+
+        foreach (var kvp in colorCount)
         {
-            footprintCount[colorRecordID[c]] = colorCount[c];
+            if (kvp.Value <= 0) continue;
+
+            if (!colorRecordIDChunk.TryGetValue(kvp.Key, out var objChunk))
+                continue;
+
+            int objectID = objChunk.Item1;
+            int chunkID = objChunk.Item2;
+
+            if (!objectFootprints.TryGetValue(objectID, out int[] footprints))
+            {
+                footprints = new int[cc.objectChunksVTGrouped[objectID].Count];
+                objectFootprints[objectID] = footprints;
+            }
+
+            footprints[chunkID] = kvp.Value;
         }
-        string filePath = "C:\\Users\\zhou1168\\VRAR\\Data\\CornerLevelFootprints\\";
-        //Vector3 pos = footprintCameras.transform.position;
-        string fileName = $"{filePath}{cameraPosIDX}_{cameraPosIDZ}.bin";
-        byte[] bytes = ConvertIntArrayToByteArray(footprintCount);
-        File.WriteAllBytes(fileName, bytes);
+
+        List<int> dataList = new List<int>();
+        foreach (var kvp in objectFootprints)
+        {
+            dataList.Add(kvp.Key); // objectID
+            dataList.AddRange(kvp.Value); // footprint array of that object
+        }
+
+        byte[] byteData = new byte[dataList.Count * sizeof(int)];
+        Buffer.BlockCopy(dataList.ToArray(), 0, byteData, 0, byteData.Length);
+        string path = $"C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunk/{cameraPosIDX}_{cameraPosIDZ}.bin";
+        File.WriteAllBytes(path, byteData);
+        Debug.Log($"Wrote binary footprint data to: {path}");
     }
 
+    public Dictionary<int, int[]> ReadFootprintByChunk(int x, int z)
+    {
+        string path = $"C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";
+        if (!File.Exists(path))
+        {
+            Debug.LogError("Footprint file not found.");
+            return null;
+        }
+
+        byte[] byteData = File.ReadAllBytes(path);
+        int[] intData = new int[byteData.Length / sizeof(int)];
+        Buffer.BlockCopy(byteData, 0, intData, 0, byteData.Length);
+
+        Dictionary<int, int[]> result = new Dictionary<int, int[]>();
+        int i = 0;
+        while (i < intData.Length)
+        {
+            int objectID = intData[i++];
+            int[] footprints = new int[cc.objectChunksVTGrouped[objectID].Count];
+            for (int j = 0; j < cc.objectChunksVTGrouped[objectID].Count; j++)
+            {
+                footprints[j] = intData[i++];
+            }
+            result[objectID] = footprints;
+        }
+
+        return result;
+    }
 
     static byte[] ConvertIntArrayToByteArray(int[] array)
     {

@@ -182,7 +182,7 @@ public class PrefabCreator
                 newMesh.SetTriangles(triangles, k);
                 if (oldMaterials[submeshID] == null)
                 {
-                    Debug.Log($"Material for submesh {submeshID} is null in object {objectID}.");
+                    //Debug.Log($"Material for submesh {submeshID} is null in object {objectID}.");
                     continue;
                 }
                 //int mode = oldMaterials[submeshID].GetInt("_Mode");
@@ -216,12 +216,19 @@ public class PrefabCreator
                 colorIndex++;
                 Color newColor = new Color(colors[colorIndex] % 100 / 100f, colors[colorIndex] / 100 % 100 / 100f,
                     colors[colorIndex] / 100 / 100 % 100 / 100f, 1);
-                newMaterial.SetColor("_Color", newColor);
+                //newMaterial.SetColor("_Color", newColor);
+                newMaterial.SetColor("_Color", oldMaterials[submeshID].GetColor("_Color"));
                 newMaterials[k] = newMaterial;
                 //newMaterials[k] = oldMaterials[submeshID];
             }
             newMesh.RecalculateBounds();
             GameObject copy = UnityEngine.Object.Instantiate(original);
+            for (int i = 0; i < copy.transform.childCount; i++)
+            {
+                Transform child = copy.transform.GetChild(i);
+                GameObject.DestroyImmediate(child.gameObject);
+                i--;
+            }
             copy.name = $"Object_{objectID}";
             copy.transform.SetParent(chunkObjectsRoot.transform, false);
             copy.transform.position = original.transform.position;

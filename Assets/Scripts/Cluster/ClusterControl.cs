@@ -708,6 +708,23 @@ public class ClusterControl : Singleton<ClusterControl>
         }
     }
 
+    private Dictionary<int, long[]> SendObjectsToClustersByChunk()
+    {
+        Dictionary<int, long[]> newObjectCountByCluster = new Dictionary<int, long[]>();
+        for (int i = 0; i < transform.childCount; i++)
+        {
+            if (transform.GetChild(i).tag == "Cluster")
+            {
+                Transform child = transform.GetChild(i);
+                Vector3 pos = ClusterControl.Instance.initialClusterCenter.transform.position;
+                int xStartIndex = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                int zStartIndex = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                Dictionary<int, int[]> chunkFootprintInfo = vc.ReadFootprintByChunk(xStartIndex, zStartIndex);
+            }
+        }
+        return newObjectCountByCluster;
+    }
+
     private void UpdateVisIndi(User user, StreamWriter writer)
     {
         Vector3 position = user.transform.position;
