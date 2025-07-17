@@ -63,7 +63,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     private string meshInfo;
     private GameObject visTarget, preVisTarget;
     private Dictionary<string, int[]> diffInfoAdd, diffInfoRemove, visibleObjectsInGrid, objectFootprintsInGrid;
-
+    private Queue<(int, int)> cornersToProcess;
     public float frameUpdatePace;
     public int numInUnitX = 10, numInUnitZ = 10;
     public Vector3 pathStartPos, pathEndPos;
@@ -83,8 +83,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         if (step == CityPreprocessSteps.CalculateFootprintChunk)
         {
             sceneRoot.SetActive(false);
-            //StartCoroutine(ColorObjectsByChunks());
-            StartCoroutine(TestReadChunks());
+            StartCoroutine(ColorObjectsByChunks());
+            //StartCoroutine(TestReadChunks());
         }
         if (step == CityPreprocessSteps.CalculateFootprintCorner) {
             ColorObjects();
@@ -137,7 +137,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         Vector3 pos = ClusterControl.Instance.initialClusterCenter.transform.position;
         int xStartIndex = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
         int zStartIndex = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-        Dictionary<int, int[]> chunkFootprintInfo = ReadFootprintByChunk(xStartIndex, zStartIndex);
+        Dictionary<int, long[]> chunkFootprintInfo = ReadFootprintByChunk(xStartIndex, zStartIndex);
 
         for (int i = 0; i < objectsInScene.Count; i++)
         {
@@ -452,7 +452,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         colorCount = new Dictionary<Color, int>();
         for (int k = 0; k < objectsInScene.Count; k++)
         {
-            chunkObjectsRoot.transform.GetChild(k).gameObject.SetActive(unitRead[k] > 0 || objectsInScene[k].tag == "Terrain");
+            chunkObjectsRoot.transform.GetChild(k).gameObject.SetActive(unitRead[k] > 0);
             if (unitRead[k] > 0)
             {
                 visibleObjects.Add(objectsInScene[k]);
@@ -474,7 +474,6 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 }
             }
         }
-        colorID = 0;
         Camera.onPostRender += CountFootprints;
     }
 
@@ -782,6 +781,16 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                     Vector3 pos = ClusterControl.Instance.initialClusterCenter.transform.position;
                     cameraPosIDX = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
                     cameraPosIDZ = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                    int gridNumToInclude = Mathf.FloorToInt(10f / gd.gridSize);
+                    cornersToProcess = new Queue<(int, int)>();
+                    for (int i = cameraPosIDX - gridNumToInclude; i < cameraPosIDX + gridNumToInclude + 1; i++)
+                    {
+                        for (int j = cameraPosIDZ - gridNumToInclude; j < cameraPosIDZ + gridNumToInclude + 1; j++)
+                        {
+                            cornersToProcess.Enqueue((i, j));
+                        }
+                    }
+                    Debug.Log($"corners to process: {string.Join(',', cornersToProcess)}");
                     ResetFootprintCount();
                     break;
 
@@ -809,11 +818,9 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             Debug.Log("garbage collection...");
             GC.Collect();
         }
-        captureAndCount = true;
-        fpcameraFinished = new bool[6];
         Vector3 cameraPos = gd.gridCornerParent.transform.position + new Vector3(cameraPosIDX * gd.gridSize, 0, cameraPosIDZ * gd.gridSize);
         footprintCameras.transform.position = new Vector3(cameraPos.x, 1, cameraPos.z);
-
+        //Debug.Log($"resetting for {cameraPosIDX}, {cameraPosIDZ}");
         switch (step)
         {
             case CityPreprocessSteps.CalculateFootprintCorner:
@@ -827,12 +834,45 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 }
                 break;
             case CityPreprocessSteps.CalculateFootprintChunk:
+                long[] unitRead = new long[objectsInScene.Count];
+                GetFootprintsInRegion(cameraPos, 10f, ref unitRead);
+                visibleObjects = new List<GameObject>();
+                colorRecordIDChunk = new Dictionary<Color, (int, int)>();
+                colorCount = new Dictionary<Color, int>();
+                for (int k = 0; k < objectsInScene.Count; k++)
+                {
+                    chunkObjectsRoot.transform.GetChild(k).gameObject.SetActive(unitRead[k] > 0);
+                    if (unitRead[k] > 0)
+                    {
+                        visibleObjects.Add(objectsInScene[k]);
+                        GameObject chunkObject = chunkObjectsRoot.transform.GetChild(k).gameObject;
+                        Material[] materials = chunkObject.GetComponent<MeshRenderer>().sharedMaterials;
+                        for (int i = 0; i < materials.Length; i++)
+                        {
+                            if (materials[i] == null)
+                            {
+                                continue;
+                            }
+                            Color color = materials[i].GetColor("_Color");
+                            color = new Color((float)Math.Round(color.r, 2), (float)Math.Round(color.g, 2), (float)Math.Round(color.b, 2), 1);
+                            if (colorRecordIDChunk.ContainsKey(color))
+                            {
+                                Debug.LogError($"Color {color} already exists in the record.");
+                            }
+                            colorRecordIDChunk.Add(color, (k, i));
+                            colorCount.Add(color, 0);
+                        }
+                    }
+                }
                 foreach (Color key in colorRecordIDChunk.Keys)
                 {
                     colorCount[key] = 0;
                 }
                 break;
         }
+        //Debug.Log($"finished resetting for {cameraPosIDX}, {cameraPosIDZ}");
+        captureAndCount = true;
+        fpcameraFinished = new bool[6];
     }
 
     private void CountFootprints(Camera cam)
@@ -895,25 +935,39 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 }
                 break;
             case CityPreprocessSteps.CalculateFootprintChunk:
-                foreach (Color c in colorRecordIDChunk.Keys)
-                {
-                    GameObject go = chunkObjectsRoot.transform.GetChild(colorRecordIDChunk[c].Item1).gameObject;
-                    MeshRenderer mr = go.GetComponent<MeshRenderer>();
-                    Material[] materials = mr.sharedMaterials;
-                    int index = colorRecordIDChunk[c].Item2;
-                    float cutoff = materials[index].GetFloat("_Cutoff");
-                    materials[index].SetFloat("_Cutoff", colorCount[c] > 0 ? cutoff : 1);
-                    //Debug.Log($"{colorRecordIDChunk[c].Item1}, {colorRecordIDChunk[c].Item2}, {colorCount[c]}");
-                    if (colorCount[c] == 0)
-                    {
-                        materials[index].SetColor("_Color", Color.clear);
-                    }
-                    else
-                    {
-                        materials[index].SetColor("_Color", c);
-                    }
-                }
+                //foreach (Color c in colorRecordIDChunk.Keys)
+                //{
+                //    GameObject go = chunkObjectsRoot.transform.GetChild(colorRecordIDChunk[c].Item1).gameObject;
+                //    MeshRenderer mr = go.GetComponent<MeshRenderer>();
+                //    Material[] materials = mr.sharedMaterials;
+                //    int index = colorRecordIDChunk[c].Item2;
+                //    float cutoff = materials[index].GetFloat("_Cutoff");
+                //    materials[index].SetFloat("_Cutoff", colorCount[c] > 0 ? cutoff : 1);
+                //    //Debug.Log($"{colorRecordIDChunk[c].Item1}, {colorRecordIDChunk[c].Item2}, {colorCount[c]}");
+                //    if (colorCount[c] == 0)
+                //    {
+                //        materials[index].SetColor("_Color", Color.clear);
+                //    }
+                //    else
+                //    {
+                //        materials[index].SetColor("_Color", c);
+                //    }
+                //}
+                Debug.Log($"serializing {cameraPosIDX}, {cameraPosIDZ}");
                 WriteFootprintByChunk();
+                while(cornersToProcess.Count > 0)
+                {
+                    (int, int) corner = cornersToProcess.Dequeue();
+                    cameraPosIDX = corner.Item1;
+                    cameraPosIDZ = corner.Item2;
+                    if (cameraPosIDX < 0 || cameraPosIDZ < 0 || cameraPosIDX >= gd.numGridX || cameraPosIDZ >= gd.numGridZ)
+                    {
+                        Debug.Log($"Invalid corner position: {cameraPosIDX}, {cameraPosIDZ}");
+                        continue;
+                    }
+                    ResetFootprintCount();
+                    break;
+                }
                 break;
         }
     }
@@ -969,7 +1023,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         Debug.Log($"Wrote binary footprint data to: {path}");
     }
 
-    public Dictionary<int, int[]> ReadFootprintByChunk(int x, int z)
+    public Dictionary<int, long[]> ReadFootprintByChunk(int x, int z)
     {
         string path = $"C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";
         if (!File.Exists(path))
@@ -982,19 +1036,18 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         int[] intData = new int[byteData.Length / sizeof(int)];
         Buffer.BlockCopy(byteData, 0, intData, 0, byteData.Length);
 
-        Dictionary<int, int[]> result = new Dictionary<int, int[]>();
+        Dictionary<int, long[]> result = new Dictionary<int, long[]>();
         int i = 0;
         while (i < intData.Length)
         {
             int objectID = intData[i++];
-            int[] footprints = new int[cc.objectChunksVTGrouped[objectID].Count];
+            long[] footprints = new long[cc.objectChunksVTGrouped[objectID].Count];
             for (int j = 0; j < cc.objectChunksVTGrouped[objectID].Count; j++)
             {
                 footprints[j] = intData[i++];
             }
             result[objectID] = footprints;
         }
-
         return result;
     }
 

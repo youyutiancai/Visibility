@@ -167,7 +167,10 @@ public class TCPClient : MonoBehaviour
             return;
         }
 
-        udpClient.ParseMessageForChunks(message);
+        if (mt == TCPMessageType.CHUNK)
+        {
+            udpClient.ParseMessageForChunks(message);
+        }
     }
 
     private void ParseTable(byte[] message)

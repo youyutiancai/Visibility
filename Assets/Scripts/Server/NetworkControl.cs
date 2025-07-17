@@ -101,7 +101,8 @@ public enum TCPMessageType
     TABLE,
     POSE_UPDATE,
     POSE_FROM_SERVER,
-    PUPPET_TOGGLE
+    PUPPET_TOGGLE,
+    CHUNK
 }
 
 public enum SendingMode

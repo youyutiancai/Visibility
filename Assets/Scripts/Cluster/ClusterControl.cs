@@ -36,9 +36,9 @@ public class ClusterControl : Singleton<ClusterControl>
     //public List<int> objectsWaitToBeSent;
     private MeshVariant mv, mv1;
     [HideInInspector]
-    public PriorityQueue<int, float> objectsWaitToBeSent;
+    public PriorityQueue<int, long> objectsWaitToBeSent;
     [HideInInspector]
-    public PriorityQueue<byte[], float> chunksToSend;
+    public PriorityQueue<byte[], long> chunksToSend;
     public Dictionary<int, List<byte[]>> objectChunksVTSeparate, objectChunksVTGrouped;
     public int chunksSentEachTime;
     private float timeSinceLastUpdate = 0f, timeSinceLastChunksent = 0f;
@@ -55,6 +55,8 @@ public class ClusterControl : Singleton<ClusterControl>
     private NetworkControl nc;
     private bool canSendObjects;
     public MeshDecodeMethod meshDecodeMethod;
+    public bool onlySendVisibleChunks;
+    private Dictionary<int, long[]> newChunksToSend = new Dictionary<int, long[]>();
 
     private StreamWriter writer;
     private string filePath;
@@ -79,8 +81,8 @@ public class ClusterControl : Singleton<ClusterControl>
         objectSentIndi = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
         initialClusterCenterPos = initialClusterCenter.transform.position;
-        objectsWaitToBeSent = new PriorityQueue<int, float>();
-        chunksToSend = new PriorityQueue<byte[], float>();
+        objectsWaitToBeSent = new PriorityQueue<int, long>();
+        chunksToSend = new PriorityQueue<byte[], long>();
         canSendObjects = false;
         mv = new RandomizedMesh();
         mv1 = new GroupedMesh();
@@ -300,6 +302,8 @@ public class ClusterControl : Singleton<ClusterControl>
     {
         timeSinceLastUpdate += Time.deltaTime;
         nc.timeSinceLastChunkRequest += Time.deltaTime;
+        //Debug.Log($"sending mode: {nc.sendingMode}");
+        numChunkRepeat = nc.sendingMode == SendingMode.UNICAST_TCP ? 1 : 3;
 
         if (SimulationStrategy == SimulationStrategyDropDown.RealUser && Keyboard.current.bKey.wasPressedThisFrame)
         {
@@ -307,9 +311,9 @@ public class ClusterControl : Singleton<ClusterControl>
             Debug.Log($"canSendObject changed to {canSendObjects}");
         }
 
-        if (canSendObjects && nc.timeSinceLastChunkRequest >= newObjectInterval && nc.readyForNextObject && objectsWaitToBeSent.Count > 0)
+        if (nc.timeSinceLastChunkRequest >= newObjectInterval && nc.readyForNextObject && objectsWaitToBeSent.Count > 0)
         {
-            float priority = objectsWaitToBeSent.GetPriority(objectsWaitToBeSent.Peek());
+            long priority = objectsWaitToBeSent.GetPriority(objectsWaitToBeSent.Peek());
             int sendingObjectIdx = objectsWaitToBeSent.Dequeue();
             List<byte[]> chunks = null;
             switch (meshDecodeMethod) {
@@ -341,7 +345,7 @@ public class ClusterControl : Singleton<ClusterControl>
         }
 
         timeSinceLastChunksent += Time.deltaTime;
-        if (timeSinceLastChunksent >= newChunkInterval && chunksToSend.Count > 0)
+        if (canSendObjects && timeSinceLastChunksent >= newChunkInterval && chunksToSend.Count > 0)
         {
             int maxToSend = Mathf.Max(0, Mathf.Min(chunksToSend.Count, chunksSentEachTime));
             for (int i = 0; i < maxToSend; i++)
@@ -379,20 +383,38 @@ public class ClusterControl : Singleton<ClusterControl>
                     RunDBSCAN();
                     ApplyClusterColors();
                     UpdateClusterParents();
-                    long[] newObjectsToSend = SendObjectsToClusters();
-
-                    //foreach (var user in users)
-                    //{
-                    //    user.UpdateVisibleObjectsIndi(newObjectsToSend, ref objectSentIndi, null);
-                    //}
-
-                    for (int i = 0; i < newObjectsToSend.Length; i++)
+                    if (meshDecodeMethod == MeshDecodeMethod.VTGrouped && onlySendVisibleChunks)
                     {
-                        if (newObjectsToSend[i] > 0 && !objectsWaitToBeSent.Contains(i))
+                        SendObjectsToClustersByChunk();
+                        foreach (int objectID in newChunksToSend.Keys)
                         {
-                            //float newDistance = Vector3.Distance(vc.objectsInScene[i].transform.position, initialClusterCenter.transform.position);
-                            objectsWaitToBeSent.Enqueue(i, $"{i}", 1024 * 1024 * 6 * 4 - newObjectsToSend[i] / 441f, 1);
-                            //Debug.Log($"{i}: {newObjectsToSend[i]}, {newObjectsToSend[i] * 100f / 1024 / 1024 / 6 / 4}");
+                            long[] footprints = newChunksToSend[objectID];
+                            for (int i = 0; i < footprints.Length; i++)
+                            {
+                                byte[] newChunk = objectChunksVTGrouped[objectID][i];
+                                if (footprints[i] > 0 && !chunksToSend.Contains(newChunk))
+                                {
+                                    long totalPixels = 1024L * 1024 * 6;
+                                    chunksToSend.Enqueue(newChunk, $"{objectID}_{i}", totalPixels - footprints[i], numChunkRepeat);
+                                }
+                            }
+                        }
+                    } else
+                    {
+                        long[] newObjectsToSend = SendObjectsToClusters();
+
+                        //foreach (var user in users)
+                        //{
+                        //    user.UpdateVisibleObjectsIndi(newObjectsToSend, ref objectSentIndi, null);
+                        //}
+
+                        for (int i = 0; i < newObjectsToSend.Length; i++)
+                        {
+                            if (newObjectsToSend[i] > 0 && !objectsWaitToBeSent.Contains(i))
+                            {
+                                long totalPixels = 1024L * 1024 * 6 * 4 * 441;
+                                objectsWaitToBeSent.Enqueue(i, $"{i}", totalPixels - newObjectsToSend[i], 1);
+                            }
                         }
                     }
                 }
@@ -708,9 +730,9 @@ public class ClusterControl : Singleton<ClusterControl>
         }
     }
 
-    private Dictionary<int, long[]> SendObjectsToClustersByChunk()
+    private void SendObjectsToClustersByChunk()
     {
-        Dictionary<int, long[]> newObjectCountByCluster = new Dictionary<int, long[]>();
+        newChunksToSend = new Dictionary<int, long[]>();
         for (int i = 0; i < transform.childCount; i++)
         {
             if (transform.GetChild(i).tag == "Cluster")
@@ -719,10 +741,24 @@ public class ClusterControl : Singleton<ClusterControl>
                 Vector3 pos = ClusterControl.Instance.initialClusterCenter.transform.position;
                 int xStartIndex = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
                 int zStartIndex = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-                Dictionary<int, int[]> chunkFootprintInfo = vc.ReadFootprintByChunk(xStartIndex, zStartIndex);
+                Dictionary<int, long[]> chunkFootprintInfo = vc.ReadFootprintByChunk(xStartIndex, zStartIndex);
+                for (int j = 0; j < child.childCount; j++)
+                {
+                    child.GetChild(j).GetComponent<User>().UpdateVisibleChunks(chunkFootprintInfo, ref newChunksToSend);
+                }
+            }
+
+            if (transform.GetChild(i).tag == "User")
+            {
+                User user = transform.GetChild(i).GetComponent<User>();
+                Vector3 position = user.transform.position;
+                int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
+                Dictionary<int, long[]> chunkFootprintInfo = vc.ReadFootprintByChunk(xStartIndex, zStartIndex);
+                user.UpdateVisibleChunks(chunkFootprintInfo, ref newChunksToSend);
             }
         }
-        return newObjectCountByCluster;
     }
 
     private void UpdateVisIndi(User user, StreamWriter writer)
