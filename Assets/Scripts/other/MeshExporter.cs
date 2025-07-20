@@ -83,6 +83,24 @@ public class MeshExporter : MonoBehaviour
                     writer.Write(color.b);
                     writer.Write(color.a);
                 }
+                // Write global transform info
+                Transform t = mf.transform;
+                Vector3 pos = t.position;
+                Quaternion rot = t.rotation;
+                Vector3 scale = t.lossyScale;
+
+                writer.Write(pos.x);
+                writer.Write(pos.y);
+                writer.Write(pos.z);
+
+                writer.Write(rot.x);
+                writer.Write(rot.y);
+                writer.Write(rot.z);
+                writer.Write(rot.w);
+
+                writer.Write(scale.x);
+                writer.Write(scale.y);
+                writer.Write(scale.z);
             }
 
             meshIndex++;

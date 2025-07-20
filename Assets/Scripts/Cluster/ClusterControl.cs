@@ -739,9 +739,8 @@ public class ClusterControl : Singleton<ClusterControl>
             {
                 Transform child = transform.GetChild(i);
                 Vector3 pos = ClusterControl.Instance.initialClusterCenter.transform.position;
-                int xStartIndex = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
-                int zStartIndex = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-                Dictionary<int, long[]> chunkFootprintInfo = vc.ReadFootprintByChunk(xStartIndex, zStartIndex);
+                Dictionary<int, long[]> chunkFootprintInfo = new Dictionary<int, long[]>();
+                vc.ReadFootprintByChunkInRegion(pos, epsilon, ref chunkFootprintInfo);
                 for (int j = 0; j < child.childCount; j++)
                 {
                     child.GetChild(j).GetComponent<User>().UpdateVisibleChunks(chunkFootprintInfo, ref newChunksToSend);
@@ -751,11 +750,12 @@ public class ClusterControl : Singleton<ClusterControl>
             if (transform.GetChild(i).tag == "User")
             {
                 User user = transform.GetChild(i).GetComponent<User>();
-                Vector3 position = user.transform.position;
-                int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
-                int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                Vector3 userPosition = user.transform.position;
+                int xStartIndex = Mathf.FloorToInt((userPosition.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                int zStartIndex = Mathf.FloorToInt((userPosition.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
                 if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
-                Dictionary<int, long[]> chunkFootprintInfo = vc.ReadFootprintByChunk(xStartIndex, zStartIndex);
+                Dictionary<int, long[]> chunkFootprintInfo = new Dictionary<int, long[]>();
+                vc.ReadFootprintByChunkInRegion(userPosition, epsilon, ref chunkFootprintInfo);
                 user.UpdateVisibleChunks(chunkFootprintInfo, ref newChunksToSend);
             }
         }

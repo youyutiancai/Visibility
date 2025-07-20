@@ -63,6 +63,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     private string meshInfo;
     private GameObject visTarget, preVisTarget;
     private Dictionary<string, int[]> diffInfoAdd, diffInfoRemove, visibleObjectsInGrid, objectFootprintsInGrid;
+    private Dictionary<string, int[]> chunkFootprintsAtCorner;
     private Queue<(int, int)> cornersToProcess;
     public float frameUpdatePace;
     public int numInUnitX = 10, numInUnitZ = 10;
@@ -215,6 +216,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         diffInfoAdd = new Dictionary<string, int[]>();
         visibleObjectsInGrid = new Dictionary<string, int[]>();
         objectFootprintsInGrid = new Dictionary<string, int[]>();
+        chunkFootprintsAtCorner = new Dictionary<string, int[]>();
         cc = ClusterControl.Instance;
     }
 
@@ -1049,6 +1051,74 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             result[objectID] = footprints;
         }
         return result;
+    }
+
+    public void ReadFootprintByChunk(int x, int z, ref int[] visibleChunksAtCorner)
+    {
+        string fileName = $"{x}_{z}";
+        if (chunkFootprintsAtCorner.ContainsKey(fileName))
+        {
+            visibleChunksAtCorner = chunkFootprintsAtCorner[fileName];
+            return;
+        }
+
+        string path = $"C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";
+        if (!File.Exists(path))
+        {
+            visibleChunksAtCorner = null;
+            return;
+        }
+
+        byte[] byteData = File.ReadAllBytes(path);
+        int[] intData = new int[byteData.Length / sizeof(int)];
+        Buffer.BlockCopy(byteData, 0, intData, 0, byteData.Length);
+        chunkFootprintsAtCorner.Add(fileName, intData);
+        visibleChunksAtCorner = intData;
+    }
+
+    public void ReadFootprintByChunkInRegion(Vector3 position, float radius, ref Dictionary<int, long[]> result)
+    {
+        int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+        int gridNumToInclude = Mathf.FloorToInt(radius / gd.gridSize);
+        result = new Dictionary<int, long[]>();
+        for (int i = xStartIndex - gridNumToInclude; i <= xStartIndex + gridNumToInclude + 1; i++)
+        {
+            for (int j = zStartIndex - gridNumToInclude; j <= zStartIndex + gridNumToInclude + 1; j++)
+            {
+                //string path = $"C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunk/{i}_{j}.bin";
+                //if (!File.Exists(path))
+                //{
+                //    Debug.Log($"Footprint file {i}_{j} not found.");
+                //    continue;
+                //}
+                //Debug.Log($"Reading footprint file by chunk: {i}_{j}");
+
+                //byte[] byteData = File.ReadAllBytes(path);
+                //int[] intData = new int[byteData.Length / sizeof(int)];
+                //Buffer.BlockCopy(byteData, 0, intData, 0, byteData.Length);
+                int[] intData = new int[0];
+                ReadFootprintByChunk(i, j, ref intData);
+                if (intData == null)
+                {
+                    continue;
+                }
+                int cursor = 0;
+                while (cursor < intData.Length)
+                {
+                    int objectID = intData[cursor++];
+                    if (!result.ContainsKey(objectID))
+                    {
+                        result[objectID] = new long[cc.objectChunksVTGrouped[objectID].Count];
+                    }
+
+                    for (int k = 0; k < cc.objectChunksVTGrouped[objectID].Count; k++)
+                    {
+                        result[objectID][k] += intData[cursor++];
+                    }
+                }
+            }
+        }
     }
 
     static byte[] ConvertIntArrayToByteArray(int[] array)

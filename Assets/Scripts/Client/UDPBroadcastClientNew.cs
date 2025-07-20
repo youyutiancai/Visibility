@@ -661,6 +661,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
         var verticesArr = verticesDict[objectID];
         var normalsArr = normalsDict[objectID];
         var trianglesArr = trianglesDict[objectID];
+        string gEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunk.id},\"type\":\"G\",\"subMeshIdx\":{chunk.subMeshIdx},\"chunkRecvTime\":\"{chunk.chunkRecvTime}\"}}";
+        chunksThisFrame.Add(gEntry);
 
         int cursor = 0;
         int vertexCount = BitConverter.ToInt32(chunk_data, cursor); cursor += sizeof(int);
