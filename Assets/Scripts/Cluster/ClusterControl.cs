@@ -36,9 +36,9 @@ public class ClusterControl : Singleton<ClusterControl>
     //public List<int> objectsWaitToBeSent;
     private MeshVariant mv, mv1;
     [HideInInspector]
-    public PriorityQueue<int, float> objectsWaitToBeSent;
+    public PriorityQueue<int, long> objectsWaitToBeSent;
     [HideInInspector]
-    public PriorityQueue<byte[], float> chunksToSend;
+    public PriorityQueue<byte[], long> chunksToSend;
     public Dictionary<int, List<byte[]>> objectChunksVTSeparate, objectChunksVTGrouped;
     public int chunksSentEachTime;
     private float timeSinceLastUpdate = 0f, timeSinceLastChunksent = 0f;
@@ -55,6 +55,8 @@ public class ClusterControl : Singleton<ClusterControl>
     private NetworkControl nc;
     private bool canSendObjects;
     public MeshDecodeMethod meshDecodeMethod;
+    public bool onlySendVisibleChunks;
+    private Dictionary<int, long[]> newChunksToSend = new Dictionary<int, long[]>();
 
     private StreamWriter writer;
     private string filePath;
@@ -79,19 +81,20 @@ public class ClusterControl : Singleton<ClusterControl>
         objectSentIndi = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
         initialClusterCenterPos = initialClusterCenter.transform.position;
-        objectsWaitToBeSent = new PriorityQueue<int, float>();
-        chunksToSend = new PriorityQueue<byte[], float>();
+        objectsWaitToBeSent = new PriorityQueue<int, long>();
+        chunksToSend = new PriorityQueue<byte[], long>();
         canSendObjects = false;
         mv = new RandomizedMesh();
         mv1 = new GroupedMesh();
-        //int object_toSerialize = 596;
-        //List<byte[]> chunks_mv = mv.RequestChunks(object_toSerialize, CHUNK_SIZE);
-        //List<byte[]> chunks_mv1 = mv1.RequestChunks(object_toSerialize, CHUNK_SIZE);
-        //GameObject newObject = ReconstructFromChunks(vc.objectsInScene[object_toSerialize], chunks_mv1);
+        //List<byte[]> chunks_mv = mv.RequestChunks(objectToSerialize, CHUNK_SIZE);
+        //List<byte[]> chunks_mv1 = mv1.RequestChunks(objectToSerialize, CHUNK_SIZE);
+        
         objectChunksVTSeparate = new Dictionary<int, List<byte[]>>();
         objectChunksVTGrouped = new Dictionary<int, List<byte[]>>();
         LoadAllChunks("Assets/Data/objectChunksGrouped", ref objectChunksVTGrouped);
         LoadAllChunks("Assets/Data/ObjectChunks", ref objectChunksVTSeparate);
+        //int objectToSerialize = 0;
+        //ReconstructFromChunks(vc.objectsInScene[objectToSerialize], objectChunksVTGrouped[objectToSerialize]);
     }
 
     private void LoadAllChunks(string chunksDirectory, ref Dictionary<int, List<byte[]>> chunkDic)
@@ -163,13 +166,12 @@ public class ClusterControl : Singleton<ClusterControl>
         return chunks;
     }
 
-    public static GameObject ReconstructFromChunks(GameObject original, List<byte[]> chunks)
+    public static void ReconstructFromChunks(GameObject original, List<byte[]> chunks)
     {
         Mesh originalMesh = original.GetComponent<MeshFilter>()?.sharedMesh;
         if (originalMesh == null)
         {
             Debug.LogError("Original object has no mesh.");
-            return null;
         }
 
         int vertexCapacity = originalMesh.vertexCount;
@@ -181,8 +183,10 @@ public class ClusterControl : Singleton<ClusterControl>
         for (int i = 0; i < submeshCount; i++)
             submeshTriangles[i] = new List<int>();
 
-        foreach (var chunk in chunks)
+        //foreach (var chunk in chunks)
+        for (int k = 0; k < chunks.Count / 2; k++)
         {
+            byte[] chunk = chunks[k];
             int offset = 0;
             char type = BitConverter.ToChar(chunk, offset); offset += sizeof(char);
             int objectID = BitConverter.ToInt32(chunk, offset); offset += sizeof(int);
@@ -219,36 +223,34 @@ public class ClusterControl : Singleton<ClusterControl>
                 int tri = BitConverter.ToInt32(chunk, offset); offset += sizeof(int);
                 submeshTriangles[submeshID].Add(tri);
             }
+
+            // Rebuild mesh
+            Mesh newMesh = new Mesh();
+            newMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            newMesh.vertices = vertices;
+            newMesh.normals = normals;
+            newMesh.subMeshCount = submeshCount;
+
+            for (int i = 0; i < submeshCount; i++)
+                newMesh.SetTriangles(submeshTriangles[i], i);
+
+            newMesh.RecalculateBounds();
+
+            // Create new object
+            GameObject copy = Instantiate(original);
+            copy.name = $"{original.name}_Reconstructed_{k}";
+            copy.transform.position = original.transform.position;
+            copy.transform.rotation = original.transform.rotation;
+            copy.transform.localScale = original.transform.localScale;
+
+            MeshFilter filter = copy.GetComponent<MeshFilter>();
+            if (filter == null) filter = copy.AddComponent<MeshFilter>();
+            filter.sharedMesh = newMesh;
+
+            MeshRenderer renderer = copy.GetComponent<MeshRenderer>();
+            if (renderer == null) renderer = copy.AddComponent<MeshRenderer>();
+            renderer.sharedMaterials = original.GetComponent<MeshRenderer>().sharedMaterials;
         }
-
-        // Rebuild mesh
-        Mesh newMesh = new Mesh();
-        newMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        newMesh.vertices = vertices;
-        newMesh.normals = normals;
-        newMesh.subMeshCount = submeshCount;
-
-        for (int i = 0; i < submeshCount; i++)
-            newMesh.SetTriangles(submeshTriangles[i], i);
-
-        newMesh.RecalculateBounds();
-
-        // Create new object
-        GameObject copy = Instantiate(original);
-        copy.name = original.name + "_Reconstructed";
-        copy.transform.position = original.transform.position;
-        copy.transform.rotation = original.transform.rotation;
-        copy.transform.localScale = original.transform.localScale;
-
-        MeshFilter filter = copy.GetComponent<MeshFilter>();
-        if (filter == null) filter = copy.AddComponent<MeshFilter>();
-        filter.sharedMesh = newMesh;
-
-        MeshRenderer renderer = copy.GetComponent<MeshRenderer>();
-        if (renderer == null) renderer = copy.AddComponent<MeshRenderer>();
-        renderer.sharedMaterials = original.GetComponent<MeshRenderer>().sharedMaterials;
-
-        return copy;
     }
 
 
@@ -300,6 +302,8 @@ public class ClusterControl : Singleton<ClusterControl>
     {
         timeSinceLastUpdate += Time.deltaTime;
         nc.timeSinceLastChunkRequest += Time.deltaTime;
+        //Debug.Log($"sending mode: {nc.sendingMode}");
+        numChunkRepeat = nc.sendingMode == SendingMode.UNICAST_TCP ? 1 : 3;
 
         if (SimulationStrategy == SimulationStrategyDropDown.RealUser && Keyboard.current.bKey.wasPressedThisFrame)
         {
@@ -307,9 +311,9 @@ public class ClusterControl : Singleton<ClusterControl>
             Debug.Log($"canSendObject changed to {canSendObjects}");
         }
 
-        if (canSendObjects && nc.timeSinceLastChunkRequest >= newObjectInterval && nc.readyForNextObject && objectsWaitToBeSent.Count > 0)
+        if (nc.timeSinceLastChunkRequest >= newObjectInterval && nc.readyForNextObject && objectsWaitToBeSent.Count > 0)
         {
-            float priority = objectsWaitToBeSent.GetPriority(objectsWaitToBeSent.Peek());
+            long priority = objectsWaitToBeSent.GetPriority(objectsWaitToBeSent.Peek());
             int sendingObjectIdx = objectsWaitToBeSent.Dequeue();
             List<byte[]> chunks = null;
             switch (meshDecodeMethod) {
@@ -334,18 +338,20 @@ public class ClusterControl : Singleton<ClusterControl>
             {
                 if (!chunksToSend.Contains(chunks[i]))
                 {
-                    chunksToSend.Enqueue(chunks[i], priority, numChunkRepeat);
+                    chunksToSend.Enqueue(chunks[i], $"{sendingObjectIdx}_{i}", priority, numChunkRepeat);
                 }
             }
             nc.timeSinceLastChunkRequest = 0;
         }
 
         timeSinceLastChunksent += Time.deltaTime;
-        if (timeSinceLastChunksent >= newChunkInterval && chunksToSend.Count > 0)
+        if (canSendObjects && timeSinceLastChunksent >= newChunkInterval && chunksToSend.Count > 0)
         {
             int maxToSend = Mathf.Max(0, Mathf.Min(chunksToSend.Count, chunksSentEachTime));
             for (int i = 0; i < maxToSend; i++)
             {
+                //byte[] chunk = chunksToSend.Peek();
+                //Debug.Log($"next chunk: {chunksToSend.GetID(chunk)}, {chunksToSend.GetPriority(chunk)}, {chunksToSend.GetCount(chunk)}");
                 nc.BroadcastChunk(chunksToSend.Dequeue());
             }
             timeSinceLastChunksent = 0;
@@ -377,20 +383,38 @@ public class ClusterControl : Singleton<ClusterControl>
                     RunDBSCAN();
                     ApplyClusterColors();
                     UpdateClusterParents();
-                    long[] newObjectsToSend = SendObjectsToClusters();
-
-                    //foreach (var user in users)
-                    //{
-                    //    user.UpdateVisibleObjectsIndi(newObjectsToSend, ref objectSentIndi, null);
-                    //}
-
-                    for (int i = 0; i < newObjectsToSend.Length; i++)
+                    if (meshDecodeMethod == MeshDecodeMethod.VTGrouped && onlySendVisibleChunks)
                     {
-                        if (newObjectsToSend[i] > 0 && !objectsWaitToBeSent.Contains(i))
+                        SendObjectsToClustersByChunk();
+                        foreach (int objectID in newChunksToSend.Keys)
                         {
-                            //float newDistance = Vector3.Distance(vc.objectsInScene[i].transform.position, initialClusterCenter.transform.position);
-                            objectsWaitToBeSent.Enqueue(i, 1024 * 1024 * 6 * 4 - newObjectsToSend[i] / 441f, 1);
-                            //Debug.Log($"{i}: {newObjectsToSend[i]}, {newObjectsToSend[i] * 100f / 1024 / 1024 / 6 / 4}");
+                            long[] footprints = newChunksToSend[objectID];
+                            for (int i = 0; i < footprints.Length; i++)
+                            {
+                                byte[] newChunk = objectChunksVTGrouped[objectID][i];
+                                if (footprints[i] > 0 && !chunksToSend.Contains(newChunk))
+                                {
+                                    long totalPixels = 1024L * 1024 * 6;
+                                    chunksToSend.Enqueue(newChunk, $"{objectID}_{i}", totalPixels - footprints[i], numChunkRepeat);
+                                }
+                            }
+                        }
+                    } else
+                    {
+                        long[] newObjectsToSend = SendObjectsToClusters();
+
+                        //foreach (var user in users)
+                        //{
+                        //    user.UpdateVisibleObjectsIndi(newObjectsToSend, ref objectSentIndi, null);
+                        //}
+
+                        for (int i = 0; i < newObjectsToSend.Length; i++)
+                        {
+                            if (newObjectsToSend[i] > 0 && !objectsWaitToBeSent.Contains(i))
+                            {
+                                long totalPixels = 1024L * 1024 * 6 * 4 * 441;
+                                objectsWaitToBeSent.Enqueue(i, $"{i}", totalPixels - newObjectsToSend[i], 1);
+                            }
                         }
                     }
                 }
@@ -706,6 +730,37 @@ public class ClusterControl : Singleton<ClusterControl>
         }
     }
 
+    private void SendObjectsToClustersByChunk()
+    {
+        newChunksToSend = new Dictionary<int, long[]>();
+        for (int i = 0; i < transform.childCount; i++)
+        {
+            if (transform.GetChild(i).tag == "Cluster")
+            {
+                Transform child = transform.GetChild(i);
+                Vector3 pos = ClusterControl.Instance.initialClusterCenter.transform.position;
+                int xStartIndex = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                int zStartIndex = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                Dictionary<int, long[]> chunkFootprintInfo = vc.ReadFootprintByChunk(xStartIndex, zStartIndex);
+                for (int j = 0; j < child.childCount; j++)
+                {
+                    child.GetChild(j).GetComponent<User>().UpdateVisibleChunks(chunkFootprintInfo, ref newChunksToSend);
+                }
+            }
+
+            if (transform.GetChild(i).tag == "User")
+            {
+                User user = transform.GetChild(i).GetComponent<User>();
+                Vector3 position = user.transform.position;
+                int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
+                Dictionary<int, long[]> chunkFootprintInfo = vc.ReadFootprintByChunk(xStartIndex, zStartIndex);
+                user.UpdateVisibleChunks(chunkFootprintInfo, ref newChunksToSend);
+            }
+        }
+    }
+
     private void UpdateVisIndi(User user, StreamWriter writer)
     {
         Vector3 position = user.transform.position;
@@ -740,38 +795,42 @@ public class ClusterControl : Singleton<ClusterControl>
 
 public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TPriority>
 {
-    private List<(TElement Element, TPriority Priority, int Count)> _heap = new();
+    private List<(TElement Element, string id, TPriority Priority, int Count)> _heap = new();
     private Dictionary<TElement, int> _indexMap = new();
 
     public int Count => _heap.Count;
 
-    public void Enqueue(TElement element, TPriority priority, int count)
+    public void Enqueue(TElement element, string id, TPriority priority, int count)
     {
-        if (_indexMap.TryGetValue(element, out int i))
+        int index = 0;
+        if (_indexMap.TryGetValue(element, out index))
         {
-            _heap[i] = (element, _heap[i].Priority, count);
-            return;
+            _heap[index] = (element, id, _heap[index].Priority, count);
         }
-
-        _heap.Add((element, priority, count));
-        int index = _heap.Count - 1;
-        _indexMap[element] = index;
+        else
+        {
+            _heap.Add((element, id, priority, count));
+            index = _heap.Count - 1;
+            _indexMap[element] = index;
+        }
         HeapifyUp(index);
     }
 
-    public void AddTimes(TElement element, TPriority priority, int count)
-    {
-        if (_indexMap.TryGetValue(element, out int i))
-        {
-            _heap[i] = (element, _heap[i].Priority, _heap[i].Count + count);
-            return;
-        }
-
-        _heap.Add((element, priority, count));
-        int index = _heap.Count - 1;
-        _indexMap[element] = index;
-        HeapifyUp(index);
-    }
+    //public void AddTimes(TElement element, TPriority priority, int count)
+    //{
+    //    int index = 0;
+    //    if (_indexMap.TryGetValue(element, out index))
+    //    {
+    //        _heap[index] = (element, _heap[index].Priority, _heap[index].Count + count);
+    //    }
+    //    else
+    //    {
+    //        _heap.Add((element, priority, count));
+    //        index = _heap.Count - 1;
+    //        _indexMap[element] = index;
+    //    }
+    //    HeapifyUp(index);
+    //}
 
     public TElement Dequeue()
     {
@@ -782,7 +841,8 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
 
         if (root.Count > 1)
         {
-            _heap[0] = (root.Element, root.Priority, root.Count - 1);
+            _heap[0] = (root.Element,root.id, root.Priority, root.Count - 1);
+            HeapifyDown(0);
             return root.Element;
         }
 
@@ -810,13 +870,16 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
             throw new KeyNotFoundException("Element not found in priority queue.");
 
         var current = _heap[index];
-        int cmp = newPriority.CompareTo(current.Priority);
-        _heap[index] = (element, newPriority, current.Count);
+        var updated = (element, current.id, newPriority, current.Count);
+        bool moveUp = IsHigherPriority(updated, current);
 
-        if (cmp < 0)
+        _heap[index] = updated;
+
+        if (moveUp)
             HeapifyUp(index);
-        else if (cmp > 0)
+        else
             HeapifyDown(index);
+
     }
 
     public bool Contains(TElement element) => _indexMap.ContainsKey(element);
@@ -832,12 +895,21 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
         while (i > 0)
         {
             int parent = (i - 1) / 2;
-            if (_heap[i].Priority.CompareTo(_heap[parent].Priority) >= 0)
+            if (!IsHigherPriority(_heap[i], _heap[parent]))
                 break;
 
             Swap(i, parent);
             i = parent;
         }
+    }
+
+    private bool IsHigherPriority((TElement Element, string id, TPriority Priority, int Count) a,
+                              (TElement Element, string id, TPriority Priority, int Count) b)
+    {
+        if (a.Count != b.Count)
+            return a.Count > b.Count; // Higher count = higher priority
+
+        return a.Priority.CompareTo(b.Priority) < 0; // Lower priority value = higher priority
     }
 
     private void HeapifyDown(int i)
@@ -847,19 +919,20 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
         {
             int left = 2 * i + 1;
             int right = 2 * i + 2;
-            int smallest = i;
+            int best = i;
 
-            if (left <= last && _heap[left].Priority.CompareTo(_heap[smallest].Priority) < 0)
-                smallest = left;
-            if (right <= last && _heap[right].Priority.CompareTo(_heap[smallest].Priority) < 0)
-                smallest = right;
+            if (left <= last && IsHigherPriority(_heap[left], _heap[best]))
+                best = left;
+            if (right <= last && IsHigherPriority(_heap[right], _heap[best]))
+                best = right;
 
-            if (smallest == i) break;
+            if (best == i) break;
 
-            Swap(i, smallest);
-            i = smallest;
+            Swap(i, best);
+            i = best;
         }
     }
+
 
     private void Swap(int i, int j)
     {
@@ -879,4 +952,165 @@ public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TP
 
         return _heap[index].Priority;
     }
+
+    public int GetCount(TElement element)
+    {
+        if (!_indexMap.TryGetValue(element, out int index))
+            throw new KeyNotFoundException("Element not found in priority queue.");
+
+        return _heap[index].Count;
+    }
+
+    public string GetID(TElement element)
+    {
+        if (!_indexMap.TryGetValue(element, out int index))
+            throw new KeyNotFoundException("Element not found in priority queue.");
+
+        return _heap[index].id;
+    }
 }
+
+//public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TPriority>
+//{
+//    private List<(TElement Element, string id, TPriority Priority, int Count)> _heap = new();
+//    private Dictionary<TElement, int> _indexMap = new();
+
+//    public int Count => _heap.Count;
+
+//    public void Enqueue(TElement element, string objectID, TPriority priority, int count)
+//    {
+//        if (_indexMap.TryGetValue(element, out int i))
+//        {
+//            _heap[i] = (element, objectID, _heap[i].Priority, count);
+//            return;
+//        }
+
+//        _heap.Add((element, objectID, priority, count));
+//        int index = _heap.Count - 1;
+//        _indexMap[element] = index;
+//        HeapifyUp(index);
+//    }
+
+//    public TElement Dequeue()
+//    {
+//        if (_heap.Count == 0)
+//            throw new InvalidOperationException("PriorityQueue is empty.");
+
+//        var root = _heap[0];
+
+//        if (root.Count > 1)
+//        {
+//            _heap[0] = (root.Element, root.id, root.Priority, root.Count - 1);
+//            return root.Element;
+//        }
+
+//        Swap(0, _heap.Count - 1);
+//        _heap.RemoveAt(_heap.Count - 1);
+//        _indexMap.Remove(root.Element);
+
+//        if (_heap.Count > 0)
+//            HeapifyDown(0);
+
+//        return root.Element;
+//    }
+
+
+//    public TElement Peek()
+//    {
+//        if (_heap.Count == 0)
+//            throw new InvalidOperationException("PriorityQueue is empty.");
+//        return _heap[0].Element;
+//    }
+
+//    public void UpdatePriority(TElement element, TPriority newPriority)
+//    {
+//        if (!_indexMap.TryGetValue(element, out int index))
+//            throw new KeyNotFoundException("Element not found in priority queue.");
+
+//        var current = _heap[index];
+//        int cmp = newPriority.CompareTo(current.Priority);
+//        _heap[index] = (element, current.id, newPriority, current.Count);
+
+//        if (cmp < 0)
+//            HeapifyUp(index);
+//        else if (cmp > 0)
+//            HeapifyDown(index);
+//    }
+
+//    public bool Contains(TElement element) => _indexMap.ContainsKey(element);
+
+//    public void Clear()
+//    {
+//        _heap.Clear();
+//        _indexMap.Clear();
+//    }
+
+//    private void HeapifyUp(int i)
+//    {
+//        while (i > 0)
+//        {
+//            int parent = (i - 1) / 2;
+//            if (_heap[i].Priority.CompareTo(_heap[parent].Priority) >= 0)
+//                break;
+
+//            Swap(i, parent);
+//            i = parent;
+//        }
+//    }
+
+//    private void HeapifyDown(int i)
+//    {
+//        int last = _heap.Count - 1;
+//        while (true)
+//        {
+//            int left = 2 * i + 1;
+//            int right = 2 * i + 2;
+//            int smallest = i;
+
+//            if (left <= last && _heap[left].Priority.CompareTo(_heap[smallest].Priority) < 0)
+//                smallest = left;
+//            if (right <= last && _heap[right].Priority.CompareTo(_heap[smallest].Priority) < 0)
+//                smallest = right;
+
+//            if (smallest == i) break;
+
+//            Swap(i, smallest);
+//            i = smallest;
+//        }
+//    }
+
+//    private void Swap(int i, int j)
+//    {
+//        var temp = _heap[i];
+//        _heap[i] = _heap[j];
+//        _heap[j] = temp;
+
+//        _indexMap[_heap[i].Element] = i;
+//        _indexMap[_heap[j].Element] = j;
+//    }
+
+
+//    public TPriority GetPriority(TElement element)
+//    {
+//        if (!_indexMap.TryGetValue(element, out int index))
+//            throw new KeyNotFoundException("Element not found in priority queue.");
+
+//        return _heap[index].Priority;
+//    }
+
+//    public int GetCount(TElement element)
+//    {
+//        if (!_indexMap.TryGetValue(element, out int index))
+//            throw new KeyNotFoundException("Element not found in priority queue.");
+
+//        return _heap[index].Count;
+//    }
+
+//    public string GetID(TElement element)
+//    {
+//        if (!_indexMap.TryGetValue(element, out int index))
+//            throw new KeyNotFoundException("Element not found in priority queue.");
+
+//        return _heap[index].id;
+//    }
+//}

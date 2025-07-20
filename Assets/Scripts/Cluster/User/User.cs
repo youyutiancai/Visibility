@@ -14,6 +14,7 @@ public abstract class User : MonoBehaviour
     protected List<SyntheticPathNode> possibleNodes;
     public float speed;
     public int currentNodeIndex = 0, preX, preZ;
+    private Dictionary<int, long[]> chunkReceived;
 
     public int ClusterId { get; set; } = -1;  // -1 indicates unvisited
 
@@ -31,6 +32,7 @@ public abstract class User : MonoBehaviour
         clusterReceived = new int[vc.objectsInScene.Count];
         indiReceived = new int[vc.objectsInScene.Count];
         preindiReceived = new int[vc.objectsInScene.Count];
+        chunkReceived = new Dictionary<int, long[]>();
         preX = 0;
         preZ = 0;
     }
@@ -50,6 +52,38 @@ public abstract class User : MonoBehaviour
             }
         }
     }
+
+    public void UpdateVisibleChunks(Dictionary<int, long[]> visibleChunks, ref Dictionary<int, long[]> newChunksToSend)
+    {
+        if (vc == null)
+        {
+            Start();
+        }
+        foreach (int objectID in visibleChunks.Keys)
+        {
+            long[] allChunksFootprint = visibleChunks[objectID];
+            for (int j = 0; j < allChunksFootprint.Length; j++)
+            {
+                if (allChunksFootprint[j] > 0)
+                {
+                    if (!chunkReceived.ContainsKey(objectID))
+                    {
+                        chunkReceived[objectID] = new long[allChunksFootprint.Length];
+                    }
+                    if (chunkReceived[objectID][j] == 0)
+                    {
+                        chunkReceived[objectID][j] = allChunksFootprint[j];
+                        if (!newChunksToSend.ContainsKey(objectID))
+                        {
+                            newChunksToSend[objectID] = new long[allChunksFootprint.Length];
+                        }
+                        newChunksToSend[objectID][j] = allChunksFootprint[j];
+                    }
+                }
+            }
+        }
+    }
+
     private string FormatValue(float value)
     {
         return value.ToString("G", System.Globalization.CultureInfo.InvariantCulture).Contains("E")

@@ -9,7 +9,6 @@ using System.Text;
 using TMPro;
 //using Unity.Android.Gradle;
 using UnityEngine;
-//using UnityEngine.tvOS;
 using UnityEngine.XR;
 
 [Serializable]
@@ -400,51 +399,64 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     public void ParseMessageForChunks(byte[] packet)
     {
+        byte[] message = new byte[packet.Length - sizeof(int)];
+        Buffer.BlockCopy(packet, sizeof(int), message, 0, message.Length);
+        MeshDecodeMethod method = (MeshDecodeMethod)BitConverter.ToInt32(message, 0);
+        switch (method)
+        {
+            case MeshDecodeMethod.VTSeparate:
+                DecodePacketMeshSeparate(message, new IPEndPoint(IPAddress.Parse("192.168.1.188"), 13000));
+                break;
+
+            case MeshDecodeMethod.VTGrouped:
+                DecodePacketMeshGrouped(message, new IPEndPoint(IPAddress.Parse("192.168.1.188"), 13000));
+                break;
+        }
         //Debug.Log($"packet size: {packet.Length}");
         // parse the packet header
-        char submeshType = BitConverter.ToChar(packet, 0);
-        int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
+        //char submeshType = BitConverter.ToChar(packet, 0);
+        //int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
 
-        if (submeshType == 'V')
-        {
-            objectId = BitConverter.ToInt32(packet, 2);
-            chunkId = BitConverter.ToInt32(packet, 6);
-            headerSize = 10;
-        }
-        else if (submeshType == 'T')
-        {
-            objectId = BitConverter.ToInt32(packet, 2);
-            chunkId = BitConverter.ToInt32(packet, 6);
-            submeshId = BitConverter.ToInt32(packet, 10);
-            headerSize = 14;
-        }
-        else
-        {
-            Debug.LogError("Unknown packet type.");
-            udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
-            return;
-        }
+        //if (submeshType == 'V')
+        //{
+        //    objectId = BitConverter.ToInt32(packet, 2);
+        //    chunkId = BitConverter.ToInt32(packet, 6);
+        //    headerSize = 10;
+        //}
+        //else if (submeshType == 'T')
+        //{
+        //    objectId = BitConverter.ToInt32(packet, 2);
+        //    chunkId = BitConverter.ToInt32(packet, 6);
+        //    submeshId = BitConverter.ToInt32(packet, 10);
+        //    headerSize = 14;
+        //}
+        //else
+        //{
+        //    Debug.LogError("Unknown packet type.");
+        //    udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+        //    return;
+        //}
 
-        // parse the packet data
-        int dataSize = packet.Length - headerSize;
-        byte[] chunkData = new byte[dataSize];
-        Buffer.BlockCopy(packet, headerSize, chunkData, 0, dataSize);
+        //// parse the packet data
+        //int dataSize = packet.Length - headerSize;
+        //byte[] chunkData = new byte[dataSize];
+        //Buffer.BlockCopy(packet, headerSize, chunkData, 0, dataSize);
 
-        // init the chunk in the client
-        var newChunk = new Chunk
-        {
-            id = chunkId,
-            type = submeshType,
-            objectID = objectId,
-            subMeshIdx = submeshId,
-            chunkRecvTime = DateTime.UtcNow,
-            data = chunkData
-        };
+        //// init the chunk in the client
+        //var newChunk = new Chunk
+        //{
+        //    id = chunkId,
+        //    type = submeshType,
+        //    objectID = objectId,
+        //    subMeshIdx = submeshId,
+        //    chunkRecvTime = DateTime.UtcNow,
+        //    data = chunkData
+        //};
 
-        lock (chunkQueueLock)
-        {
-            chunkQueue.Enqueue(newChunk);
-        }
+        //lock (chunkQueueLock)
+        //{
+        //    chunkQueue.Enqueue(newChunk);
+        //}
     }
 
     //private void DecodePacketMeshSeparate(byte[] packet, IPEndPoint remoteEP)

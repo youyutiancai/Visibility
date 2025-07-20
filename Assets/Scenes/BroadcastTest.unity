@@ -245,6 +245,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71311aed9d425dc45ab9f8cd911ab3a2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  tc: {fileID: 0}
+  cc: {fileID: 0}
+  vc: {fileID: 0}
+  readyForNextObject: 0
+  totalChunkSent: 0
+  totalBytesSent: 0
+  isBroadcast: 0
+  timeSinceLastChunkRequest: 0
+  objectTable: 
+  sendingMode: 0
 --- !u!4 &1406114466
 Transform:
   m_ObjectHideFlags: 0
