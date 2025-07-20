@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 public class ObjectChunkManager : MonoBehaviour
 {
     private Dictionary<int, List<byte[]>> objectChunks; // objectID -> list of chunks
-    private string chunksDirectory = "Assets/Data/ObjectChunks";
+    private string chunksDirectory = "Assets/Data/objectChunksGrouped";
     private int totalChunkCount = 0; // Cached total chunk count
 
     // Chunk type identifiers
@@ -22,6 +22,16 @@ public class ObjectChunkManager : MonoBehaviour
         public int objectID;     // ID of the object this chunk belongs to
         public int chunkID;      // Sequential ID of this chunk
         public int subMeshID;    // Only present in triangle chunks
+    }
+
+    public struct ChunkHeaderGrouped
+    {
+        public MeshDecodeMethod meshDecodeMethod;
+        public int id;
+        public char type;
+        public int objectID;
+        public int subMeshIdx;
+        public DateTime chunkRecvTime;
     }
 
     void Awake()
@@ -191,12 +201,14 @@ public class ObjectChunkManager : MonoBehaviour
         }
     }
 
+    // Achieved: Since currently we use GroupedMesh
     public bool IsVertexChunk(int objectID, int chunkID)
     {
         var header = GetChunkHeader(objectID, chunkID);
         return header.HasValue && header.Value.type == VERTEX_CHUNK;
     }
 
+    // Achieved: Since currently we use GroupedMesh
     public bool IsTriangleChunk(int objectID, int chunkID)
     {
         var header = GetChunkHeader(objectID, chunkID);
@@ -262,7 +274,7 @@ public class ObjectChunkManager : MonoBehaviour
         return objectChunks.Count;
     }
 
-    // Helper method to get all vertex chunks for an object
+    // Achieved: Since currently we use GroupedMesh
     public List<byte[]> GetVertexChunks(int objectID)
     {
         if (!objectChunks.ContainsKey(objectID)) return null;
@@ -278,7 +290,7 @@ public class ObjectChunkManager : MonoBehaviour
         return vertexChunks;
     }
 
-    // Helper method to get all triangle chunks for an object
+    // Achieved: Since currently we use GroupedMesh
     public List<byte[]> GetTriangleChunks(int objectID)
     {
         if (!objectChunks.ContainsKey(objectID)) return null;

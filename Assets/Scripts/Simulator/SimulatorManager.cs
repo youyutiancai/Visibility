@@ -160,7 +160,7 @@ public class SimulatorManager : MonoBehaviour
 
         // load default jsonl file
         jsonlFilePath = Path.Combine("Assets/Data/ClientLogData", fileSelectionDropdown.options[0].text);
-        LoadJsonlData();
+        LoadUserLogJsonlData();
     }
 
     private void ComputeChunkSentByVisibility(int[] visibility)
@@ -252,7 +252,7 @@ public class SimulatorManager : MonoBehaviour
     {
         string selectedFile = fileSelectionDropdown.options[index].text;
         jsonlFilePath = Path.Combine("Assets/Data/ClientLogData", selectedFile);
-        LoadJsonlData();
+        LoadUserLogJsonlData();
     }
 
     private void CaptureFrame()
@@ -323,7 +323,7 @@ public class SimulatorManager : MonoBehaviour
             // Simulate based on mode
             if (modeDropdown.value == 0) // Replay
             {
-                ProcessReceivedChunks(entry.chunks);
+                ProcessReceivedChunksGrouped(entry.chunks);
             }
             else if (modeDropdown.value == 1) // Capture Frames - Ground Truth
             {
@@ -331,7 +331,7 @@ public class SimulatorManager : MonoBehaviour
             }
             else if (modeDropdown.value == 2) // Capture Frames - Recevied
             {
-                ProcessReceivedChunks(entry.chunks);
+                ProcessReceivedChunksGrouped(entry.chunks);
                 CaptureFrame();
             }
 
@@ -351,6 +351,113 @@ public class SimulatorManager : MonoBehaviour
             UpdateElapsedTimeDisplay(entry.time);
 
             currentEntryIndex++;
+        }
+    }
+
+    private void ProcessReceivedChunksGrouped(List<ChunkData> chunks)
+    {
+        if (chunks == null) return;
+        
+        // Track the first chunk received time
+        if (firstChunkTime < 0 && chunks.Count > 0)
+        {
+            firstChunkTime = logEntries[currentEntryIndex].time;
+            Debug.Log($"First chunk received at time: {firstChunkTime:F3} seconds");
+        }
+        
+        foreach (var chunk in chunks)
+        {
+            // TODO: might also need to udpate Get object information from ObjectTableManager
+            ObjectHolder holder = objectTableManager.GetObjectInfo(chunk.objectID);
+            if (holder == null)
+            {
+                Debug.LogError($"Object {chunk.objectID} not found in object table!");
+                continue;
+            }
+
+            if (!totalReceivedChunks.ContainsKey(chunk.objectID))
+            {
+                totalReceivedChunks[chunk.objectID] = 0;
+                isReceivedChunks[chunk.objectID] = new bool[chunkManager.GetChunkCount(chunk.objectID)];
+            }
+
+            // Get the chunk data from ObjectChunkManager
+            if (chunkManager.HasChunk(chunk.objectID, chunk.chunkID))
+            {
+                // update the pacekt received status
+                totalReceivedChunks[chunk.objectID]++;
+                isReceivedChunks[chunk.objectID][chunk.chunkID] = true;
+                
+                byte[] packet = chunkManager.GetChunk(chunk.objectID, chunk.chunkID);
+                
+                // Parse the packet header in the grouped format
+                int cursor = 0;
+                char submeshType = BitConverter.ToChar(packet, cursor);
+                int objectId = BitConverter.ToInt32(packet, cursor += 2);
+                int chunkId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+                int submeshId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+                int headerSize = cursor += sizeof(int);
+
+                // Parse the packet data
+                int dataSize = packet.Length - headerSize;
+                byte[] chunkData = new byte[dataSize];
+                Buffer.BlockCopy(packet, headerSize, chunkData, 0, dataSize);
+
+                // Initialize data structures if needed
+                if (!verticesDict.ContainsKey(objectId))
+                {
+                    verticesDict[objectId] = new Vector3[holder.totalVertNum];
+                    normalsDict[objectId] = new Vector3[holder.totalVertNum];
+                    trianglesDict[objectId] = new List<List<int>>();
+                    for (int i = 0; i < holder.submeshCount; i++)
+                    {
+                        trianglesDict[objectId].Add(new List<int>());
+                    }
+                }
+
+                var verticesArr = verticesDict[objectId];
+                var normalsArr = normalsDict[objectId];
+                var trianglesArr = trianglesDict[objectId];
+
+                cursor = 0;
+                int vertexCount = BitConverter.ToInt32(chunkData, cursor); cursor += sizeof(int);
+                for (int i = 0; i < vertexCount; i++)
+                {
+                    int index = BitConverter.ToInt32(chunkData, cursor); cursor += sizeof(int);
+
+                    // Skip decoding if already filled
+                    if (verticesArr[index] != Vector3.zero)
+                    {
+                        cursor += 6 * sizeof(float); // skip position + normal
+                        continue;
+                    }
+
+                    float x = BitConverter.ToSingle(chunkData, cursor); cursor += sizeof(float);
+                    float y = BitConverter.ToSingle(chunkData, cursor); cursor += sizeof(float);
+                    float z = BitConverter.ToSingle(chunkData, cursor); cursor += sizeof(float);
+                    verticesArr[index] = new Vector3(x, y, z);
+
+                    float nx = BitConverter.ToSingle(chunkData, cursor); cursor += sizeof(float);
+                    float ny = BitConverter.ToSingle(chunkData, cursor); cursor += sizeof(float);
+                    float nz = BitConverter.ToSingle(chunkData, cursor); cursor += sizeof(float);
+                    normalsArr[index] = new Vector3(nx, ny, nz);
+                }
+
+
+                int triangleCount = BitConverter.ToInt32(chunkData, cursor); cursor += sizeof(int);
+                for (int i = 0; i < triangleCount; i++)
+                {
+                    int tri = BitConverter.ToInt32(chunkData, cursor); cursor += sizeof(int);
+                    trianglesArr[submeshId].Add(tri);  // [chunk.subMeshIdx] temporary: replace back if log include submeshIdx
+                }
+
+                // Update mesh visualization
+                UpdateMeshVisualization(objectId, holder);
+            }
+            else
+            {
+                Debug.Log($"Chunk {chunk.objectID}, {chunk.chunkID} not found in ObjectChunkManager!");
+            }
         }
     }
 
@@ -384,7 +491,7 @@ public class SimulatorManager : MonoBehaviour
             // Get the chunk data from ObjectChunkManager
             if (chunkManager.HasChunk(chunk.objectID, chunk.chunkID))
             {
-                // updat the pacekt received status
+                // update the pacekt received status
                 totalReceivedChunks[chunk.objectID]++;
                 isReceivedChunks[chunk.objectID][chunk.chunkID] = true;
                 
@@ -532,7 +639,7 @@ public class SimulatorManager : MonoBehaviour
         }
     }
 
-    private void LoadJsonlData()
+    private void LoadUserLogJsonlData()
     {
         if (logEntries == null)
             logEntries = new List<LogEntry>();
