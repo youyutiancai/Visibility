@@ -62,7 +62,7 @@ public class SimulatorManager : MonoBehaviour
 
 
     // visibility check variables
-    private float epsilon = 10f;    // Radius for clustering
+    private float epsilon = 3f;    // Radius for clustering
 
     [Serializable]
     private class ChunkData
@@ -142,7 +142,7 @@ public class SimulatorManager : MonoBehaviour
         if (sceneRoot != null && gd != null)
         {
             sceneRoot.SetActive(true);
-            simulatorVisibility = new SimulatorVisibility(sceneRoot, gd);
+            simulatorVisibility = new SimulatorVisibility(sceneRoot, gd, chunkManager, objectTableManager);
             sceneRoot.SetActive(false);
         }
         else
@@ -208,8 +208,9 @@ public class SimulatorManager : MonoBehaviour
         else if (index == 1)
         {
             // Capture Frames - Ground Truth (noted: the current ground truth is based on the visibility check table)
-            sceneRoot.SetActive(true);
-            simulatorVisibility.SetVisibilityObjectsInScene(cameraRig.position, epsilon);
+            // sceneRoot.SetActive(true);
+            // simulatorVisibility.SetVisibilityObjectsInScene(cameraRig.position, epsilon);
+            simulatorVisibility.SetVisibilityChunksInRegion(cameraRig.position, epsilon);
         }
         else if (index == 2)
         {
