@@ -6,30 +6,74 @@ using UnityEngine;
 public class SimulatorVisibility
 {
     private List<GameObject> objectsInScene;
-    private int[] visibleObjects;
-    private Dictionary<string, int[]> diffInfoAdd, visibleObjectsInGrid;
+    private long[] objectFootprintInfo;
+    private Dictionary<string, int[]> diffInfoAdd, objectFootprintsInGrid;
     private float numInUnitX = 10f, numInUnitZ = 10f;
     private GridDivide gd;
     private GameObject sceneRoot;
     private ObjectChunkManager chunkManager;
     private ObjectTableManager objectTableManager;
+    private ResourceLoader resourceLoader;
 
     private Dictionary<int, GameObject> visualizedObjects = new Dictionary<int, GameObject>();
     private Dictionary<int, Vector3[]> verticesDict = new Dictionary<int, Vector3[]>();
     private Dictionary<int, Vector3[]> normalsDict = new Dictionary<int, Vector3[]>();
     private Dictionary<int, List<List<int>>> trianglesDict = new Dictionary<int, List<List<int>>>();
+    private GameObject chunkVisGroundTruthRoot;
 
-    public SimulatorVisibility(GameObject sceneRoot, GridDivide gridDivide, ObjectChunkManager chunkManager, ObjectTableManager objectTableManager)
+    // public variables for total objects and chunks sent based on the visibility check
+    public int totalObjectsSentByChunk = 0;
+    public int totalChunksSentByChunk = 0;
+    public int totalObjectsSentByObject = 0;
+    public int totalChunksSentByObject = 0;
+
+    public enum VisibilityType
+    {
+        Chunk,
+        Object
+    }
+
+    public void ShowVisibilityGroundTruthByType(VisibilityType type, bool active)
+    {
+        if (chunkVisGroundTruthRoot != null)
+            chunkVisGroundTruthRoot.SetActive(type == VisibilityType.Chunk && active);
+        if (sceneRoot != null)
+            sceneRoot.SetActive(type == VisibilityType.Object && active);
+    }
+
+    public (int, int) GetTotalObjectsAndChunksSent(VisibilityType type)
+    {
+        if (type == VisibilityType.Chunk)
+        {
+            return (totalObjectsSentByChunk, totalChunksSentByChunk);
+        }
+        else if (type == VisibilityType.Object)
+        {
+            return (totalObjectsSentByObject, totalChunksSentByObject);
+        }
+
+        Debug.LogError($"Invalid visibility type: {type}");
+        return (0, 0);
+    }
+
+    public void ComputeVisibility(Vector3 position, float radius)
+    {
+        SetVisibilityChunksInRegion(position, radius);
+        SetVisibilityObjectsInRegion(position, radius);
+    }
+
+    public SimulatorVisibility(GameObject sceneRoot, GridDivide gridDivide, ObjectChunkManager chunkManager, ObjectTableManager objectTableManager, ResourceLoader resourceLoader)
     {
         this.sceneRoot = sceneRoot;
         this.gd = gridDivide;
         this.chunkManager = chunkManager;
         this.objectTableManager = objectTableManager;
+        this.resourceLoader = resourceLoader;
         objectsInScene = new List<GameObject>();
         diffInfoAdd = new Dictionary<string, int[]>();
-        visibleObjectsInGrid = new Dictionary<string, int[]>();
+        objectFootprintsInGrid = new Dictionary<string, int[]>();
         AddAllObjects(sceneRoot.transform);
-
+        chunkVisGroundTruthRoot = new GameObject("ChunkVisGroundTruthRoot");
         Debug.Log($"SimulatorVisibility initialized with {objectsInScene.Count} objects in scene");
     }
 
@@ -44,19 +88,52 @@ public class SimulatorVisibility
             AddAllObjects(child.GetChild(i));
     }
 
-    public void SetVisibilityObjectsInScene(Vector3 head_position, float radius)
+    public void SetVisibilityObjectsInRegion(Vector3 head_position, float radius)
     {
-        visibleObjects = new int[objectsInScene.Count];
-        GetVisibleObjectsInRegionProg_Internal(head_position, radius, ref visibleObjects);
+        totalObjectsSentByObject = 0;
+        totalChunksSentByObject = 0;
         
-        for (int i = 0; i < objectsInScene.Count; i++)
+        objectFootprintInfo = new long[objectsInScene.Count];
+        // Archived
+        //GetVisibleObjectsInRegionProg_Internal(head_position, radius, ref visibleObjects);
+        ReadFootprintByObjectInRegion(head_position, radius, ref objectFootprintInfo);
+
+        Debug.Log($"objectFootprintInfo.Length: {objectFootprintInfo.Length}");
+
+        for (int i = 0; i < objectFootprintInfo.Length; i++)
         {
-            objectsInScene[i].SetActive(visibleObjects[i] > 0 || objectsInScene[i].tag == "Terrain");
+            if (objectFootprintInfo[i] > 0)
+            {
+                totalObjectsSentByObject++;
+                totalChunksSentByObject += chunkManager.GetChunkCount(i);
+            }
+            
+            objectsInScene[i].SetActive(objectFootprintInfo[i] > 0 || objectsInScene[i].tag == "Terrain");
         }
+
+        Debug.Log($"Total objects sent: {totalObjectsSentByObject}, total chunks sent: {totalChunksSentByObject}");
     }
 
     public void SetVisibilityChunksInRegion(Vector3 position, float radius)
     {
+        totalObjectsSentByChunk = 0;
+        totalChunksSentByChunk = 0;
+
+        // Reset visualized chunks
+        foreach (var obj in visualizedObjects.Values)
+        {
+            if (obj != null)
+            {
+                GameObject.Destroy(obj);
+            }
+        }
+        visualizedObjects.Clear();
+        verticesDict.Clear();
+        normalsDict.Clear();
+        trianglesDict.Clear();
+
+        Debug.Log($"Setting visibility chunks in region at {position}, {radius}");
+        
         Dictionary<int, long[]> chunkFootprintInfo = new Dictionary<int, long[]>();
         ReadFootprintByChunkInRegion(position, radius, ref chunkFootprintInfo);
         Debug.Log($"chunkFootprintInfo.Count: {chunkFootprintInfo.Count}");
@@ -64,21 +141,31 @@ public class SimulatorVisibility
         foreach (var objectID in chunkFootprintInfo.Keys)
         {
             long[] footprints = chunkFootprintInfo[objectID];
+            bool firstChunkOfObjectSent = true;
             for (int chunkID = 0; chunkID < footprints.Length; chunkID++)
             {
                 if (footprints[chunkID] > 0)
                 {
+                    if (firstChunkOfObjectSent)
+                    {
+                        totalObjectsSentByChunk++;
+                        firstChunkOfObjectSent = false;
+                    }
+
+                    totalChunksSentByChunk++;
                     VisualizeChunk(objectID, chunkID);
                 }
             }
         }
+        Debug.Log($"Total objects sent: {totalObjectsSentByChunk}, total chunks sent: {totalChunksSentByChunk}");
     }
 
-    public int[] GetVisibleObjectInRegion()
+    public long[] GetVisibleObjectInRegion()
     {
-        return visibleObjects;
+        return objectFootprintInfo;
     }
 
+    // Archived
     private void GetVisibleObjectsInRegionProg_Internal(Vector3 position, float radius, ref int[] objectVisibility)
     {
         int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
@@ -118,14 +205,15 @@ public class SimulatorVisibility
         }
     }
 
+
     private int[] ReadFootprintGridUnit(int x, int z)
     {
         string indiGrid = $"{x}_{z}";
-        if (visibleObjectsInGrid.ContainsKey(indiGrid))
+        if (objectFootprintsInGrid.ContainsKey(indiGrid))
         {
-            return visibleObjectsInGrid[indiGrid];
+            return objectFootprintsInGrid[indiGrid];
         }
-        string filePath = "./Assets/Data/GridLevelVis_Unit/";
+        string filePath = "./Assets/Data/GridLevelFootprintsUnit/";
         int unitX = x / (int)numInUnitX, unitZ = z / (int)numInUnitZ;
         string fileName = $"{filePath}{unitX}_{unitZ}.bin";
         if (!File.Exists(fileName))
@@ -134,22 +222,62 @@ public class SimulatorVisibility
             return new int[objectsInScene.Count];
         }
         byte[] bytes_read = File.ReadAllBytes(fileName);
-        int[] visInfo = ConvertByteArrayToIntArray(bytes_read);
-        int cursor = 0;
+        int[] visInfo = ConvertByteArrayToIntArrayNoHeader(bytes_read);
         for (int k = 0; k < numInUnitX; k++)
         {
             for (int l = 0; l < numInUnitZ; l++)
             {
                 int gridX = unitX * (int)numInUnitX + k, gridZ = unitZ * (int)numInUnitZ + l;
-                int[] visibleObjects = new int[visInfo[cursor]];
-                Array.Copy(visInfo, cursor + 1, visibleObjects, 0, visInfo[cursor]);
-                visibleObjectsInGrid.Add($"{gridX}_{gridZ}", visibleObjects);
-                cursor += 1 + visInfo[cursor];
+                int objectCount = objectsInScene.Count;
+                int[] newGridLevelFootprintInfo = new int[objectCount];
+                Array.Copy(visInfo, objectCount * (k * (int)numInUnitX + l), newGridLevelFootprintInfo, 0, objectCount);
+                objectFootprintsInGrid.Add($"{gridX}_{gridZ}", newGridLevelFootprintInfo);
             }
         }
-        return visibleObjectsInGrid[indiGrid];
+        return objectFootprintsInGrid[indiGrid];
     }
 
+    private static int[] ConvertByteArrayToIntArrayNoHeader(byte[] byteArray)
+    {
+        int[] ints = new int[byteArray.Length / sizeof(int)];
+        Buffer.BlockCopy(byteArray, 0, ints, 0, byteArray.Length);
+        return ints;
+    }
+
+    // Archived
+    // private int[] ReadFootprintGridUnit(int x, int z)
+    // {
+    //     string indiGrid = $"{x}_{z}";
+    //     if (visibleObjectsInGrid.ContainsKey(indiGrid))
+    //     {
+    //         return visibleObjectsInGrid[indiGrid];
+    //     }
+    //     string filePath = "./Assets/Data/GridLevelVis_Unit/";
+    //     int unitX = x / (int)numInUnitX, unitZ = z / (int)numInUnitZ;
+    //     string fileName = $"{filePath}{unitX}_{unitZ}.bin";
+    //     if (!File.Exists(fileName))
+    //     {
+    //         Debug.LogError($"{fileName} does not exist");
+    //         return new int[objectsInScene.Count];
+    //     }
+    //     byte[] bytes_read = File.ReadAllBytes(fileName);
+    //     int[] visInfo = ConvertByteArrayToIntArray(bytes_read);
+    //     int cursor = 0;
+    //     for (int k = 0; k < numInUnitX; k++)
+    //     {
+    //         for (int l = 0; l < numInUnitZ; l++)
+    //         {
+    //             int gridX = unitX * (int)numInUnitX + k, gridZ = unitZ * (int)numInUnitZ + l;
+    //             int[] visibleObjects = new int[visInfo[cursor]];
+    //             Array.Copy(visInfo, cursor + 1, visibleObjects, 0, visInfo[cursor]);
+    //             visibleObjectsInGrid.Add($"{gridX}_{gridZ}", visibleObjects);
+    //             cursor += 1 + visInfo[cursor];
+    //         }
+    //     }
+    //     return visibleObjectsInGrid[indiGrid];
+    // }
+
+    // Archived
     private int[] ReadFootprintsDiffUnit(int fromX, int fromZ, int toX, int toZ)
     {
         string indiDiff = $"{fromX}_{fromZ}_{toX}_{toZ}";
@@ -208,21 +336,38 @@ public class SimulatorVisibility
         return array;
     }
 
-    /// <summary>
-    /// Aggregates chunk-level footprint data for all objects within a region centered at 'position' with the given 'radius'.
-    /// The result is a dictionary mapping objectID to an array of chunk footprint counts (long[]).
-    /// </summary>
-    public void ReadFootprintByChunkInRegion(Vector3 position, float radius, ref Dictionary<int, long[]> result)
+    private void ReadFootprintByObjectInRegion(Vector3 position, float radius, ref long[] objectFootprints)
+    {
+        int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+
+        int gridNumToInclude = Mathf.FloorToInt(radius / gd.gridSize);
+
+        for (int i = xStartIndex - gridNumToInclude; i < xStartIndex + gridNumToInclude + 1; i++)
+        {
+            for (int j = zStartIndex - gridNumToInclude; j < zStartIndex + gridNumToInclude + 1; j++)
+            {
+                int[] footprints = ReadFootprintGridUnit(i, j);
+                for (int k = 0; k < objectFootprints.Length; k++)
+                {
+                    objectFootprints[k] += footprints[k];
+                }
+            }
+        }
+    }
+
+    
+    private void ReadFootprintByChunkInRegion(Vector3 position, float radius, ref Dictionary<int, long[]> result)
     {
         int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
         int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
         int gridNumToInclude = Mathf.FloorToInt(radius / gd.gridSize);
-        result = new Dictionary<int, long[]>();
+        
         for (int i = xStartIndex - gridNumToInclude; i <= xStartIndex + gridNumToInclude + 1; i++)
         {
             for (int j = zStartIndex - gridNumToInclude; j <= zStartIndex + gridNumToInclude + 1; j++)
             {
-                Debug.Log($"Reading footprint by chunk at {i}, {j}");
+                // Debug.Log($"Reading footprint by chunk at {i}, {j}");
 
                 int[] intData = new int[0];
                 ReadFootprintByChunk(i, j, ref intData);
@@ -242,16 +387,15 @@ public class SimulatorVisibility
                     for (int k = 0; k < chunkCount; k++)
                     {
                         result[objectID][k] += intData[cursor++];
-                        Debug.Log($"Object {objectID} chunk {k} footprint: {result[objectID][k]}");
+                        //Debug.Log($"Object {objectID} chunk {k} footprint: {result[objectID][k]}");
                     }
                 }
             }
         }
     }
 
-    /// <summary>
-    /// Reads the chunk-level footprint data for a specific grid cell (i, j) into intData.
-    /// </summary>
+
+    
     private void ReadFootprintByChunk(int x, int z, ref int[] visibleChunksAtCorner)
     {
         string fileName = $"{x}_{z}";
@@ -268,10 +412,7 @@ public class SimulatorVisibility
         visibleChunksAtCorner = intData;
     }
 
-    /// <summary>
-    /// Returns the number of chunks for a given objectID by scanning the chunk file directory.
-    /// This is a minimal replacement for cc.objectChunksVTGrouped[objectID].Count.
-    /// </summary>
+   
     private int GetChunkCountForObject(int objectID)
     {
         // Try to infer chunk count from the chunk file in Assets/Data/objectChunksGrouped/object_{objectID}.bin
@@ -285,7 +426,6 @@ public class SimulatorVisibility
         }
     }
 
-    
 
     private void VisualizeChunk(int objectID, int chunkID)
     {
@@ -301,7 +441,6 @@ public class SimulatorVisibility
         if (holder == null) return;
         int totalVertNum = holder.totalVertNum;
         int submeshCount = holder.submeshCount;
-        string[] materialNames = holder.materialNames;
 
         // Initialize mesh data structures if needed
         if (!verticesDict.ContainsKey(objectID))
@@ -380,18 +519,11 @@ public class SimulatorVisibility
             newMesh.RecalculateBounds();
             newObject.GetComponent<MeshFilter>().mesh = newMesh;
 
-            // Set up materials using Resources.Load
+            // Set up materials using ResourceLoader
             List<Material> materials = new List<Material>();
-            if (materialNames != null)
+            foreach (string matName in holder.materialNames)
             {
-                foreach (string matName in materialNames)
-                {
-                    var mat = Resources.Load<Material>(matName);
-                    if (mat != null)
-                        materials.Add(mat);
-                    else
-                        materials.Add(new Material(Shader.Find("Standard")));
-                }
+                materials.Add(resourceLoader.LoadMaterialByName(matName));
             }
             renderer.materials = materials.ToArray();
 
@@ -399,6 +531,8 @@ public class SimulatorVisibility
             newObject.transform.position = holder.position;
             newObject.transform.eulerAngles = holder.eulerAngles;
             newObject.transform.localScale = holder.scale;
+            // Parent to chunkVisualizationRoot
+            newObject.transform.SetParent(chunkVisGroundTruthRoot.transform);
 
             visualizedObjects[objectID] = newObject;
         }

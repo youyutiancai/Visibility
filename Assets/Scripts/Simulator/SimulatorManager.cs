@@ -22,6 +22,7 @@ public class SimulatorManager : MonoBehaviour
     public Button toggleSimulateButton;
     public TMP_Dropdown fileSelectionDropdown;
     public TMP_Dropdown modeDropdown;
+    public TMP_Dropdown visibilityTypeDropdown;
     public CameraSetupManager cameraSetupManager;
     public TMP_Text packetLossText;
     public TMP_Text elapsedTimeText;
@@ -31,6 +32,7 @@ public class SimulatorManager : MonoBehaviour
 
     [Header("Server Send Head Position")]
     public Vector3 serverSendHeadPosition = new Vector3(0f, 0f, 0f);
+
 
     private bool startSimulating = false;
     private List<LogEntry> logEntries;
@@ -116,6 +118,9 @@ public class SimulatorManager : MonoBehaviour
         public Vector3 rotationEuler => new Vector3(_rotationArray[0], _rotationArray[1], _rotationArray[2]);
     }
 
+    // Add this field to track the current visibility type
+    private SimulatorVisibility.VisibilityType visibilityType = SimulatorVisibility.VisibilityType.Chunk;
+
     void Start()
     {
         chunkManager = GetComponent<ObjectChunkManager>();
@@ -138,19 +143,20 @@ public class SimulatorManager : MonoBehaviour
         }
         isReceivedChunks = new Dictionary<int, bool[]>();
         
-        // Initialize SimulatorVisibility 
+        // Initialize SimulatorVisibility FIRST
         if (sceneRoot != null && gd != null)
         {
             sceneRoot.SetActive(true);
-            simulatorVisibility = new SimulatorVisibility(sceneRoot, gd, chunkManager, objectTableManager);
+            simulatorVisibility = new SimulatorVisibility(sceneRoot, gd, chunkManager, objectTableManager, resourceLoader);
             sceneRoot.SetActive(false);
         }
         else
             Debug.LogError("sceneRoot or gd not assigned! SimulatorVisibility cannot be initialized.");
-        
-        // Initialize the dropdown
+
+        // Initialize the dropdowns
         InitializeFileDropdown();
         InitializeModeDropdown();
+        InitializeVisibilityTypeDropdown();
 
         // Initialize elapsed time display
         if (elapsedTimeText != null)
@@ -161,20 +167,6 @@ public class SimulatorManager : MonoBehaviour
         // load default jsonl file
         jsonlFilePath = Path.Combine("Assets/Data/ClientLogData", fileSelectionDropdown.options[0].text);
         LoadUserLogJsonlData();
-    }
-
-    private void ComputeChunkSentByVisibility(int[] visibility)
-    {
-        totalObjectsSent = 0;
-        totalChunksSent = 0;
-        for (int i = 0; i < visibility.Length; i++)
-        {
-            if (visibility[i] > 0)
-            {
-                totalObjectsSent++;
-                totalChunksSent += chunkManager.GetChunkCount(i);
-            }
-        }
     }
 
     private void InitializeModeDropdown()
@@ -202,7 +194,8 @@ public class SimulatorManager : MonoBehaviour
         if (index == 0)
         {
             // Replay
-            sceneRoot.SetActive(false);
+            //sceneRoot.SetActive(false);
+            simulatorVisibility.ShowVisibilityGroundTruthByType(visibilityType, false);
 
         }
         else if (index == 1)
@@ -210,12 +203,13 @@ public class SimulatorManager : MonoBehaviour
             // Capture Frames - Ground Truth (noted: the current ground truth is based on the visibility check table)
             // sceneRoot.SetActive(true);
             // simulatorVisibility.SetVisibilityObjectsInScene(cameraRig.position, epsilon);
-            simulatorVisibility.SetVisibilityChunksInRegion(cameraRig.position, epsilon);
+            simulatorVisibility.ShowVisibilityGroundTruthByType(visibilityType, true);
         }
         else if (index == 2)
         {
             // Capture Frames - Recevied
-            sceneRoot.SetActive(false);
+            //sceneRoot.SetActive(false);
+            simulatorVisibility.ShowVisibilityGroundTruthByType(visibilityType, false);
         }
     }
 
@@ -254,6 +248,30 @@ public class SimulatorManager : MonoBehaviour
         string selectedFile = fileSelectionDropdown.options[index].text;
         jsonlFilePath = Path.Combine("Assets/Data/ClientLogData", selectedFile);
         LoadUserLogJsonlData();
+    }
+
+
+    private void InitializeVisibilityTypeDropdown()
+    {
+        if (visibilityTypeDropdown == null)
+        {
+            Debug.LogError("Visibility Type Dropdown not assigned!");
+            return;
+        }
+        visibilityTypeDropdown.ClearOptions();
+        visibilityTypeDropdown.AddOptions(new List<TMP_Dropdown.OptionData>
+        {
+            new TMP_Dropdown.OptionData("Chunk"),
+            new TMP_Dropdown.OptionData("Object")
+        });
+        visibilityTypeDropdown.value = (int)visibilityType;
+        visibilityTypeDropdown.onValueChanged.AddListener(OnVisibilityTypeSelected);
+    }
+
+    private void OnVisibilityTypeSelected(int index)
+    {
+        visibilityType = (SimulatorVisibility.VisibilityType)index;
+        Debug.Log($"Visibility type changed to: {visibilityType}");
     }
 
     private void CaptureFrame()
@@ -368,7 +386,6 @@ public class SimulatorManager : MonoBehaviour
         
         foreach (var chunk in chunks)
         {
-            // TODO: might also need to udpate Get object information from ObjectTableManager
             ObjectHolder holder = objectTableManager.GetObjectInfo(chunk.objectID);
             if (holder == null)
             {
@@ -789,16 +806,15 @@ public class SimulatorManager : MonoBehaviour
             logDeltaTime = 0.0;
             captureFrameCount = 0; // Reset frame counter
 
-            // trick to get the total objects and chunks sent
+            // Archived: trick to get the total objects and chunks sent
             // sceneRoot.SetActive(true);
             // simulatorVisibility.SetVisibilityObjectsInScene(serverSendHeadPosition, epsilon);
             // int[] visibility = simulatorVisibility.GetVisibleObjectInRegion();
             // ComputeChunkSentByVisibility(visibility);
             // sceneRoot.SetActive(false);
 
-            // currently fixed number, once Simulator Visibility is updated, this will be deleted
-            totalObjectsSent = 250;
-            totalChunksSent = 28443;
+            totalObjectsSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item1;
+            totalChunksSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item2;
 
             // Reset packet loss tracking
             totalReceivedChunks.Clear();
@@ -869,4 +885,11 @@ public class SimulatorManager : MonoBehaviour
             }
         }
     }
+
+    // Might need to be refactored if users/clusters are dynamic
+    public void ComputeAllVisibility()
+    {
+        simulatorVisibility.ComputeVisibility(serverSendHeadPosition, epsilon);
+    }
+
 }
