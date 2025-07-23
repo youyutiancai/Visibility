@@ -723,6 +723,9 @@ public class SimulatorManager : MonoBehaviour
 
     public void CalculatePacketLog()
     {   
+        totalObjectsSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item1;
+        totalChunksSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item2;
+        
         if (totalObjectsSent > 0 && totalChunksSent > 0)
         {
             // Calculate total received chunks
