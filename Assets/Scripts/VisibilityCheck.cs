@@ -125,8 +125,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 totalChunkCount += cc.objectChunksVTSeparate[k].Count;
                 count++;
             }
-            //objectsInScene[k].SetActive(unitRead[k] > 0 || objectsInScene[k].tag == "Terrain" || showAll);
-            chunkObjectsRoot.transform.GetChild(k).gameObject.SetActive(unitRead[k] > 0 || objectsInScene[k].tag == "Terrain" || showAll);
+            objectsInScene[k].SetActive(unitRead[k] > 0 || objectsInScene[k].tag == "Terrain" || showAll);
+            //chunkObjectsRoot.transform.GetChild(k).gameObject.SetActive(unitRead[k] > 0 || objectsInScene[k].tag == "Terrain" || showAll);
         }
         Debug.Log($"{string.Join(", ", unitRead)}");
         Debug.Log($"total object num: {count}, total chunk count: {totalChunkCount}");

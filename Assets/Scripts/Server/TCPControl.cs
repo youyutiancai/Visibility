@@ -192,7 +192,7 @@ public class TCPControl : MonoBehaviour
 
     private void SendTable(TcpClient client)
     {
-        if (cc.SimulationStrategy != SimulationStrategyDropDown.RealUser)
+        if (!(cc.SimulationStrategy == SimulationStrategyDropDown.RealUserCluster || cc.SimulationStrategy == SimulationStrategyDropDown.RealUserIndi))
         {
             Debug.LogError($"The current simulation strategy is not real user!");
             return;

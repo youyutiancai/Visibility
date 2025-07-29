@@ -34,7 +34,7 @@ public class NetworkControl : Singleton<NetworkControl>
     {
         cc = ClusterControl.Instance;
         vc = VisibilityCheck.Instance;
-        if (cc.SimulationStrategy == SimulationStrategyDropDown.RealUser)
+        if (cc.SimulationStrategy == SimulationStrategyDropDown.RealUserCluster || cc.SimulationStrategy == SimulationStrategyDropDown.RealUserIndi)
         {
             Dispatcher dispatcher = Dispatcher.Instance;
             VisibilityCheck visibilityCheck = VisibilityCheck.Instance;
@@ -62,11 +62,6 @@ public class NetworkControl : Singleton<NetworkControl>
 
     private void Update()
     {
-        if (cc.SimulationStrategy == SimulationStrategyDropDown.RealUser)
-        {
-            bcc.UpdateTime();
-            //bcc.UpdateChunkSending();
-        }
     }
 
     public void BroadcastObjectData(int objectID, float _sleepTime = 0.01f)

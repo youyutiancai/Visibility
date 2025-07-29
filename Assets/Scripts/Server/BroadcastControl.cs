@@ -20,7 +20,6 @@ public class BroadcastControl : MonoBehaviour
 
     private UdpClient udpClient;
     private bool appRunning;
-    private int currentTimeCheck, lastTimeCheck;
     Thread broadcastThread;
     Thread retransmissionThread;
     private CancellationToken ct;
@@ -52,7 +51,6 @@ public class BroadcastControl : MonoBehaviour
         Debug.Log(udpClient.Client.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendBuffer));
         appRunning = true;
         nc = NetworkControl.Instance;
-        lastTimeCheck = 0;
         bundleID = 0;
         chunks = new Dictionary<int, byte[]>();
         //mv = new RandomizedMesh();
@@ -64,11 +62,6 @@ public class BroadcastControl : MonoBehaviour
         // Start the thread that listens for retransmission requests.
         retransmissionThread = new Thread(() => ListenForRetransmissionRequests());
         retransmissionThread.Start();
-    }
-
-    public void UpdateTime()
-    {
-        currentTimeCheck = (int)Time.time;
     }
 
     // Entry point for broadcasting object data.
