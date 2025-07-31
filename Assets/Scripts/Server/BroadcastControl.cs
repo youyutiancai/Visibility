@@ -111,8 +111,13 @@ public class BroadcastControl : MonoBehaviour
     // Sends the provided message as a broadcast UDP packet.
     public void BroadcastChunk(byte[] message)
     {
+        if (nc.totalChunkSent == 0)
+        {
+            nc.timeStartSendingChunks = Time.time;
+        }
         nc.totalChunkSent++;
         nc.totalBytesSent += message.Length;
+        nc.timePassedForSendingChunks = Time.time - nc.timeStartSendingChunks;
         //byte[] placeHolder = BitConverter.GetBytes('a');
         //udpClient.Send(placeHolder, placeHolder.Length, new IPEndPoint(IPAddress.Parse("192.168.1.137"), PORT));
         switch (nc.sendingMode) {
@@ -210,7 +215,7 @@ public class BroadcastControl : MonoBehaviour
         for (int i = 0; i < req.missingChunks.Length; i++)
         {
             byte[] missingChunk = nc.cc.objectChunksVTSeparate[req.objectID][req.missingChunks[i]];
-            if (!nc.cc.chunksToSend.Contains(missingChunk))
+            if (!nc.cc.chunksToSend.Contains((req.objectID, i)))
             {
                 //nc.cc.chunksToSend.AddTimes(missingChunk, distance, 1);
             }

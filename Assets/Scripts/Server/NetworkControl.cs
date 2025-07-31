@@ -19,6 +19,7 @@ public class NetworkControl : Singleton<NetworkControl>
     [HideInInspector]
     public bool readyForNextObject;
     public int totalChunkSent, totalBytesSent;
+    public float timeStartSendingChunks, timePassedForSendingChunks;
     public bool isBroadcast;
     [HideInInspector]
     public float timeSinceLastChunkRequest;

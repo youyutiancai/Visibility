@@ -10,6 +10,7 @@ using Random = UnityEngine.Random;
 using UnityEngine.InputSystem;
 using System.Net.Sockets;
 using UnityEngine.Assertions;
+using UnityEngine.UIElements;
 
 public class ClusterControl : Singleton<ClusterControl>
 {
@@ -36,11 +37,11 @@ public class ClusterControl : Singleton<ClusterControl>
     //public List<int> objectsWaitToBeSent;
     private MeshVariant mv, mv1;
     [HideInInspector]
-    public PriorityQueue<int, long, float> objectsWaitToBeSent;
+    public PriorityQueue<int, long, float, int> objectsWaitToBeSent;
     [HideInInspector]
-    public PriorityQueue<byte[], float, long> chunksCoolingDown;
+    public PriorityQueue<byte[], float, long, (int, int)> chunksCoolingDown;
     [HideInInspector]
-    public PriorityQueue<byte[], long, float> chunksToSend;
+    public PriorityQueue<byte[], long, float, (int, int)> chunksToSend;
     public Dictionary<int, List<byte[]>> objectChunksVTSeparate, objectChunksVTGrouped;
     public int chunksSentEachTime;
     private float timeSinceLastUpdate = 0f, timeSinceLastChunksent = 0f;
@@ -83,9 +84,9 @@ public class ClusterControl : Singleton<ClusterControl>
         objectSentIndi = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
         initialClusterCenterPos = initialClusterCenter.transform.position;
-        objectsWaitToBeSent = new PriorityQueue<int, long, float>();
-        chunksToSend = new PriorityQueue<byte[], long, float>();
-        chunksCoolingDown = new PriorityQueue<byte[], float, long>();
+        objectsWaitToBeSent = new PriorityQueue<int, long, float, int>();
+        chunksToSend = new PriorityQueue<byte[], long, float, (int, int)>();
+        chunksCoolingDown = new PriorityQueue<byte[], float, long, (int, int)>();
         chunksCoolingDown.descending = false;
         chunksCoolingDown.ifHaveChunkCoolingDown = true;
         canSendObjects = false;
@@ -336,75 +337,6 @@ public class ClusterControl : Singleton<ClusterControl>
             Debug.Log($"canSendObject changed to {canSendObjects}");
         }
 
-        if (nc.timeSinceLastChunkRequest >= newObjectInterval && nc.readyForNextObject && objectsWaitToBeSent.Count > 0)
-        {
-            long priority = objectsWaitToBeSent.GetPriority(objectsWaitToBeSent.Peek());
-            int sendingObjectIdx = objectsWaitToBeSent.Dequeue();
-            List<byte[]> chunks = null;
-            switch (meshDecodeMethod) {
-                case MeshDecodeMethod.VTSeparate:
-                    if (!objectChunksVTSeparate.ContainsKey(sendingObjectIdx))
-                    {
-                        objectChunksVTSeparate.Add(sendingObjectIdx, mv.RequestChunks(sendingObjectIdx, CHUNK_SIZE));
-                    }
-                    chunks = objectChunksVTSeparate[sendingObjectIdx];
-                    break;
-
-                case MeshDecodeMethod.VTGrouped:
-                    if (!objectChunksVTGrouped.ContainsKey(sendingObjectIdx))
-                    {
-                        objectChunksVTGrouped.Add(sendingObjectIdx, mv1.RequestChunks(sendingObjectIdx, CHUNK_SIZE));
-                    }
-                    chunks = objectChunksVTGrouped[sendingObjectIdx];
-                    
-                    break;
-            }
-            for (int i = 0; i < chunks.Count; i++)
-            {
-                if (!chunksToSend.Contains(chunks[i]))
-                {
-                    chunksToSend.Enqueue(chunks[i], $"{sendingObjectIdx}_{i}", priority, numChunkRepeatLocal, 0);
-                }
-            }
-            nc.timeSinceLastChunkRequest = 0;
-        }
-
-        timeSinceLastChunksent += Time.deltaTime;
-        if (canSendObjects && timeSinceLastChunksent >= newChunkInterval && chunksToSend.Count > 0)
-        {
-            int maxToSend = Mathf.Max(0, Mathf.Min(chunksToSend.Count, chunksSentEachTime));
-            float now = Time.time;
-            for (int i = 0; i < maxToSend; i++)
-            {
-                if (ifHaveChunkCoolingDown)
-                {
-                    byte[] chunk = chunksToSend.Peek();
-                    int countLeft = chunksToSend.GetCount(chunk);
-                    long priority = chunksToSend.GetPriority(chunk);
-                    string id = chunksToSend.GetID(chunk);
-                    if (countLeft > 1)
-                    {
-                        chunksCoolingDown.Enqueue(chunk, id, now + chunkCoolDownInterval, countLeft - 1, priority);
-                    }
-                }
-                nc.BroadcastChunk(chunksToSend.Dequeue());
-            }
-            if (ifHaveChunkCoolingDown)
-            {
-                while (chunksCoolingDown.Count > 0 && chunksCoolingDown.GetPriority(chunksCoolingDown.Peek()) < now)
-                {
-                    //Debug.Log($"removing from chunksCoolingDown");
-                    byte[] chunk = chunksCoolingDown.Peek();
-                    int countLeft = chunksCoolingDown.GetCount(chunk);
-                    long priority = chunksCoolingDown.GetAdditionalElement(chunk);
-                    string id = chunksCoolingDown.GetID(chunk);
-                    chunksToSend.Enqueue(chunk, id, priority, countLeft, 0);
-                    chunksCoolingDown.Dequeue();
-                }
-            }
-            timeSinceLastChunksent = 0;
-        }
-
         if (users.Count == 0)
             return;
 
@@ -440,9 +372,9 @@ public class ClusterControl : Singleton<ClusterControl>
                             for (int i = 0; i < footprints.Length; i++)
                             {
                                 byte[] newChunk = objectChunksVTGrouped[objectID][i];
-                                if (footprints[i] > 0 && !chunksToSend.Contains(newChunk))
+                                if (footprints[i] > 0 && !chunksToSend.Contains((objectID, i)))
                                 {
-                                    chunksToSend.Enqueue(newChunk, $"{objectID}_{i}", footprints[i], numChunkRepeatLocal, 0);
+                                    chunksToSend.Enqueue(newChunk, (objectID, i), footprints[i], numChunkRepeatLocal, 0);
                                 }
                             }
                         }
@@ -460,7 +392,7 @@ public class ClusterControl : Singleton<ClusterControl>
                         {
                             if (newObjectCount[i] > 0 && !objectsWaitToBeSent.Contains(i))
                             {
-                                objectsWaitToBeSent.Enqueue(i, $"{i}", newObjectCount[i], 1, 0);
+                                objectsWaitToBeSent.Enqueue(i, i, newObjectCount[i], 1, 0);
                             }
                         }
                     }
@@ -474,27 +406,50 @@ public class ClusterControl : Singleton<ClusterControl>
                     timeSinceLastUpdate = 0f;
                     if (meshDecodeMethod == MeshDecodeMethod.VTGrouped && onlySendVisibleChunks)
                     {
-                        SendObjectsToIndisByChunk();
-                        CountObjectFootprintIndi();
-                        foreach (int objectID in newChunksToSend.Keys)
+                        // everyone votes for the order of objects
+                        //SendObjectsToIndisByChunk();
+                        //CountObjectFootprintIndi();
+                        //foreach (int objectID in newChunksToSend.Keys)
+                        //{
+                        //    long[] footprints = newChunksToSend[objectID];
+                        //    for (int i = 0; i < footprints.Length; i++)
+                        //    {
+                        //        byte[] newChunk = objectChunksVTGrouped[objectID][i];
+                        //        if (footprints[i] > 0 && !chunksToSend.Contains((objectID, i)))
+                        //        {
+                        //            if (useChunkFootAsPriority)
+                        //            {
+                        //                chunksToSend.Enqueue(newChunk, (objectID, i), footprints[i], numChunkRepeatLocal, 0);
+                        //            }
+                        //            else
+                        //            {
+                        //                chunksToSend.Enqueue(newChunk, (objectID, i), newObjectCount[objectID], numChunkRepeatLocal, 0);
+                        //            }
+                        //        }
+                        //    }
+                        //}
+
+                        // send one object for users in turn
+                        for (int i = 0; i < transform.childCount; i++)
                         {
-                            long[] footprints = newChunksToSend[objectID];
-                            for (int i = 0; i < footprints.Length; i++)
+                            User user = transform.GetChild(i).GetComponent<User>();
+                            Vector3 userPosition = user.transform.position;
+                            int xStartIndex = Mathf.FloorToInt((userPosition.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                            int zStartIndex = Mathf.FloorToInt((userPosition.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                            if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
+                            user.preX = xStartIndex; user.preZ = zStartIndex;
+                            user.CleanChunksWaitToSend();
+                            chunkFootprintInfo = new Dictionary<int, long[]>();
+                            vc.ReadFootprintByChunkInRegion(userPosition, epsilon, ref chunkFootprintInfo);
+                            newObjectCount = new long[vc.objectsInScene.Count];
+                            if (!useChunkFootAsPriority)
                             {
-                                byte[] newChunk = objectChunksVTGrouped[objectID][i];
-                                if (footprints[i] > 0 && !chunksToSend.Contains(newChunk))
-                                {
-                                    if (useChunkFootAsPriority)
-                                    {
-                                        chunksToSend.Enqueue(newChunk, $"{objectID}_{i}", footprints[i], numChunkRepeatLocal, 0);
-                                    } else
-                                    {
-                                        chunksToSend.Enqueue(newChunk, $"{objectID}_{i}", newObjectCount[objectID], numChunkRepeatLocal, 0);
-                                    }
-                                }
+                                vc.GetFootprintsInRegion(userPosition, epsilon, ref newObjectCount);
                             }
+                            user.UpdateChunkToSend(chunkFootprintInfo, newObjectCount, numChunkRepeatLocal, useChunkFootAsPriority);
+
+                            Debug.Log($"RealUserIndiStrategy chunks left to send: {user.ChunksWaitToSend.Count}");
                         }
-                        Debug.Log($"RealUserIndiStrategy chunks left to send: {chunksToSend.Count}");
                     }
                     else
                     {
@@ -504,7 +459,7 @@ public class ClusterControl : Singleton<ClusterControl>
                         {
                             if (newObjectCount[i] > 0 && !objectsWaitToBeSent.Contains(i))
                             {
-                                objectsWaitToBeSent.Enqueue(i, $"{i}", newObjectCount[i], 1, 0);
+                                objectsWaitToBeSent.Enqueue(i, i, newObjectCount[i], 1, 0);
                             }
                         }
                     }
@@ -512,10 +467,115 @@ public class ClusterControl : Singleton<ClusterControl>
                 SimulateAndSendPuppetPoses();
                 break;
         }
-            //if (regularlySwapUsers || regularlySwapLeader)
+
+        if (nc.timeSinceLastChunkRequest >= newObjectInterval && nc.readyForNextObject && objectsWaitToBeSent.Count > 0)
+        {
+            long priority = objectsWaitToBeSent.GetPriority(objectsWaitToBeSent.Peek());
+            int sendingObjectIdx = objectsWaitToBeSent.Dequeue();
+            List<byte[]> chunks = null;
+            switch (meshDecodeMethod)
+            {
+                case MeshDecodeMethod.VTSeparate:
+                    if (!objectChunksVTSeparate.ContainsKey(sendingObjectIdx))
+                    {
+                        objectChunksVTSeparate.Add(sendingObjectIdx, mv.RequestChunks(sendingObjectIdx, CHUNK_SIZE));
+                    }
+                    chunks = objectChunksVTSeparate[sendingObjectIdx];
+                    break;
+
+                case MeshDecodeMethod.VTGrouped:
+                    if (!objectChunksVTGrouped.ContainsKey(sendingObjectIdx))
+                    {
+                        objectChunksVTGrouped.Add(sendingObjectIdx, mv1.RequestChunks(sendingObjectIdx, CHUNK_SIZE));
+                    }
+                    chunks = objectChunksVTGrouped[sendingObjectIdx];
+
+                    break;
+            }
+            for (int i = 0; i < chunks.Count; i++)
+            {
+                if (!chunksToSend.Contains((sendingObjectIdx, i)))
+                {
+                    chunksToSend.Enqueue(chunks[i], (sendingObjectIdx, i), priority, numChunkRepeatLocal, 0);
+                }
+            }
+            nc.timeSinceLastChunkRequest = 0;
+        }
+
+        timeSinceLastChunksent += Time.deltaTime;
+        if (canSendObjects && timeSinceLastChunksent >= newChunkInterval) //  && chunksToSend.Count > 0
+        {
+            //int maxToSend = Mathf.Max(0, Mathf.Min(chunksToSend.Count, chunksSentEachTime));
+            //float now = Time.time;
+            //for (int i = 0; i < maxToSend; i++)
             //{
-            //    ss.UpdateRegularly();
+            // (int, int) id = chunksToSend.Peek();
+            //    if (ifHaveChunkCoolingDown)
+            //    {
+            //        (int, int) id = chunksToSend.Peek();
+            //        byte[] chunk = chunksToSend.GetElement(id);
+            //        int countLeft = chunksToSend.GetCount(id);
+            //        long priority = chunksToSend.GetPriority(id);
+            //        if (countLeft > 1)
+            //        {
+            //            chunksCoolingDown.Enqueue(chunk, id, now + chunkCoolDownInterval, countLeft - 1, priority);
+            //        }
+            //    }
+            //    Debug.Log($"{Time.time}: {id.Item1}, {id.Item2}");
+            //    nc.BroadcastChunk(chunksToSend.Dequeue());
             //}
+            //if (ifHaveChunkCoolingDown)
+            //{
+            //    while (chunksCoolingDown.Count > 0 && chunksCoolingDown.GetPriority(chunksCoolingDown.Peek()) < now)
+            //    {
+            //        (int, int) id = chunksCoolingDown.Peek();
+            //        byte[] chunk = chunksCoolingDown.GetElement(id);
+            //        int countLeft = chunksCoolingDown.GetCount(id);
+            //        long priority = chunksCoolingDown.GetAdditionalElement(id);
+            //        chunksToSend.Enqueue(chunk, id, priority, countLeft, 0);
+            //        chunksCoolingDown.Dequeue();
+            //    }
+            //}
+            int count = 0, userIDToSend = 0;
+            User[] allUsers = new User[transform.childCount];
+            int totalChunksWaitToSend = 0;
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                allUsers[i] = transform.GetChild(i).GetComponent<User>();
+                totalChunksWaitToSend += allUsers[i].ChunksWaitToSend.Count;
+            }
+            //Debug.Log(totalChunksWaitToSend);
+            if (totalChunksWaitToSend > 0)
+            {
+                while (count < chunksSentEachTime)
+                {
+                    if (allUsers[userIDToSend].ChunksWaitToSend.Count == 0)
+                    {
+                        userIDToSend = (userIDToSend + 1) % allUsers.Length;
+                        continue;
+                    }
+                    (int, int) id = allUsers[userIDToSend].ChunksWaitToSend.Peek();
+                    int chunksLeft = 0;
+                    for (int i = 0; i < allUsers.Length; i++)
+                    {
+                        allUsers[i].MarkAsSent(id.Item1, id.Item2, objectChunksVTGrouped[id.Item1].Count, allUsers[userIDToSend].ChunksWaitToSend.GetPriority(id));
+                        chunksLeft += allUsers[userIDToSend].ChunksWaitToSend.Count;
+                    }
+                    nc.BroadcastChunk(objectChunksVTGrouped[id.Item1][id.Item2]);
+                    if (chunksLeft == 0)
+                    {
+                        break;
+                    }
+                    count++;
+                    userIDToSend = (userIDToSend + 1) % allUsers.Length;
+                }
+            }
+            timeSinceLastChunksent = 0;
+        }
+        //if (regularlySwapUsers || regularlySwapLeader)
+        //{
+        //    ss.UpdateRegularly();
+        //}
     }
 
     private void SimulateAndSendPuppetPoses()
@@ -795,6 +855,8 @@ public class ClusterControl : Singleton<ClusterControl>
                 int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
                 int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
                 if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
+                user.preX = xStartIndex;
+                user.preZ = zStartIndex;
                 objectFootPrintsInRegion = new long[vc.objectsInScene.Count];
                 vc.GetFootprintsInRegion(initialClusterCenterPos, epsilon, ref objectFootPrintsInRegion);
                 user.UpdateVisibleObjects(objectFootPrintsInRegion, ref newObjectCount);
@@ -812,6 +874,8 @@ public class ClusterControl : Singleton<ClusterControl>
             int xStartIndex = Mathf.FloorToInt((position.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
             int zStartIndex = Mathf.FloorToInt((position.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
             if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
+            user.preX = xStartIndex;
+            user.preZ = zStartIndex;
             objectFootPrintsInRegion = new long[vc.objectsInScene.Count];
             vc.GetFootprintsInRegion(initialClusterCenterPos, epsilon, ref objectFootPrintsInRegion);
             user.UpdateVisibleObjects(objectFootPrintsInRegion, ref newObjectCount);
@@ -859,6 +923,8 @@ public class ClusterControl : Singleton<ClusterControl>
                 int xStartIndex = Mathf.FloorToInt((userPosition.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
                 int zStartIndex = Mathf.FloorToInt((userPosition.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
                 if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
+                user.preX = xStartIndex;
+                user.preZ = zStartIndex;
                 chunkFootprintInfo = new Dictionary<int, long[]>();
                 vc.ReadFootprintByChunkInRegion(initialClusterCenterPos, epsilon, ref chunkFootprintInfo);
                 user.UpdateVisibleChunks(chunkFootprintInfo, ref newChunksToSend);
@@ -876,6 +942,8 @@ public class ClusterControl : Singleton<ClusterControl>
             int xStartIndex = Mathf.FloorToInt((userPosition.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
             int zStartIndex = Mathf.FloorToInt((userPosition.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
             if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
+            user.preX = xStartIndex;
+            user.preZ = zStartIndex;
             chunkFootprintInfo = new Dictionary<int, long[]>();
             vc.ReadFootprintByChunkInRegion(userPosition, epsilon, ref chunkFootprintInfo);
             user.UpdateVisibleChunks(chunkFootprintInfo, ref newChunksToSend);
@@ -920,18 +988,18 @@ public class ClusterControl : Singleton<ClusterControl>
     }
 }
 
-public class PriorityQueue<TElement, TPriority, AElement> where TPriority : IComparable<TPriority>
+public class PriorityQueue<TElement, TPriority, AElement, IDELement> where TPriority : IComparable<TPriority>
 {
-    private List<(TElement Element, string id, TPriority Priority, int Count, AElement AdditionalElement)> _heap = new();
-    private Dictionary<TElement, int> _indexMap = new();
-    public bool descending = true, ifHaveChunkCoolingDown = true;
+    private List<(TElement Element, IDELement id, TPriority Priority, int Count, AElement AdditionalElement)> _heap = new();
+    private Dictionary<IDELement, int> _indexMap = new();
+    public bool descending = true, ifHaveChunkCoolingDown = false;
 
     public int Count => _heap.Count;
 
-    public void Enqueue(TElement element, string id, TPriority priority, int count, AElement additionalElement)
+    public void Enqueue(TElement element, IDELement id, TPriority priority, int count, AElement additionalElement)
     {
         int index = 0;
-        if (_indexMap.TryGetValue(element, out index))
+        if (_indexMap.TryGetValue(id, out index))
         {
             _heap[index] = (element, id, _heap[index].Priority, count, additionalElement);
         }
@@ -939,7 +1007,7 @@ public class PriorityQueue<TElement, TPriority, AElement> where TPriority : ICom
         {
             _heap.Add((element, id, priority, count, additionalElement));
             index = _heap.Count - 1;
-            _indexMap[element] = index;
+            _indexMap[id] = index;
         }
         HeapifyUp(index);
     }
@@ -976,7 +1044,7 @@ public class PriorityQueue<TElement, TPriority, AElement> where TPriority : ICom
 
         Swap(0, _heap.Count - 1);
         _heap.RemoveAt(_heap.Count - 1);
-        _indexMap.Remove(root.Element);
+        _indexMap.Remove(root.id);
 
         if (_heap.Count > 0)
             HeapifyDown(0);
@@ -984,21 +1052,74 @@ public class PriorityQueue<TElement, TPriority, AElement> where TPriority : ICom
         return root.Element;
     }
 
+    public bool Remove(IDELement id)
+    {
+        if (!_indexMap.TryGetValue(id, out int index))
+            return false;
 
-    public TElement Peek()
+        int lastIndex = _heap.Count - 1;
+
+        // Swap with the last element
+        Swap(index, lastIndex);
+
+        // Remove from list and map
+        _heap.RemoveAt(lastIndex);
+        _indexMap.Remove(id);
+
+        // Restore heap only if we didn't remove the last element directly
+        if (index < _heap.Count)
+        {
+            // Determine if we should heapify up or down
+            if (index > 0 && IsHigherPriority(_heap[index], _heap[(index - 1) / 2]))
+                HeapifyUp(index);
+            else
+                HeapifyDown(index);
+        }
+
+        return true;
+    }
+
+    public bool DecreaseCount(IDELement id, int amount)
+    {
+        if (!_indexMap.TryGetValue(id, out int index))
+            return false;
+
+        var entry = _heap[index];
+        int newCount = entry.Count - amount;
+
+        if (newCount <= 0)
+        {
+            // Remove if count drops to 0 or below
+            return Remove(id);
+        }
+        else
+        {
+            _heap[index] = (entry.Element, id, entry.Priority, newCount, entry.AdditionalElement);
+
+            // Reorder heap depending on priority change
+            if (index > 0 && IsHigherPriority(_heap[index], _heap[(index - 1) / 2]))
+                HeapifyUp(index);
+            else
+                HeapifyDown(index);
+        }
+
+        return true;
+    }
+
+    public IDELement Peek()
     {
         if (_heap.Count == 0)
             throw new InvalidOperationException("PriorityQueue is empty.");
-        return _heap[0].Element;
+        return _heap[0].id;
     }
 
-    public void UpdatePriority(TElement element, TPriority newPriority)
+    public void UpdatePriority(IDELement id, TPriority newPriority)
     {
-        if (!_indexMap.TryGetValue(element, out int index))
+        if (!_indexMap.TryGetValue(id, out int index))
             throw new KeyNotFoundException("Element not found in priority queue.");
 
         var current = _heap[index];
-        var updated = (element, current.id, newPriority, current.Count, current.AdditionalElement);
+        var updated = (current.Element, current.id, newPriority, current.Count, current.AdditionalElement);
         bool moveUp = IsHigherPriority(updated, current);
 
         _heap[index] = updated;
@@ -1010,7 +1131,7 @@ public class PriorityQueue<TElement, TPriority, AElement> where TPriority : ICom
 
     }
 
-    public bool Contains(TElement element) => _indexMap.ContainsKey(element);
+    public bool Contains(IDELement id) => _indexMap.ContainsKey(id);
 
     public void Clear()
     {
@@ -1031,8 +1152,8 @@ public class PriorityQueue<TElement, TPriority, AElement> where TPriority : ICom
         }
     }
 
-    private bool IsHigherPriority((TElement Element, string id, TPriority Priority, int Count, AElement AdditionalElement) a,
-                              (TElement Element, string id, TPriority Priority, int Count, AElement AdditionalElement) b)
+    private bool IsHigherPriority((TElement Element, IDELement id, TPriority Priority, int Count, AElement AdditionalElement) a,
+                              (TElement Element, IDELement id, TPriority Priority, int Count, AElement AdditionalElement) b)
     {
         if (a.Count != b.Count && !ifHaveChunkCoolingDown)
             return a.Count > b.Count; // Higher count = higher priority
@@ -1071,37 +1192,38 @@ public class PriorityQueue<TElement, TPriority, AElement> where TPriority : ICom
         _heap[i] = _heap[j];
         _heap[j] = temp;
 
-        _indexMap[_heap[i].Element] = i;
-        _indexMap[_heap[j].Element] = j;
+        _indexMap[_heap[i].id] = i;
+        _indexMap[_heap[j].id] = j;
     }
 
 
-    public TPriority GetPriority(TElement element)
+    public TPriority GetPriority(IDELement id)
     {
-        if (!_indexMap.TryGetValue(element, out int index))
+        if (!_indexMap.TryGetValue(id, out int index))
             throw new KeyNotFoundException("Element not found in priority queue.");
 
         return _heap[index].Priority;
     }
 
-    public int GetCount(TElement element)
+    public int GetCount(IDELement id)
     {
-        if (!_indexMap.TryGetValue(element, out int index))
+        if (!_indexMap.TryGetValue(id, out int index))
             throw new KeyNotFoundException("Element not found in priority queue.");
 
         return _heap[index].Count;
     }
 
-    public string GetID(TElement element)
+    public TElement GetElement(IDELement id)
     {
-        if (!_indexMap.TryGetValue(element, out int index))
+        if (!_indexMap.TryGetValue(id, out int index))
             throw new KeyNotFoundException("Element not found in priority queue.");
 
-        return _heap[index].id;
+        return _heap[index].Element;
     }
-    public AElement GetAdditionalElement(TElement element)
+
+    public AElement GetAdditionalElement(IDELement id)
     {
-        if (!_indexMap.TryGetValue(element, out int index))
+        if (!_indexMap.TryGetValue(id, out int index))
             throw new KeyNotFoundException("Element not found in priority queue.");
 
         return _heap[index].AdditionalElement;

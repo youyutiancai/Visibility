@@ -8,13 +8,15 @@ public abstract class User : MonoBehaviour
     public Camera userCamera;
     [HideInInspector]
     public int[] clusterReceived, indiReceived, preindiReceived;
+    [HideInInspector]
+    public PriorityQueue<int, long, float, (int, int)> ChunksWaitToSend;
 
     public SyntheticPathNode[] path;
     public Vector3 offset;
     protected List<SyntheticPathNode> possibleNodes;
     public float speed;
     public int currentNodeIndex = 0, preX, preZ;
-    private Dictionary<int, long[]> chunkPlanned, chunkWaitToSend;
+    private Dictionary<int, long[]> chunkPlanned;
 
     public int ClusterId { get; set; } = -1;  // -1 indicates unvisited
 
@@ -81,6 +83,54 @@ public abstract class User : MonoBehaviour
                     }
                 }
             }
+        }
+    }
+
+    public void CleanChunksWaitToSend()
+    {
+        ChunksWaitToSend = new PriorityQueue<int, long, float, (int, int)>();
+    }
+
+    public void UpdateChunkToSend(Dictionary<int, long[]> visibleChunks, long[] objectFootprints, int repetitionCount, bool ifUseChunkFootprint)
+    {
+        if (vc == null)
+        {
+            Start();
+        }
+        foreach (int objectID in visibleChunks.Keys)
+        {
+            long[] allChunksFootprint = visibleChunks[objectID];
+            for (int j = 0; j < allChunksFootprint.Length; j++)
+            {
+                if (allChunksFootprint[j] > 0)
+                {
+                    if (!chunkPlanned.ContainsKey(objectID))
+                    {
+                        chunkPlanned[objectID] = new long[allChunksFootprint.Length];
+                    }
+                    if (chunkPlanned[objectID][j] == 0 && !ChunksWaitToSend.Contains((objectID, j)))
+                    {
+                        long priority = ifUseChunkFootprint ? allChunksFootprint[j] : objectFootprints[objectID];
+                        ChunksWaitToSend.Enqueue(0, (objectID, j), priority, repetitionCount, 0);
+                    }
+                }
+            }
+        }
+    }
+
+    public void MarkAsSent(int objectID, int ChunkID, int chunkCountForObject, long priority)
+    {
+        if (!chunkPlanned.ContainsKey(objectID))
+        {
+            chunkPlanned[objectID] = new long[chunkCountForObject];
+        }
+        if (chunkPlanned[objectID][ChunkID] == 0)
+        {
+            chunkPlanned[objectID][ChunkID] = priority;
+        }
+        if (ChunksWaitToSend.Contains((objectID, ChunkID)))
+        {
+            ChunksWaitToSend.DecreaseCount((objectID, ChunkID), 1);
         }
     }
 
