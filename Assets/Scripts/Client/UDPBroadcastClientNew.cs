@@ -84,6 +84,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private int maxChunksPerFrame = 50; // You can tweak this
     private float lastAdjustTime = 0f;
     private float adjustCooldown = 0.3f; // seconds
+    private bool isShuttingDown = false;
 
     private static UdpClient retransmissionClient = new UdpClient();
 
@@ -246,10 +247,14 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
     }
 
-    
+
 
     private void ReceiveMeshChunks(IAsyncResult ar)
     {
+        // Check if shutting down or socket already closed
+        if (isShuttingDown || udpClient == null)
+            return;
+
         try
         {
             IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, portUDP);
@@ -258,26 +263,46 @@ public class UDPBroadcastClientNew : MonoBehaviour
             if (packet.Length < HEADER_SIZE)
             {
                 Debug.LogWarning("Received packet too small to contain header.");
-                udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
-                return;
             }
-            MeshDecodeMethod method = (MeshDecodeMethod)BitConverter.ToInt32(packet, 0);
-            switch (method) {
-                case MeshDecodeMethod.VTSeparate:
-                    DecodePacketMeshSeparate(packet, remoteEP); 
-                    break;
+            else
+            {
+                MeshDecodeMethod method = (MeshDecodeMethod)BitConverter.ToInt32(packet, 0);
+                switch (method)
+                {
+                    case MeshDecodeMethod.VTSeparate:
+                        DecodePacketMeshSeparate(packet, remoteEP);
+                        break;
 
-                case MeshDecodeMethod.VTGrouped:
-                    DecodePacketMeshGrouped(packet, remoteEP);
-                    break;
+                    case MeshDecodeMethod.VTGrouped:
+                        DecodePacketMeshGrouped(packet, remoteEP);
+                        break;
+                }
             }
-        } catch (Exception ex)
+        }
+        catch (ObjectDisposedException)
         {
-            Debug.LogError("ReceiveMeshChunks error: " + ex.Message);
+            // Expected when shutting down — safe to ignore
+        }
+        catch (Exception ex)
+        {
+            if (!isShuttingDown) // suppress if already quitting
+                Debug.LogError("ReceiveMeshChunks error: " + ex.Message);
         }
 
-        udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+        // Re-register only if still running
+        if (!isShuttingDown && udpClient != null)
+        {
+            try
+            {
+                udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
+            }
+            catch (ObjectDisposedException)
+            {
+                // Also safe to ignore if shutdown race
+            }
+        }
     }
+
 
     private void DecodePacketMeshSeparate(byte[] packet, IPEndPoint remoteEP)
     {
@@ -722,6 +747,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 materials.Add(m_ResourceLoader.LoadMaterialByName(matName));
             }
             recGameObject.GetComponent<MeshRenderer>().materials = materials.ToArray();
+            recGameObject.AddComponent<MeshCollider>();
+            recGameObject.layer = 1;
 
             recGameObject.transform.position = position;
             recGameObject.transform.eulerAngles = eulerAngles;
@@ -731,16 +758,26 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
         else
         {
-            Mesh mesh = recGameObjects[objectID].GetComponent<MeshFilter>().mesh;
+            GameObject go = recGameObjects[objectID];
+            Mesh mesh = go.GetComponent<MeshFilter>().mesh;
+
             mesh.vertices = verticesArr;
             mesh.normals = normalsArr;
+
             for (int i = 0; i < subMeshCount; i++)
             {
                 mesh.SetTriangles(trianglesArr[i], i);
             }
 
-            // IMPORTANT: Set the recompute the mesh bounds to avoid camera culling issues
-            mesh.RecalculateBounds();
+            mesh.RecalculateBounds(); // important for rendering
+
+            // Rebuild the mesh collider if needed
+            //MeshCollider collider = go.GetComponent<MeshCollider>();
+            //if (collider != null)
+            //{
+            //    collider.sharedMesh = null;
+            //    collider.sharedMesh = mesh;
+            //}
         }
     }
 
@@ -787,6 +824,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     void OnDestroy()
     {
+        isShuttingDown = true;
         if (udpClient != null)
         {
             if (isMulticast)

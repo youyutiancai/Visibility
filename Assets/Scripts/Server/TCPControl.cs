@@ -94,11 +94,11 @@ public class TCPControl : MonoBehaviour
             while (!ct.IsCancellationRequested)
             {
                 // Await data only if available (non-blocking), else yield
-                if (!stream.DataAvailable)
-                {
-                    await Task.Delay(10, ct);
-                    continue;
-                }
+                //if (!stream.DataAvailable)
+                //{
+                //    await Task.Delay(10, ct);
+                //    continue;
+                //}
 
                 int byteCount = await stream.ReadAsync(buffer, 0, buffer.Length, ct);
 
@@ -125,6 +125,9 @@ public class TCPControl : MonoBehaviour
             {
                 clients.Remove(ep.Address);
                 clientTasks.Remove(ep.Address);
+                GameObject userParent = addressToUser[ep.Address].gameObject;
+                userParent.transform.SetParent(null);
+                Destroy(userParent);
                 addressToUser.Remove(ep.Address);
                 Debug.Log($"Client {ep} has been removed");
             }

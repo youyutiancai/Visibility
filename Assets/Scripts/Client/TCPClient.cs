@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using Oculus.Platform;
 using UnityEngine;
 
 public class TCPClient : MonoBehaviour
@@ -31,11 +31,13 @@ public class TCPClient : MonoBehaviour
     private byte[] receiveBuffer = new byte[1024 * 1024];
     private int readPos = 0, writePos = 0;
     private float poseSendingGap, lastPoseSentTime;
+    private volatile bool isRunning = true;
 
     void Start()
     {
         parsingTable = false;
         receivedInitPos = false;
+        isRunning = true;
         poseSendingGap = 0.1f;
         lastPoseSentTime = Time.time;
         try
@@ -89,12 +91,12 @@ public class TCPClient : MonoBehaviour
     }
     private void ListenToServer(TcpClient server)
     {
-        try
-        {
-            NetworkStream stream = server.GetStream();
-            byte[] tempBuffer = new byte[8192];
+        NetworkStream stream = server.GetStream();
+        byte[] tempBuffer = new byte[8192];
 
-            while (true)
+        while (isRunning)
+        {
+            try
             {
                 int bytesRead = stream.Read(tempBuffer, 0, tempBuffer.Length);
                 if (bytesRead == 0) break;
@@ -121,8 +123,12 @@ public class TCPClient : MonoBehaviour
                     readPos = 0;
                 }
             }
+            catch (IOException e)
+            {
+                if (isRunning) Debug.Log($"IOException: {e}");
+                break;
+            }
         }
-        catch (Exception e) { Debug.Log($"Exception : {e}"); }
     }
 
     private void HandleMessage(byte[] message)
@@ -263,6 +269,7 @@ public class TCPClient : MonoBehaviour
 
     private void Disconnect()
     {
+        isRunning = false;
         try
         {
             if (client?.Connected == true)
