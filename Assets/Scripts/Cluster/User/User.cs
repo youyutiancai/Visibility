@@ -17,10 +17,12 @@ public abstract class User : MonoBehaviour
     public float speed;
     public int currentNodeIndex = 0, preX, preZ;
     private Dictionary<int, long[]> chunkPlanned;
+    private Dictionary<int, int[]> chunkSentTimes;
 
     public int ClusterId { get; set; } = -1;  // -1 indicates unvisited
 
     protected VisibilityCheck vc;
+    protected ClusterControl cc;
 
     public User(Vector3 initialPos)
     {
@@ -29,12 +31,14 @@ public abstract class User : MonoBehaviour
     private void Start()
     {
         vc = VisibilityCheck.Instance;
+        cc = ClusterControl.Instance;
         userCamera = GetComponent<Camera>();
         currentNodeIndex = 0;
         clusterReceived = new int[vc.objectsInScene.Count];
         indiReceived = new int[vc.objectsInScene.Count];
         preindiReceived = new int[vc.objectsInScene.Count];
         chunkPlanned = new Dictionary<int, long[]>();
+        chunkSentTimes = new Dictionary<int, int[]>();
         preX = 0;
         preZ = 0;
     }
@@ -91,7 +95,7 @@ public abstract class User : MonoBehaviour
         ChunksWaitToSend = new PriorityQueue<int, long, float, (int, int)>();
     }
 
-    public void UpdateChunkToSend(Dictionary<int, long[]> visibleChunks, long[] objectFootprints, int repetitionCount, bool ifUseChunkFootprint)
+    public void UpdateChunkToSend(Dictionary<int, long[]> visibleChunks, long[] objectFootprints, bool ifUseChunkFootprint)
     {
         if (vc == null)
         {
@@ -104,33 +108,43 @@ public abstract class User : MonoBehaviour
             {
                 if (allChunksFootprint[j] > 0)
                 {
-                    if (!chunkPlanned.ContainsKey(objectID))
+                    if (!chunkSentTimes.ContainsKey(objectID))
                     {
-                        chunkPlanned[objectID] = new long[allChunksFootprint.Length];
+                        chunkSentTimes[objectID] = new int[allChunksFootprint.Length];
                     }
-                    if (chunkPlanned[objectID][j] == 0 && !ChunksWaitToSend.Contains((objectID, j)))
+                    if (chunkSentTimes[objectID][j] < cc.numChunkRepeat && !ChunksWaitToSend.Contains((objectID, j)))
                     {
                         long priority = ifUseChunkFootprint ? allChunksFootprint[j] : objectFootprints[objectID];
-                        ChunksWaitToSend.Enqueue(0, (objectID, j), priority, repetitionCount, 0);
+                        ChunksWaitToSend.Enqueue(0, (objectID, j), priority, cc.numChunkRepeat - chunkSentTimes[objectID][j], 0);
                     }
                 }
             }
         }
     }
 
-    public void MarkAsSent(int objectID, int ChunkID, int chunkCountForObject, long priority)
+    public void MarkAsSent(int objectID, int ChunkID, int chunkCountForObject, int sentCounts)
     {
-        if (!chunkPlanned.ContainsKey(objectID))
+        if (!chunkSentTimes.ContainsKey(objectID))
         {
-            chunkPlanned[objectID] = new long[chunkCountForObject];
+            chunkSentTimes[objectID] = new int[chunkCountForObject];
         }
-        if (chunkPlanned[objectID][ChunkID] == 0)
-        {
-            chunkPlanned[objectID][ChunkID] = priority;
-        }
+        chunkSentTimes[objectID][ChunkID]++;
         if (ChunksWaitToSend.Contains((objectID, ChunkID)))
         {
-            ChunksWaitToSend.DecreaseCount((objectID, ChunkID), 1);
+            ChunksWaitToSend.DecreaseCount((objectID, ChunkID), sentCounts);
+        }
+    }
+
+    public void MarkAsSentMaxCount(int objectID, int ChunkID, int chunkCountForObject)
+    {
+        if (!chunkSentTimes.ContainsKey(objectID))
+        {
+            chunkSentTimes[objectID] = new int[chunkCountForObject];
+        }
+        chunkSentTimes[objectID][ChunkID] = cc.numChunkRepeat;
+        if (ChunksWaitToSend.Contains((objectID, ChunkID)))
+        {
+            ChunksWaitToSend.Remove((objectID, ChunkID));
         }
     }
 

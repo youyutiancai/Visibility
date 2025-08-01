@@ -71,6 +71,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
 
     private RenderTexture reusableRenderTexture;
     private Texture2D reusableTexture;
+    private int xStartPos, zStartPos, xEndPos, zEndPos, footprintCalculateminX, footprintCalculatemaxX, footprintCalculateminZ, footprintCalculatemaxZ;
 
     void Start()
     {
@@ -448,7 +449,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         yield return new WaitForSeconds(1f);
         Vector3 pos = ClusterControl.Instance.initialClusterCenter.transform.position;
         long[] unitRead = new long[objectsInScene.Count];
-        GetFootprintsInRegion(pos, 10f, ref unitRead);
+        GetFootprintsInRegion(pos, 1f, ref unitRead);
         visibleObjects = new List<GameObject>();
         colorRecordIDChunk = new Dictionary<Color, (int, int)>();
         colorCount = new Dictionary<Color, int>();
@@ -770,8 +771,20 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             switch (step)
             {
                 case CityPreprocessSteps.CalculateFootprintCorner:
-                    cameraPosIDX = 122;
-                    cameraPosIDZ = 597;
+                    
+                    Vector3 startPos = cc.footprintCalculateStartPos.transform.position;
+                    Vector3 endPos = cc.footprintCalculateEndPos.transform.position;
+                    xStartPos = Mathf.FloorToInt((startPos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                    zStartPos = Mathf.FloorToInt((startPos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                    xEndPos = Mathf.FloorToInt((endPos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                    zEndPos = Mathf.FloorToInt((endPos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                    footprintCalculateminX = Math.Min(xStartPos, xEndPos);
+                    footprintCalculatemaxX = Math.Min(xStartPos, xEndPos);
+                    footprintCalculateminZ = Math.Min(zStartPos, zEndPos);
+                    footprintCalculatemaxZ = Math.Max(zStartPos, zEndPos);
+                    //int minX = 0; maxX = gd.numGridX, minZ = 0, maxZ = gd.numGridZ;
+                    cameraPosIDX = footprintCalculateminX;
+                    cameraPosIDZ = footprintCalculateminZ;
                     ResetFootprintCount();
                     break;
 
@@ -780,18 +793,36 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                     break;
 
                 case CityPreprocessSteps.CalculateFootprintChunk:
-                    Vector3 pos = ClusterControl.Instance.initialClusterCenter.transform.position;
-                    cameraPosIDX = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
-                    cameraPosIDZ = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-                    int gridNumToInclude = Mathf.FloorToInt(10f / gd.gridSize);
+                    
+                    startPos = cc.footprintCalculateStartPos.transform.position;
+                    endPos = cc.footprintCalculateEndPos.transform.position;
+                    xStartPos = Mathf.FloorToInt((startPos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                    zStartPos = Mathf.FloorToInt((startPos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                    xEndPos = Mathf.FloorToInt((endPos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                    zEndPos = Mathf.FloorToInt((endPos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                    footprintCalculateminX = Math.Min(xStartPos, xEndPos);
+                    footprintCalculatemaxX = Math.Min(xStartPos, xEndPos);
+                    footprintCalculateminZ = Math.Min(zStartPos, zEndPos);
+                    footprintCalculatemaxZ = Math.Max(zStartPos, zEndPos);
                     cornersToProcess = new Queue<(int, int)>();
-                    for (int i = cameraPosIDX - gridNumToInclude; i < cameraPosIDX + gridNumToInclude + 1; i++)
+                    for (int i = footprintCalculateminX; i <= footprintCalculatemaxX; i++)
                     {
-                        for (int j = cameraPosIDZ - gridNumToInclude; j < cameraPosIDZ + gridNumToInclude + 1; j++)
+                        for (int j = footprintCalculateminZ; j <= footprintCalculatemaxZ; j++)
                         {
                             cornersToProcess.Enqueue((i, j));
                         }
                     }
+                    //Vector3 pos = cc.initialClusterCenter.transform.position;
+                    //cameraPosIDX = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                    //cameraPosIDZ = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                    //int gridNumToInclude = Mathf.FloorToInt(10f / gd.gridSize);
+                    //for (int i = cameraPosIDX - gridNumToInclude; i < cameraPosIDX + gridNumToInclude + 1; i++)
+                    //{
+                    //    for (int j = cameraPosIDZ - gridNumToInclude; j < cameraPosIDZ + gridNumToInclude + 1; j++)
+                    //    {
+                    //        cornersToProcess.Enqueue((i, j));
+                    //    }
+                    //}
                     Debug.Log($"corners to process: {string.Join(',', cornersToProcess)}");
                     ResetFootprintCount();
                     break;
@@ -812,7 +843,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
     private void ResetFootprintCount()
     {
         long totalAllocatedMemory = UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong();
-        Debug.Log(totalAllocatedMemory);
+        //Debug.Log(totalAllocatedMemory);
 
         // Check if memory usage has reached half of the specified limit
         if (totalAllocatedMemory >= 8589934592)
@@ -837,7 +868,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 break;
             case CityPreprocessSteps.CalculateFootprintChunk:
                 long[] unitRead = new long[objectsInScene.Count];
-                GetFootprintsInRegion(cameraPos, 10f, ref unitRead);
+                GetFootprintsInRegion(cameraPos, 1f, ref unitRead);
                 visibleObjects = new List<GameObject>();
                 colorRecordIDChunk = new Dictionary<Color, (int, int)>();
                 colorCount = new Dictionary<Color, int>();
@@ -925,12 +956,25 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             case CityPreprocessSteps.CalculateFootprintCorner:
                 WriteFootprints();
-                cameraPosIDZ++;
-                if (cameraPosIDZ > gd.numGridZ)
+                string filePath = "C:/Users/zhou1168/VRAR/Data/CornerLevelFootprints";
+                while (cameraPosIDX <= footprintCalculatemaxX)
                 {
-                    cameraPosIDX++;
-                    cameraPosIDZ = 0;
+                    cameraPosIDZ++;
+                    if (cameraPosIDZ > footprintCalculatemaxZ)
+                    {
+                        cameraPosIDX++;
+                        cameraPosIDZ = footprintCalculateminZ;
+                    }
+                    if (File.Exists($"{filePath}/{cameraPosIDX}_{cameraPosIDZ}.bin"))
+                    {
+                        Debug.Log($"file {cameraPosIDX}_{cameraPosIDZ}.bin already exists, skipping.");
+                        continue;
+                    } else
+                    {
+                        break;
+                    }
                 }
+                
                 if (cameraPosIDX <= gd.numGridX)
                 {
                     ResetFootprintCount();
@@ -956,6 +1000,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 //    }
                 //}
                 Debug.Log($"serializing {cameraPosIDX}, {cameraPosIDZ}");
+                filePath = "C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunk";
                 WriteFootprintByChunk();
                 while(cornersToProcess.Count > 0)
                 {
@@ -965,6 +1010,11 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                     if (cameraPosIDX < 0 || cameraPosIDZ < 0 || cameraPosIDX >= gd.numGridX || cameraPosIDZ >= gd.numGridZ)
                     {
                         Debug.Log($"Invalid corner position: {cameraPosIDX}, {cameraPosIDZ}");
+                        continue;
+                    }
+                    if (File.Exists($"{filePath}/{cameraPosIDX}_{cameraPosIDZ}.bin"))
+                    {
+                        Debug.Log($"file {cameraPosIDX}_{cameraPosIDZ}.bin already exists, skipping.");
                         continue;
                     }
                     ResetFootprintCount();
@@ -981,11 +1031,12 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             footprintCount[colorRecordID[c]] = colorCount[c];
         }
-        string filePath = "C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprints";
+        string filePath = "C:/Users/zhou1168/VRAR/Data/CornerLevelFootprints";
         //Vector3 pos = footprintCameras.transform.position;
-        string fileName = $"{filePath}{cameraPosIDX}_{cameraPosIDZ}.bin";
+        string fileName = $"{filePath}/{cameraPosIDX}_{cameraPosIDZ}.bin";
         byte[] bytes = ConvertIntArrayToByteArray(footprintCount);
         File.WriteAllBytes(fileName, bytes);
+        Debug.Log($"Wrote binary footprint data to: {fileName}");
     }
 
     public void WriteFootprintByChunk()

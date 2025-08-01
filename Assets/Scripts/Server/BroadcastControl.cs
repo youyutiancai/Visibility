@@ -6,12 +6,11 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
-using Unity.VisualScripting;
 using UnityEngine;
-//using UnityEngine.tvOS;
+using UnityTCPClient.Assets.Scripts;
 
 
-public class BroadcastControl : MonoBehaviour
+public class BroadcastControl : Singleton<BroadcastControl>
 {
     private IPAddress BROADCAST_IP = IPAddress.Broadcast;// IPAddress.Parse("192.168.1.255");//  //IPAddress.Parse("192.168.0.211");
     private const int PORT = 5005;
@@ -20,9 +19,8 @@ public class BroadcastControl : MonoBehaviour
 
     private UdpClient udpClient;
     private bool appRunning;
-    Thread broadcastThread;
-    Thread retransmissionThread;
-    private CancellationToken ct;
+    //Thread retransmissionThread;
+    public CancellationToken ct;
     //private const int CHUNK_SIZE = 1400;
     private const int HEADER_SIZE = 12;
     private int bundleID, currentChunkToSend;
@@ -30,96 +28,34 @@ public class BroadcastControl : MonoBehaviour
     private Dictionary<int, byte[]> chunks;
     //private MeshVariant mv;
     private NetworkControl nc;
-    private List<byte[]> chunksOfObject;
-    private float sleepTime, timeSinceLastUpdate;
+    private VisibilityCheck vc;
+    private ClusterControl cc;
 
-    // Object metadata (unused in this snippet but left for context)
-    private List<Dictionary<string, object>> objectTable = new List<Dictionary<string, object>>()
+    void Start()
     {
-        new Dictionary<string, object>() { { "name", "Cube" }, { "size", 1024 } },
-        new Dictionary<string, object>() { { "name", "Sphere" }, { "size", 1024 } },
-        new Dictionary<string, object>() { { "name", "Pyramid" }, { "size", 512 } }
-    };
-
-    // Constructor – note that for MonoBehaviour you typically initialize in Awake/Start.
-    public BroadcastControl(CancellationToken _ct)
-    {
-        ct = _ct;
         udpClient = new UdpClient();
         udpClient.Client.SendBufferSize = 1024 * 1024;
         udpClient.EnableBroadcast = true;
-        Debug.Log(udpClient.Client.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendBuffer));
         appRunning = true;
+        vc = VisibilityCheck.Instance; 
+        cc = ClusterControl.Instance;
         nc = NetworkControl.Instance;
         bundleID = 0;
         chunks = new Dictionary<int, byte[]>();
-        //mv = new RandomizedMesh();
 
-        // Start the thread to broadcast the asset bundle.
-        //broadcastThread = new Thread(() => BroadcastObjectData());
-        //broadcastThread.Start();
-
-        // Start the thread that listens for retransmission requests.
-        retransmissionThread = new Thread(() => ListenForRetransmissionRequests());
-        retransmissionThread.Start();
-    }
-
-    // Entry point for broadcasting object data.
-    public void BroadcastObjectData(int objectID, float _sleepTime = 0.01f)
-    {
-        sleepTime = _sleepTime;
-        timeSinceLastUpdate = 0;
-        //Dispatcher.Instance.Enqueue(() => BroadcastChunks(objectID));
-        // For demonstration, we broadcast a prefab named "balcony_1".
-        //BroadcastPrefab("balcony_1");
-    }
-
-    //private void BroadcastChunks(int objectID)
-    //{
-    //    chunksOfObject = mv.RequestChunks(objectID, CHUNK_SIZE);
-    //    nc.readyForNextObject = false;
-    //    currentChunkToSend = 0;
-    //}
-
-    public void UpdateChunkSending()
-    {
-        timeSinceLastUpdate += Time.deltaTime;
-        //Debug.Log($"{Time.deltaTime * 1000}");
-        if (nc.readyForNextObject || timeSinceLastUpdate < sleepTime || chunksOfObject == null || currentChunkToSend >= chunksOfObject.Count)
-            return;
-        timeSinceLastUpdate = 0;
-        int maxToSend = Mathf.Max(0, Mathf.Min(chunksOfObject.Count - currentChunkToSend, 5));
-        for (int i = 0; i < maxToSend; i++)
+        if (cc.SimulationStrategy == SimulationStrategyDropDown.RealUserCluster || cc.SimulationStrategy == SimulationStrategyDropDown.RealUserIndi)
         {
-            BroadcastChunk(chunksOfObject[currentChunkToSend]);
-            currentChunkToSend++;
+            Debug.Log($"nc cts null: {nc.cts is null}");
+            ct = nc.cts.Token;
+            // Start the thread that listens for retransmission requests.
+            //retransmissionThread = new Thread(() => ListenForRetransmissionRequests());
+            //retransmissionThread.Start();
         }
-
-        if (currentChunkToSend == chunksOfObject.Count)
-        {
-            nc.readyForNextObject = true;
-            nc.timeSinceLastChunkRequest = 0;
-        }
-        //for (int i = currentChunkToSend; i < chunksOfObject.Count; i++)
-        //{
-        //    BroadcastChunk(chunksOfObject[i]);
-        //}
-        //nc.readyForNextObject = true;
-        //nc.timeSinceLastChunkRequest = 0;
     }
 
     // Sends the provided message as a broadcast UDP packet.
     public void BroadcastChunk(byte[] message)
     {
-        if (nc.totalChunkSent == 0)
-        {
-            nc.timeStartSendingChunks = Time.time;
-        }
-        nc.totalChunkSent++;
-        nc.totalBytesSent += message.Length;
-        nc.timePassedForSendingChunks = Time.time - nc.timeStartSendingChunks;
-        //byte[] placeHolder = BitConverter.GetBytes('a');
-        //udpClient.Send(placeHolder, placeHolder.Length, new IPEndPoint(IPAddress.Parse("192.168.1.137"), PORT));
         switch (nc.sendingMode) {
 
             case SendingMode.BROADCAST:
@@ -147,8 +83,6 @@ public class BroadcastControl : MonoBehaviour
                 Buffer.BlockCopy(BitConverter.GetBytes((int)TCPMessageType.CHUNK), 0, new_message, sizeof(int), sizeof(int));
                 Buffer.BlockCopy(BitConverter.GetBytes((int)nc.cc.meshDecodeMethod), 0, new_message, sizeof(int) * 2, sizeof(int));
                 Buffer.BlockCopy(message, 0, new_message, sizeof(int) * 3, message.Length);
-                //Debug.Log($"{nc}");
-                //Debug.Log($"{nc.tc}");
                 nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.173"), new_message);
                 nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.101"), new_message);
                 nc.tc.SendMessageToClient(IPAddress.Parse("192.168.1.174"), new_message);
@@ -217,7 +151,6 @@ public class BroadcastControl : MonoBehaviour
             byte[] missingChunk = nc.cc.objectChunksVTSeparate[req.objectID][req.missingChunks[i]];
             if (!nc.cc.chunksToSend.Contains((req.objectID, i)))
             {
-                //nc.cc.chunksToSend.AddTimes(missingChunk, distance, 1);
             }
         }
     }
@@ -225,15 +158,10 @@ public class BroadcastControl : MonoBehaviour
     void OnApplicationQuit()
     {
         appRunning = false;
-        if (broadcastThread != null && broadcastThread.IsAlive)
-        {
-            //broadcastThread.Join();
-            broadcastThread.Join();
-        }
-        if (retransmissionThread != null && retransmissionThread.IsAlive)
-        {
-            retransmissionThread.Join();
-        }
+        //if (retransmissionThread != null && retransmissionThread.IsAlive)
+        //{
+        //    retransmissionThread.Join();
+        //}
         udpClient.Close();
         udpClient.Dispose();
     }

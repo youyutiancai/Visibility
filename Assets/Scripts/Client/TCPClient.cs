@@ -257,24 +257,27 @@ public class TCPClient : MonoBehaviour
 
     }
 
-    public void OnApplicationQuit()
+    void OnApplicationQuit() => Disconnect();
+    void OnDisable() => Disconnect();
+    void OnDestroy() => Disconnect();
+
+    private void Disconnect()
     {
-        Debug.Log("onapplicationquit");
-        client.Close();
-        listenerThread.Abort();
+        try
+        {
+            if (client?.Connected == true)
+            {
+                client.Client.Shutdown(SocketShutdown.Both);
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"Shutdown failed: {e.Message}");
+        }
+
+        try { client?.Close(); } catch (Exception e) { Debug.LogWarning($"Close failed: {e.Message}"); }
+
+        try { listenerThread?.Join(100); } catch { }
     }
 
-    public void OnDisable()
-    {
-        Debug.Log("onDisable");
-        client.Close();
-        listenerThread.Abort();
-    }
-
-    public void OnDestroy()
-    {
-        Debug.Log("onDestroy");
-        client.Close();
-        listenerThread.Abort();
-    }
 }

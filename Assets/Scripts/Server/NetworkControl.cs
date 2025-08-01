@@ -11,9 +11,10 @@ using UnityTCPClient.Assets.Scripts;
 
 public class NetworkControl : Singleton<NetworkControl>
 {
-    BroadcastControl bcc;
+    public BroadcastControl bcc;
     public TCPControl tc;
-    private CancellationTokenSource cts;
+    [HideInInspector]
+    public CancellationTokenSource cts;
     public ClusterControl cc;
     public VisibilityCheck vc;
     [HideInInspector]
@@ -29,20 +30,14 @@ public class NetworkControl : Singleton<NetworkControl>
 
     private void Awake()
     {
+        cts = new CancellationTokenSource();
     }
 
     void Start()
     {
         cc = ClusterControl.Instance;
         vc = VisibilityCheck.Instance;
-        if (cc.SimulationStrategy == SimulationStrategyDropDown.RealUserCluster || cc.SimulationStrategy == SimulationStrategyDropDown.RealUserIndi)
-        {
-            Dispatcher dispatcher = Dispatcher.Instance;
-            VisibilityCheck visibilityCheck = VisibilityCheck.Instance;
-            cts = new CancellationTokenSource();
-            bcc = new BroadcastControl(cts.Token);
-            tc = new TCPControl(cts.Token, dispatcher, visibilityCheck, cc);
-        }
+        Dispatcher dispatcher = Dispatcher.Instance;
         readyForNextObject = true;
         totalChunkSent = 0;
 
@@ -65,14 +60,36 @@ public class NetworkControl : Singleton<NetworkControl>
     {
     }
 
-    public void BroadcastObjectData(int objectID, float _sleepTime = 0.01f)
-    {
-        bcc.BroadcastObjectData(objectID, _sleepTime);
-    }
-
     public void BroadcastChunk(byte[] chunk)
     {
+        if (totalChunkSent == 0)
+        {
+            timeStartSendingChunks = Time.time;
+        }
+        totalChunkSent++;
+        totalBytesSent += chunk.Length;
+        timePassedForSendingChunks = Time.time - timeStartSendingChunks;
         bcc.BroadcastChunk(chunk);
+    }
+
+    public void SendChunkTCP(RealUser user, byte[] chunk)
+    {
+        if (totalChunkSent == 0)
+        {
+            timeStartSendingChunks = Time.time;
+        }
+        totalChunkSent++;
+        totalBytesSent += chunk.Length;
+        timePassedForSendingChunks = Time.time - timeStartSendingChunks;
+        try
+        {
+            tc.SendMessageToUser(user, chunk);
+        }
+        catch (Exception e)
+        {
+            Debug.Log($"{tc is null}, {user is null}, {chunk is null}");
+        }
+        
     }
 
     private async void OnApplicationQuit()

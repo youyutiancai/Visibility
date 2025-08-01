@@ -16,7 +16,8 @@ public class ClusterControl : Singleton<ClusterControl>
 {
     private const int CHUNK_SIZE = 1400;
 
-    public GameObject randomMovingUserPrefab, followUserPrefab, realUserPrefab, clusterPrefab, initialClusterCenter;  // clusterPrefab is used to represent a cluster visually
+    public GameObject randomMovingUserPrefab, followUserPrefab, realUserPrefab, clusterPrefab, initialClusterCenter, footprintCalculateStartPos,
+        footprintCalculateEndPos;  // clusterPrefab is used to represent a cluster visually
     //public SyntheticPathNode[] clusterInitPoses;
     //public SyntheticPathNode[] paths;
     public TextMeshProUGUI displayText;
@@ -53,7 +54,7 @@ public class ClusterControl : Singleton<ClusterControl>
     private int[] visibleObjectsInRegion;
     private long[] objectFootPrintsInRegion, newObjectCount;
     private GridDivide gd;
-    private int objectSentIndi;
+    private int objectSentIndi, userIDToSend;
     private GameObject pathNodesRoot;
     private NetworkControl nc;
     private bool canSendObjects;
@@ -82,6 +83,7 @@ public class ClusterControl : Singleton<ClusterControl>
         visibleObjectsInRegion = new int[vc.objectsInScene.Count];
         objectFootPrintsInRegion = new long[vc.objectsInScene.Count];
         objectSentIndi = 0;
+        userIDToSend = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
         initialClusterCenterPos = initialClusterCenter.transform.position;
         objectsWaitToBeSent = new PriorityQueue<int, long, float, int>();
@@ -97,8 +99,11 @@ public class ClusterControl : Singleton<ClusterControl>
         
         objectChunksVTSeparate = new Dictionary<int, List<byte[]>>();
         objectChunksVTGrouped = new Dictionary<int, List<byte[]>>();
-        LoadAllChunks("Assets/Data/objectChunksGrouped", ref objectChunksVTGrouped);
-        LoadAllChunks("Assets/Data/ObjectChunks", ref objectChunksVTSeparate);
+        if (vc.step == CityPreprocessSteps.NoPreProcessStep)
+        {
+            LoadAllChunks("Assets/Data/objectChunksGrouped", ref objectChunksVTGrouped);
+            LoadAllChunks("Assets/Data/ObjectChunks", ref objectChunksVTSeparate);
+        }
         //Dictionary<int, long[]> result = new Dictionary<int, long[]>();
         //vc.ReadFootprintByChunkInRegion(initialClusterCenterPos + new Vector3(0, 0, -1), epsilon, ref result);
         //int count = 0;
@@ -328,8 +333,6 @@ public class ClusterControl : Singleton<ClusterControl>
         timeSinceLastUpdate += Time.deltaTime;
         nc.timeSinceLastChunkRequest += Time.deltaTime;
         chunksToSend.ifHaveChunkCoolingDown = ifHaveChunkCoolingDown;
-        //Debug.Log($"sending mode: {nc.sendingMode}");
-        int numChunkRepeatLocal = nc.sendingMode == SendingMode.UNICAST_TCP ? 1 : numChunkRepeat;
 
         if ((SimulationStrategy == SimulationStrategyDropDown.RealUserCluster || SimulationStrategy == SimulationStrategyDropDown.RealUserIndi) && Keyboard.current.bKey.wasPressedThisFrame)
         {
@@ -374,7 +377,7 @@ public class ClusterControl : Singleton<ClusterControl>
                                 byte[] newChunk = objectChunksVTGrouped[objectID][i];
                                 if (footprints[i] > 0 && !chunksToSend.Contains((objectID, i)))
                                 {
-                                    chunksToSend.Enqueue(newChunk, (objectID, i), footprints[i], numChunkRepeatLocal, 0);
+                                    chunksToSend.Enqueue(newChunk, (objectID, i), footprints[i], numChunkRepeat, 0);
                                 }
                             }
                         }
@@ -419,11 +422,11 @@ public class ClusterControl : Singleton<ClusterControl>
                         //        {
                         //            if (useChunkFootAsPriority)
                         //            {
-                        //                chunksToSend.Enqueue(newChunk, (objectID, i), footprints[i], numChunkRepeatLocal, 0);
+                        //                chunksToSend.Enqueue(newChunk, (objectID, i), footprints[i], numChunkRepeat, 0);
                         //            }
                         //            else
                         //            {
-                        //                chunksToSend.Enqueue(newChunk, (objectID, i), newObjectCount[objectID], numChunkRepeatLocal, 0);
+                        //                chunksToSend.Enqueue(newChunk, (objectID, i), newObjectCount[objectID], numChunkRepeat, 0);
                         //            }
                         //        }
                         //    }
@@ -446,7 +449,7 @@ public class ClusterControl : Singleton<ClusterControl>
                             {
                                 vc.GetFootprintsInRegion(userPosition, epsilon, ref newObjectCount);
                             }
-                            user.UpdateChunkToSend(chunkFootprintInfo, newObjectCount, numChunkRepeatLocal, useChunkFootAsPriority);
+                            user.UpdateChunkToSend(chunkFootprintInfo, newObjectCount, useChunkFootAsPriority);
 
                             Debug.Log($"RealUserIndiStrategy chunks left to send: {user.ChunksWaitToSend.Count}");
                         }
@@ -496,7 +499,7 @@ public class ClusterControl : Singleton<ClusterControl>
             {
                 if (!chunksToSend.Contains((sendingObjectIdx, i)))
                 {
-                    chunksToSend.Enqueue(chunks[i], (sendingObjectIdx, i), priority, numChunkRepeatLocal, 0);
+                    chunksToSend.Enqueue(chunks[i], (sendingObjectIdx, i), priority, numChunkRepeat, 0);
                 }
             }
             nc.timeSinceLastChunkRequest = 0;
@@ -536,38 +539,50 @@ public class ClusterControl : Singleton<ClusterControl>
             //        chunksCoolingDown.Dequeue();
             //    }
             //}
-            int count = 0, userIDToSend = 0;
-            User[] allUsers = new User[transform.childCount];
+            int count = 0;
+            RealUser[] allUsers = new RealUser[transform.childCount];
             int totalChunksWaitToSend = 0;
             for (int i = 0; i < transform.childCount; i++)
             {
-                allUsers[i] = transform.GetChild(i).GetComponent<User>();
+                allUsers[i] = transform.GetChild(i).GetComponent<RealUser>();
                 totalChunksWaitToSend += allUsers[i].ChunksWaitToSend.Count;
             }
-            //Debug.Log(totalChunksWaitToSend);
             if (totalChunksWaitToSend > 0)
             {
                 while (count < chunksSentEachTime)
                 {
+                    userIDToSend = userIDToSend % allUsers.Length;
                     if (allUsers[userIDToSend].ChunksWaitToSend.Count == 0)
                     {
                         userIDToSend = (userIDToSend + 1) % allUsers.Length;
                         continue;
                     }
                     (int, int) id = allUsers[userIDToSend].ChunksWaitToSend.Peek();
-                    int chunksLeft = 0;
-                    for (int i = 0; i < allUsers.Length; i++)
+                    if (nc.sendingMode == SendingMode.UNICAST_TCP)
                     {
-                        allUsers[i].MarkAsSent(id.Item1, id.Item2, objectChunksVTGrouped[id.Item1].Count, allUsers[userIDToSend].ChunksWaitToSend.GetPriority(id));
-                        chunksLeft += allUsers[userIDToSend].ChunksWaitToSend.Count;
+                        allUsers[userIDToSend].MarkAsSentMaxCount(id.Item1, id.Item2, objectChunksVTGrouped[id.Item1].Count);
+                        nc.SendChunkTCP(allUsers[userIDToSend], objectChunksVTGrouped[id.Item1][id.Item2]);
                     }
-                    nc.BroadcastChunk(objectChunksVTGrouped[id.Item1][id.Item2]);
-                    if (chunksLeft == 0)
+                    else
                     {
+                        for (int i = 0; i < allUsers.Length; i++)
+                        {
+                            allUsers[i].MarkAsSent(id.Item1, id.Item2, objectChunksVTGrouped[id.Item1].Count, 1);
+                        }
+                        nc.BroadcastChunk(objectChunksVTGrouped[id.Item1][id.Item2]);
+                    }
+                    int nextUserID = userIDToSend;
+                    do
+                    {
+                        nextUserID = (nextUserID + 1) % allUsers.Length;
+                        if (nextUserID == userIDToSend)
+                            break;
+                    }
+                    while (allUsers[nextUserID].ChunksWaitToSend.Count == 0);
+                    if (nextUserID == userIDToSend && allUsers[nextUserID].ChunksWaitToSend.Count == 0)
                         break;
-                    }
                     count++;
-                    userIDToSend = (userIDToSend + 1) % allUsers.Length;
+                    userIDToSend = nextUserID;
                 }
             }
             timeSinceLastChunksent = 0;

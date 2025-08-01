@@ -18,18 +18,19 @@ public class TCPControl : MonoBehaviour
     public static Dictionary<IPAddress, TcpClient> clients;
     private static Dictionary<IPAddress, Task> clientTasks;
     private Dispatcher dispatcher;
-    private VisibilityCheck visibilityCheck;
+    private VisibilityCheck vc;
     private ClusterControl cc;
     private NetworkControl nc;
     public Dictionary<IPAddress, RealUser> addressToUser;
 
-    public TCPControl(CancellationToken _ct, Dispatcher _dispatcher, VisibilityCheck _visibilityCheck, ClusterControl _clusterControl)
+
+    private void Start()
     {
-        ct = _ct;
-        dispatcher = _dispatcher;
-        visibilityCheck = _visibilityCheck;
-        cc = _clusterControl;
+        dispatcher = Dispatcher.Instance;
+        vc = VisibilityCheck.Instance;
+        cc = ClusterControl.Instance;
         nc = NetworkControl.Instance;
+        ct = nc.cts.Token;
         iP4Address = IPAddress.Any;
         clients = new Dictionary<IPAddress, TcpClient>();
         clientTasks = new Dictionary<IPAddress, Task>();
@@ -92,6 +93,7 @@ public class TCPControl : MonoBehaviour
         {
             while (!ct.IsCancellationRequested)
             {
+                // Await data only if available (non-blocking), else yield
                 if (!stream.DataAvailable)
                 {
                     await Task.Delay(10, ct);
@@ -100,6 +102,7 @@ public class TCPControl : MonoBehaviour
 
                 int byteCount = await stream.ReadAsync(buffer, 0, buffer.Length, ct);
 
+                // Client disconnected
                 if (byteCount == 0)
                     break;
 
@@ -108,7 +111,10 @@ public class TCPControl : MonoBehaviour
                 dispatcher.Enqueue(() => HandleMessageTCP(client, data));
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            Debug.Log($"Client {ep} read canceled");
+        }
         catch (Exception e)
         {
             Debug.Log($"Client {ep} read error: {e.Message}");
@@ -122,9 +128,14 @@ public class TCPControl : MonoBehaviour
                 addressToUser.Remove(ep.Address);
                 Debug.Log($"Client {ep} has been removed");
             }
-            client.Close();
+
+            // Forcefully close socket to ensure ReadAsync exits
+            try { client.Client?.Shutdown(SocketShutdown.Both); } catch { }
+            try { stream?.Close(); } catch { }
+            try { client?.Close(); } catch { }
         }
     }
+
 
     private void HandleMessageTCP(TcpClient client, byte[] data)
     {
@@ -240,6 +251,16 @@ public class TCPControl : MonoBehaviour
         }
     }
 
+    public void SendMessageToUser(RealUser user, byte[] message)
+    {
+        byte[] new_message = new byte[message.Length + sizeof(int) * 3];
+        Buffer.BlockCopy(BitConverter.GetBytes(new_message.Length - sizeof(int)), 0, new_message, 0, sizeof(int));
+        Buffer.BlockCopy(BitConverter.GetBytes((int)TCPMessageType.CHUNK), 0, new_message, sizeof(int), sizeof(int));
+        Buffer.BlockCopy(BitConverter.GetBytes((int)nc.cc.meshDecodeMethod), 0, new_message, sizeof(int) * 2, sizeof(int));
+        Buffer.BlockCopy(message, 0, new_message, sizeof(int) * 3, message.Length);
+        SendMessageToClient(user.tcpEndPoint.Address, new_message);
+    }
+
     public void SendMessageToClient(IPAddress clientEndPoint, byte[] message)
     {
         //Debug.Log($"Sending message to client {clients[clientEndPoint].Available} of size {BitConverter.ToInt32(message, 0)}");
@@ -267,8 +288,16 @@ public class TCPControl : MonoBehaviour
         {
             foreach (var kvp in clients)
             {
-                try { kvp.Value?.Close(); }
-                catch (Exception e) { Debug.Log($"Error closing client {kvp.Key}: {e.Message}"); }
+                try
+                {
+                    kvp.Value.Client?.Shutdown(SocketShutdown.Both);
+                    kvp.Value?.GetStream().Close();
+                    kvp.Value?.Close();
+                }
+                catch (Exception e)
+                {
+                    Debug.Log($"Error closing client {kvp.Key}: {e.Message}");
+                }
             }
             clients.Clear();
         }
@@ -283,7 +312,7 @@ public class TCPControl : MonoBehaviour
         }
 
         clientTasks.Clear();
-
         Debug.Log("TCPControl shutdown complete.");
     }
+
 }
