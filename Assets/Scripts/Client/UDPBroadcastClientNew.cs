@@ -69,6 +69,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private int bufferSize = 1024 * 1024;
 
     public int numVerticesPerChunk = 57;
+    public GameObject ground;
     private Dictionary<int, GameObject> recGameObjects = new Dictionary<int, GameObject>();
     private Dictionary<int, Vector3[]> verticesDict = new Dictionary<int, Vector3[]>();
     private Dictionary<int, List<List<int>>> trianglesDict = new Dictionary<int, List<List<int>>>();
@@ -85,6 +86,12 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private float lastAdjustTime = 0f, adjustCooldown = 0.3f, lastColliderUpdateTime, colliderUpdateInterval;
     private bool isShuttingDown = false;
 
+    private Matrix4x4 lightViewProjMatrix = new Matrix4x4(new Vector4(0.00433f, -0.00192f, -0.00064f, 0.00000f),
+                new Vector4(0.00000f, 0.00321f, -0.00153f, 0.00000f),
+                new Vector4(0.00250f, 0.00332f, 0.00111f, 0.00000f),
+                new Vector4(0.00049f, -0.22139f, -0.39583f, 1.00000f));
+    private Texture2D shadowMap;
+    
     private static UdpClient retransmissionClient = new UdpClient();
 
     private class MeshTransmission
@@ -108,6 +115,9 @@ public class UDPBroadcastClientNew : MonoBehaviour
     }
     private void Start()
     {
+        shadowMap = Resources.Load<Texture2D>("shadowMap.png");
+        Shader.SetGlobalTexture("_CustomShadowMap", shadowMap);
+        Shader.SetGlobalMatrix("_LightViewProjection", lightViewProjMatrix);
         colliderUpdateInterval = 2f;
         colliderToUpdateEachFrame = 10;
         currentColliderToUpdate = 0;
@@ -240,7 +250,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
         int numCollidersUpdatedThisFrame = 0;
         int objectIDStarted = currentColliderToUpdate;
-        while (numCollidersUpdatedThisFrame < colliderToUpdateEachFrame)
+        while (numCollidersUpdatedThisFrame < colliderToUpdateEachFrame && m_TCPClient.objectHolders is not null)
         {
             currentColliderToUpdate = (currentColliderToUpdate + 1) % m_TCPClient.objectHolders.Length;
             if (currentColliderToUpdate == objectIDStarted)
@@ -685,7 +695,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 materials.Add(m_ResourceLoader.LoadMaterialByName(matName));
             }
             recGameObject.GetComponent<MeshRenderer>().materials = materials.ToArray();
-
             recGameObject.transform.position = position;
             recGameObject.transform.eulerAngles = eulerAngles;
             recGameObject.transform.localScale = scale;
@@ -793,12 +802,40 @@ public class UDPBroadcastClientNew : MonoBehaviour
             recGameObject.GetComponent<MeshFilter>().mesh = newMesh;
             recGameObject.AddComponent<MeshRenderer>();
 
+            //List<Material> materials = new List<Material>();
+            //foreach (string matName in materialNames)
+            //{
+            //    materials.Add(m_ResourceLoader.LoadMaterialByName(matName));
+            //}
+            //recGameObject.GetComponent<MeshRenderer>().materials = materials.ToArray();
+
             List<Material> materials = new List<Material>();
             foreach (string matName in materialNames)
             {
-                materials.Add(m_ResourceLoader.LoadMaterialByName(matName));
+                if (matName == "null")
+                {
+                    materials.Add(m_ResourceLoader.LoadMaterialByName(matName));
+                    continue;
+                }
+                //Debug.Log($"{matName}, {matName == "null"}, {matName is null}");
+                Material oldMaterial = m_ResourceLoader.LoadMaterialByName(matName);
+                int mode = oldMaterial.GetInt("_Mode");
+                Material newMaterial = new Material(Shader.Find("Custom/Pure_Color_Shadow"));
+                if (mode == 1)
+                {
+                    newMaterial.SetFloat("_Cutoff", oldMaterial.GetFloat("_Cutoff"));
+                }
+                else
+                {
+                    newMaterial.SetFloat("_Cutoff", 0);
+                }
+                newMaterial.SetColor("_Color", oldMaterial.GetColor("_Color"));
+                materials.Add(newMaterial);
             }
             recGameObject.GetComponent<MeshRenderer>().materials = materials.ToArray();
+
+            Shader.SetGlobalTexture("_CustomShadowMap", shadowMap);
+            Shader.SetGlobalMatrix("_LightViewProjection", lightViewProjMatrix);
             recGameObject.AddComponent<MeshCollider>();
             recGameObject.layer = 1;
 

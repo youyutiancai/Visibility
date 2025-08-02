@@ -139,6 +139,10 @@ PrefabInstance:
       propertyPath: m_TagString
       value: Terrain
       objectReference: {fileID: 0}
+    - target: {fileID: 1902770365646634, guid: 36888e805d00a0b4b82757e3692ede9b, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4509780323381818, guid: 36888e805d00a0b4b82757e3692ede9b, type: 3}
       propertyPath: m_RootOrder
       value: 75
@@ -192,9 +196,13 @@ PrefabInstance:
       value: -180.00002
       objectReference: {fileID: 0}
     - target: {fileID: 23804647764631420, guid: 36888e805d00a0b4b82757e3692ede9b, type: 3}
+      propertyPath: m_ReceiveShadows
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 23804647764631420, guid: 36888e805d00a0b4b82757e3692ede9b, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
-      objectReference: {fileID: 2100000, guid: 754229dc66b057d40bcd2ebe48424571, type: 2}
+      objectReference: {fileID: 2100000, guid: c0e6baeb54e82bc4cb0a6b7837d3ea3f, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -601,6 +609,7 @@ MonoBehaviour:
   portUDP: 5005
   portTCP: 5006
   numVerticesPerChunk: 57
+  ground: {fileID: 0}
   headsetTransform: {fileID: 1290289617}
 --- !u!114 &742252864
 MonoBehaviour:

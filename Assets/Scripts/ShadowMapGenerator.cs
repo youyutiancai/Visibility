@@ -3,13 +3,15 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class ShadowMapGenerator : MonoBehaviour
 {
     //public Texture2D shadowMap;
     public GameObject geometry;
-    public Camera camera, lightCamera;
+    public Camera lightCamera;
     public Light mainLight;
+    public bool ifCreatingShadowMap = true;
     private bool capture;
     bool hasSet;
     private List<float> timesForFrames;
@@ -26,22 +28,29 @@ public class ShadowMapGenerator : MonoBehaviour
 
     private void StartShadowing()
     {
-        //UpdateShadowMapShader(geometry, "Custom/Shadow_map");
-        UpdateChild(geometry);
-        Shader.SetGlobalVector("_EnvPos", camera.transform.position);
-        Shader.SetGlobalVector("_UserPos", camera.transform.position);
-        byte[] shadowMapbytes = File.ReadAllBytes($"Assets/Materials/Textures/shadowMap.png");
-        Texture2D shadowMap = new Texture2D(2, 2);
-        shadowMap.LoadImage(shadowMapbytes);
-        Shader.SetGlobalTexture("_CustomShadowMap", shadowMap);
-        //Matrix4x4 mainLightViewProjectionMatrix = lightCamera.projectionMatrix * lightCamera.worldToCameraMatrix;
-        //Debug.Log($"{mainLightViewProjectionMatrix}");
-        Matrix4x4 lightViewProjMatrix = new Matrix4x4(new Vector4(0.00433f, -0.00192f, -0.00064f, 0.00000f),
-            new Vector4(0.00000f, 0.00321f, -0.00153f, 0.00000f),
-            new Vector4(0.00250f, 0.00332f, 0.00111f, 0.00000f),
-            new Vector4(0.00049f, -0.22139f, -0.39583f, 1.00000f));
-        Shader.SetGlobalMatrix("_LightViewProjection", lightViewProjMatrix);
-        Debug.Log(lightViewProjMatrix);
+        if (ifCreatingShadowMap)
+        {
+            UpdateShadowMapShader(geometry, "Custom/Shadow_map");
+            Matrix4x4 mainLightViewProjectionMatrix = lightCamera.projectionMatrix * lightCamera.worldToCameraMatrix;
+            Debug.Log($"{mainLightViewProjectionMatrix}");
+            Shader.SetGlobalMatrix("_LightViewProjection", mainLightViewProjectionMatrix);
+        } else
+        {
+            UpdateChild(geometry);
+            byte[] shadowMapbytes = File.ReadAllBytes(Application.dataPath + "./Resources/Materials/Textures/shadowMap_new.png");
+            Texture2D shadowMap = new Texture2D(2, 2);
+            shadowMap.LoadImage(shadowMapbytes);
+            Matrix4x4 mainLightViewProjectionMatrix = lightCamera.projectionMatrix * lightCamera.worldToCameraMatrix;
+            Shader.SetGlobalTexture("_CustomShadowMap", shadowMap);
+            Shader.SetGlobalMatrix("_LightViewProjection", mainLightViewProjectionMatrix);
+        }
+
+        //Matrix4x4 lightViewProjMatrix = new Matrix4x4(new Vector4(0.00433f, -0.00192f, -0.00064f, 0.00000f),
+        //    new Vector4(0.00000f, 0.00321f, -0.00153f, 0.00000f),
+        //    new Vector4(0.00250f, 0.00332f, 0.00111f, 0.00000f),
+        //    new Vector4(0.00049f, -0.22139f, -0.39583f, 1.00000f));
+        //
+        //Debug.Log(lightViewProjMatrix);
     }
 
     void OnPostRenderCallback(Camera cam)
@@ -63,7 +72,7 @@ public class ShadowMapGenerator : MonoBehaviour
             Rect regionToReadFrom = new Rect(0, 0, screenWidth, screenHeight);
             destinationTexture.ReadPixels(regionToReadFrom, xPosToWriteTo, yPosToWriteTo, updateMipMapsAutomatically);
             destinationTexture.Apply();
-            SaveTextureToFile(destinationTexture, "Materials/Textures/shadowMap.png");
+            SaveTextureToFile(destinationTexture, "./Resources/Materials/Textures/shadowMap_new.png");
 
             RenderTexture.active = null;            
             //UpdateShadowMapShader(geometry, "Custom/Shadow_map_alt");
@@ -124,7 +133,7 @@ public class ShadowMapGenerator : MonoBehaviour
         //    //lightCamera.gameObject.SetActive(false);
         //    hasSet = true;
         //}
-        if (Input.GetKeyDown(KeyCode.S))
+        if (Keyboard.current.sKey.wasPressedThisFrame)
         {
             capture = true;
         }
