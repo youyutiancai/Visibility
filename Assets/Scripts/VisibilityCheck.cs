@@ -779,7 +779,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                     xEndPos = Mathf.FloorToInt((endPos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
                     zEndPos = Mathf.FloorToInt((endPos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
                     footprintCalculateminX = Math.Min(xStartPos, xEndPos);
-                    footprintCalculatemaxX = Math.Min(xStartPos, xEndPos);
+                    footprintCalculatemaxX = Math.Max(xStartPos, xEndPos);
                     footprintCalculateminZ = Math.Min(zStartPos, zEndPos);
                     footprintCalculatemaxZ = Math.Max(zStartPos, zEndPos);
                     //int minX = 0; maxX = gd.numGridX, minZ = 0, maxZ = gd.numGridZ;
@@ -801,7 +801,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                     xEndPos = Mathf.FloorToInt((endPos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
                     zEndPos = Mathf.FloorToInt((endPos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
                     footprintCalculateminX = Math.Min(xStartPos, xEndPos);
-                    footprintCalculatemaxX = Math.Min(xStartPos, xEndPos);
+                    footprintCalculatemaxX = Math.Max(xStartPos, xEndPos);
                     footprintCalculateminZ = Math.Min(zStartPos, zEndPos);
                     footprintCalculatemaxZ = Math.Max(zStartPos, zEndPos);
                     cornersToProcess = new Queue<(int, int)>();
@@ -971,14 +971,16 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                         continue;
                     } else
                     {
+                        Debug.Log($"next {cameraPosIDX}_{cameraPosIDZ}, {footprintCalculatemaxX}");
+                        if (cameraPosIDX <= gd.numGridX)
+                        {
+                            ResetFootprintCount();
+                        }
                         break;
                     }
                 }
                 
-                if (cameraPosIDX <= gd.numGridX)
-                {
-                    ResetFootprintCount();
-                }
+
                 break;
             case CityPreprocessSteps.CalculateFootprintChunk:
                 //foreach (Color c in colorRecordIDChunk.Keys)

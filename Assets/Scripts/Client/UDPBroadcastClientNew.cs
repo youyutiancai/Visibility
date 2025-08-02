@@ -41,7 +41,7 @@ public class ObjectHolder
     public string prefabName;
     public string[] materialNames;
     public int totalVertChunkNum, totalTriChunkNum, totalVertNum, submeshCount;
-    public bool ifVisible, ifOwned;
+    public bool ifVisible, ifOwned, needUpdateCollider;
     public Dictionary<int, Chunk> chunks_VTSeparate = new Dictionary<int, Chunk>();
     public Dictionary<int, Chunk> chunks_VTGrouped = new Dictionary<int, Chunk>();
     public DateTime firstChunkTime, latestChunkTime;
@@ -81,9 +81,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     private readonly Queue<Chunk> chunkQueue = new Queue<Chunk>();
     private readonly object chunkQueueLock = new object();
-    private int maxChunksPerFrame = 50; // You can tweak this
-    private float lastAdjustTime = 0f;
-    private float adjustCooldown = 0.3f; // seconds
+    private int maxChunksPerFrame = 50, currentColliderToUpdate, colliderToUpdateEachFrame; // You can tweak this
+    private float lastAdjustTime = 0f, adjustCooldown = 0.3f, lastColliderUpdateTime, colliderUpdateInterval;
     private bool isShuttingDown = false;
 
     private static UdpClient retransmissionClient = new UdpClient();
@@ -109,6 +108,10 @@ public class UDPBroadcastClientNew : MonoBehaviour
     }
     private void Start()
     {
+        colliderUpdateInterval = 2f;
+        colliderToUpdateEachFrame = 10;
+        currentColliderToUpdate = 0;
+        lastColliderUpdateTime = Time.time;
         string filename = $"ClientRuntimeLog_{DateTime.UtcNow:yyyyMMdd_HHmmss}.jsonl";
         logFilePath = Path.Combine(Application.persistentDataPath, filename);
         logWriter = new StreamWriter(logFilePath, append: false);
@@ -209,6 +212,55 @@ public class UDPBroadcastClientNew : MonoBehaviour
             logWriter.WriteLine(frameEntry);
             logWriter.Flush();
             chunksThisFrame.Clear();
+        }
+
+        //if (Time.time - lastColliderUpdateTime > colliderUpdateInterval)
+        //{
+            
+        //    foreach (int objectID in recGameObjects.Keys)
+        //    {
+        //        ObjectHolder holder = m_TCPClient.objectHolders[objectID];
+        //        if (holder.needUpdateCollider && recGameObjects.TryGetValue(objectID, out GameObject go))
+        //        {
+        //            Mesh mesh = go.GetComponent<MeshFilter>().mesh;
+        //            if (mesh != null)
+        //            {
+        //                MeshCollider collider = go.GetComponent<MeshCollider>();
+        //                if (collider != null)
+        //                {
+        //                    collider.sharedMesh = null; // clear the old mesh
+        //                    collider.sharedMesh = mesh; // assign the new mesh
+        //                }
+        //                holder.needUpdateCollider = false; // reset the flag
+        //            }
+        //        }
+        //    }
+        //    lastColliderUpdateTime = Time.time;
+        //}
+
+        int numCollidersUpdatedThisFrame = 0;
+        int objectIDStarted = currentColliderToUpdate;
+        while (numCollidersUpdatedThisFrame < colliderToUpdateEachFrame)
+        {
+            currentColliderToUpdate = (currentColliderToUpdate + 1) % m_TCPClient.objectHolders.Length;
+            if (currentColliderToUpdate == objectIDStarted)
+                break;
+            ObjectHolder holder = m_TCPClient.objectHolders[currentColliderToUpdate];
+            if (holder.needUpdateCollider && recGameObjects.TryGetValue(currentColliderToUpdate, out GameObject go))
+            {
+                Mesh mesh = go.GetComponent<MeshFilter>().mesh;
+                if (mesh != null)
+                {
+                    MeshCollider collider = go.GetComponent<MeshCollider>();
+                    if (collider != null)
+                    {
+                        collider.sharedMesh = null; // clear the old mesh
+                        collider.sharedMesh = mesh; // assign the new mesh
+                    }
+                }
+                holder.needUpdateCollider = false;
+                numCollidersUpdatedThisFrame++;
+            }
         }
     }
 
@@ -770,14 +822,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
             }
 
             mesh.RecalculateBounds(); // important for rendering
-
-            // Rebuild the mesh collider if needed
-            //MeshCollider collider = go.GetComponent<MeshCollider>();
-            //if (collider != null)
-            //{
-            //    collider.sharedMesh = null;
-            //    collider.sharedMesh = mesh;
-            //}
+            holder.needUpdateCollider = true;
         }
     }
 
