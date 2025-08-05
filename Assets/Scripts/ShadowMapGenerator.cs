@@ -36,10 +36,11 @@ public class ShadowMapGenerator : MonoBehaviour
             Shader.SetGlobalMatrix("_LightViewProjection", mainLightViewProjectionMatrix);
         } else
         {
-            UpdateChild(geometry);
-            byte[] shadowMapbytes = File.ReadAllBytes(Application.dataPath + "./Resources/Materials/Textures/shadowMap_new.png");
-            Texture2D shadowMap = new Texture2D(2, 2);
-            shadowMap.LoadImage(shadowMapbytes);
+            UpdateChildPureColorShadow(geometry);
+            //byte[] shadowMapbytes = File.ReadAllBytes(Application.dataPath + "./Resources/Materials/Textures/shadowMap_new.png");
+            //Texture2D shadowMap = new Texture2D(2, 2);
+            //shadowMap.LoadImage(shadowMapbytes);
+            Texture2D shadowMap = Resources.Load<Texture2D>("Materials/Textures/shadowMap_new");
             Matrix4x4 mainLightViewProjectionMatrix = lightCamera.projectionMatrix * lightCamera.worldToCameraMatrix;
             Shader.SetGlobalTexture("_CustomShadowMap", shadowMap);
             Shader.SetGlobalMatrix("_LightViewProjection", mainLightViewProjectionMatrix);
@@ -65,7 +66,7 @@ public class ShadowMapGenerator : MonoBehaviour
             bool updateMipMapsAutomatically = false;
 
             //int screenWidth = cam.activeTexture.width, screenHeight = cam.activeTexture.height;
-            int screenWidth = 1024, screenHeight = 1024;
+            int screenWidth = 2048, screenHeight = 2048;
             Texture2D destinationTexture = new Texture2D(screenWidth, screenHeight, TextureFormat.RGBA32, false);
 
             RenderTexture.active = cam.targetTexture;
@@ -210,6 +211,41 @@ public class ShadowMapGenerator : MonoBehaviour
         for (int i = 0; i < parent.transform.childCount; i++)
         {
             UpdateChild(parent.transform.GetChild(i).gameObject);
+        }
+    }
+
+    private void UpdateChildPureColorShadow(GameObject parent)
+    {
+        MeshRenderer renderer = parent.GetComponent<MeshRenderer>();
+        if (renderer != null)
+        {
+            Material[] materials = renderer.sharedMaterials;
+            for (int i = 0; i < materials.Length; i++)
+            {
+                Material material = materials[i];
+                if (material == null)
+                    continue;
+
+                int mode = material.GetInt("_Mode");
+                Material newMaterial = new Material(Shader.Find("Custom/Pure_Color_Shadow"));
+                if (mode == 1)
+                {
+                    //newMaterial.SetFloat("_IsCutout", 1);
+                    newMaterial.SetFloat("_Cutoff", material.GetFloat("_Cutoff"));
+                }
+                else
+                {
+                    newMaterial.SetFloat("_Cutoff", 0);
+                }
+                newMaterial.SetColor("_Color", material.GetColor("_Color"));
+                materials[i] = newMaterial;
+            }
+            renderer.materials = materials;
+        }
+
+        for (int i = 0; i < parent.transform.childCount; i++)
+        {
+            UpdateChildPureColorShadow(parent.transform.GetChild(i).gameObject);
         }
     }
 }

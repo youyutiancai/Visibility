@@ -99,7 +99,7 @@ public class ClusterControl : Singleton<ClusterControl>
         
         objectChunksVTSeparate = new Dictionary<int, List<byte[]>>();
         objectChunksVTGrouped = new Dictionary<int, List<byte[]>>();
-        if (vc.step == CityPreprocessSteps.NoPreProcessStep)
+        if (vc.step == CityPreprocessSteps.NoPreProcessStep || vc.step == CityPreprocessSteps.CalculateFootprintChunk)
         {
             LoadAllChunks("Assets/Data/objectChunksGrouped", ref objectChunksVTGrouped);
             LoadAllChunks("Assets/Data/ObjectChunks", ref objectChunksVTSeparate);
@@ -441,7 +441,6 @@ public class ClusterControl : Singleton<ClusterControl>
                             int zStartIndex = Mathf.FloorToInt((userPosition.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
                             if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
                             user.preX = xStartIndex; user.preZ = zStartIndex;
-                            user.CleanChunksWaitToSend();
                             chunkFootprintInfo = new Dictionary<int, long[]>();
                             vc.ReadFootprintByChunkInRegion(userPosition, epsilon, ref chunkFootprintInfo);
                             newObjectCount = new long[vc.objectsInScene.Count];
@@ -449,6 +448,7 @@ public class ClusterControl : Singleton<ClusterControl>
                             {
                                 vc.GetFootprintsInRegion(userPosition, epsilon, ref newObjectCount);
                             }
+                            user.CleanChunksWaitToSend();
                             user.UpdateChunkToSend(chunkFootprintInfo, newObjectCount, useChunkFootAsPriority);
 
                             Debug.Log($"RealUserIndiStrategy chunks left to send: {user.ChunksWaitToSend.Count}");

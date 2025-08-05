@@ -16,7 +16,7 @@ using System.Reflection;
 
 public enum CityPreprocessSteps
 {
-    CalculateFootprintCorner, CombineFootprintToUnit, NoPreProcessStep, CalculateFootprintChunk
+    CalculateFootprintCorner, CombineFootprintToUnit, NoPreProcessStep, CalculateFootprintChunk, VisibilityDataTest
 }
 
 [Serializable]
@@ -78,22 +78,31 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         InitialValues();
         AddAllObjects(sceneRoot.transform);
         //StartCoroutine(Test());
-        if (step == CityPreprocessSteps.NoPreProcessStep)
+        switch (step)
         {
-            sceneRoot.SetActive(false);
-        }
-        if (step == CityPreprocessSteps.CalculateFootprintChunk)
-        {
-            sceneRoot.SetActive(false);
-            StartCoroutine(ColorObjectsByChunks());
-            //StartCoroutine(TestReadChunks());
-        }
-        if (step == CityPreprocessSteps.CalculateFootprintCorner) {
-            ColorObjects();
+            case (CityPreprocessSteps.NoPreProcessStep):
+                sceneRoot.SetActive(false);
+                break;
+
+            case (CityPreprocessSteps.CalculateFootprintChunk):
+                sceneRoot.SetActive(false);
+                StartCoroutine(ColorObjectsByChunks());
+                break;
+
+            case (CityPreprocessSteps.CombineFootprintToUnit):
+                sceneRoot.SetActive(false);
+                break;
+
+            case (CityPreprocessSteps.CalculateFootprintCorner):
+                ColorObjects();
+                break;
+
+            case (CityPreprocessSteps.VisibilityDataTest):
+                VisibilityDataTest();
+                break;
         }
         //objectTable = CreateObjectTable();
         //TestObjectTable();
-        //Debug.Log(objectsInScene.Count);
         //GenerateMeshInfo();
     }
 
@@ -131,6 +140,28 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         }
         Debug.Log($"{string.Join(", ", unitRead)}");
         Debug.Log($"total object num: {count}, total chunk count: {totalChunkCount}");
+    }
+
+    private void VisibilityDataTest()
+    {
+        Vector3 pos = mainCamera.transform.position;
+        //int gridX = Mathf.FloorToInt((pos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        //int gridZ = Mathf.FloorToInt((pos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+        //int[] corner0 = ReadFootprintsGrid(gridX, gridZ);
+        //int[] corner1 = ReadFootprintsGrid(gridX + 1, gridZ);
+        //int[] corner2 = ReadFootprintsGrid(gridX, gridZ + 1);
+        //int[] corner3 = ReadFootprintsGrid(gridX + 1, gridZ + 1);
+        //int[] sum = new int[objectsInScene.Count];
+        //for (int d = 0; d < objectsInScene.Count; d++)
+        //{
+        //    objectsInScene[d].SetActive(corner0[d] + corner1[d] + corner2[d] + corner3[d] > 0 || objectsInScene[d].tag == "Terrain" || showAll);
+        //}
+        long[] unitRead = new long[objectsInScene.Count];
+        GetFootprintsInRegion(pos, 1f, ref unitRead);
+        for (int d = 0; d < objectsInScene.Count; d++)
+        {
+            objectsInScene[d].SetActive(unitRead[d] > 0 || objectsInScene[d].tag == "Terrain" || showAll);
+        }
     }
 
     private IEnumerator TestReadChunks()
@@ -530,6 +561,10 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             autoMove = true;
             stepCount = 0;
         }
+        if (step == CityPreprocessSteps.VisibilityDataTest)
+        {
+            VisibilityDataTest();
+        }
         //if (autoMove)
         //{
         //    UpdateCameraPosOnPath();
@@ -809,6 +844,12 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                     {
                         for (int j = footprintCalculateminZ; j <= footprintCalculatemaxZ; j++)
                         {
+                            string path = $"C:/Users/zhou1168/VRAR/Data/CornerLevelFootprintsByChunk/{i}_{j}.bin"; // Visibility/Assets/
+                            if (File.Exists(path))
+                            {
+                                Debug.Log($"File {path} already exists. Skipping processing for corner ({i}, {j}).");
+                                continue;
+                            }
                             cornersToProcess.Enqueue((i, j));
                         }
                     }
@@ -824,6 +865,8 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                     //    }
                     //}
                     Debug.Log($"corners to process: {string.Join(',', cornersToProcess)}");
+                    cameraPosIDX = cornersToProcess.Peek().Item1;
+                    cameraPosIDZ = cornersToProcess.Peek().Item2;
                     ResetFootprintCount();
                     break;
 
@@ -1002,7 +1045,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 //    }
                 //}
                 Debug.Log($"serializing {cameraPosIDX}, {cameraPosIDZ}");
-                filePath = "C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunk";
+                filePath = "C:/Users/zhou1168/VRAR/Data/CornerLevelFootprintsByChunk";
                 WriteFootprintByChunk();
                 while(cornersToProcess.Count > 0)
                 {
@@ -1073,14 +1116,14 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
 
         byte[] byteData = new byte[dataList.Count * sizeof(int)];
         Buffer.BlockCopy(dataList.ToArray(), 0, byteData, 0, byteData.Length);
-        string path = $"C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunk/{cameraPosIDX}_{cameraPosIDZ}.bin";
+        string path = $"C:/Users/zhou1168/VRAR/Data/CornerLevelFootprintsByChunk/{cameraPosIDX}_{cameraPosIDZ}.bin";
         File.WriteAllBytes(path, byteData);
         Debug.Log($"Wrote binary footprint data to: {path}");
     }
 
     public Dictionary<int, long[]> ReadFootprintByChunk(int x, int z)
     {
-        string path = $"C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";
+        string path = $"C:/Users/zhou1168/VRAR/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";
         if (!File.Exists(path))
         {
             Debug.LogError("Footprint file not found.");
@@ -1115,7 +1158,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             return;
         }
 
-        string path = $"C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";
+        string path = $"C:/Users/zhou1168/VRAR/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";
         if (!File.Exists(path))
         {
             visibleChunksAtCorner = null;
@@ -1139,7 +1182,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             for (int j = zStartIndex - gridNumToInclude; j <= zStartIndex + gridNumToInclude + 1; j++)
             {
-                //string path = $"C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunk/{i}_{j}.bin";
+                //string path = $"C:/Users/zhou1168/VRAR/Data/CornerLevelFootprintsByChunk/{i}_{j}.bin";
                 //if (!File.Exists(path))
                 //{
                 //    Debug.Log($"Footprint file {i}_{j} not found.");
@@ -1238,7 +1281,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         {
             return objectFootprintsInGrid[indiGrid];
         }
-        string filePath = "C:/Users/zhou1168/VRAR/Visibility/Assets/Data/GridLevelFootprintsUnit/"; // "C:/Users/zhou1168/VRAR/Data/GridLevelFootprintsUnit/";
+        string filePath =  "C:/Users/zhou1168/VRAR/Data/GridLevelFootprintsUnit/"; // "C:/Users/zhou1168/VRAR/Visibility/Assets/Data/GridLevelFootprintsUnit/";
         int unitX = x / (int)numInUnitX, unitZ = z / (int)numInUnitZ;
         string fileName = $"{filePath}{unitX}_{unitZ}.bin";
         if (!File.Exists(fileName))
@@ -1259,6 +1302,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 objectFootprintsInGrid.Add($"{gridX}_{gridZ}", newGridLevelFootprintInfo);
             }
         }
+        Debug.Log($"Read {indiGrid} footprints from unit: {fileName}");
         return objectFootprintsInGrid[indiGrid];
     }
 

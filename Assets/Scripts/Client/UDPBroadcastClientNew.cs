@@ -61,6 +61,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     public int portUDP = 5005;
     public int portTCP = 5006;
+    public Camera lightCamera;
     private UdpClient udpClient;
     private IPEndPoint localEP;
     private string multicastAddr = "230.0.0.1";
@@ -69,7 +70,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private int bufferSize = 1024 * 1024;
 
     public int numVerticesPerChunk = 57;
-    public GameObject ground;
     private Dictionary<int, GameObject> recGameObjects = new Dictionary<int, GameObject>();
     private Dictionary<int, Vector3[]> verticesDict = new Dictionary<int, Vector3[]>();
     private Dictionary<int, List<List<int>>> trianglesDict = new Dictionary<int, List<List<int>>>();
@@ -86,10 +86,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private float lastAdjustTime = 0f, adjustCooldown = 0.3f, lastColliderUpdateTime, colliderUpdateInterval;
     private bool isShuttingDown = false;
 
-    private Matrix4x4 lightViewProjMatrix = new Matrix4x4(new Vector4(0.00433f, -0.00192f, -0.00064f, 0.00000f),
-                new Vector4(0.00000f, 0.00321f, -0.00153f, 0.00000f),
-                new Vector4(0.00250f, 0.00332f, 0.00111f, 0.00000f),
-                new Vector4(0.00049f, -0.22139f, -0.39583f, 1.00000f));
+    private Matrix4x4 lightViewProjMatrix;
     private Texture2D shadowMap;
     
     private static UdpClient retransmissionClient = new UdpClient();
@@ -115,9 +112,10 @@ public class UDPBroadcastClientNew : MonoBehaviour
     }
     private void Start()
     {
-        shadowMap = Resources.Load<Texture2D>("shadowMap.png");
-        Shader.SetGlobalTexture("_CustomShadowMap", shadowMap);
-        Shader.SetGlobalMatrix("_LightViewProjection", lightViewProjMatrix);
+        shadowMap = Resources.Load<Texture2D>("Materials/Textures/shadowMap_new");
+        lightViewProjMatrix = lightCamera.projectionMatrix * lightCamera.worldToCameraMatrix;
+        //Shader.SetGlobalTexture("_CustomShadowMap", shadowMap);
+        //Shader.SetGlobalMatrix("_LightViewProjection", lightViewProjMatrix);
         colliderUpdateInterval = 2f;
         colliderToUpdateEachFrame = 10;
         currentColliderToUpdate = 0;

@@ -4,7 +4,6 @@ Shader "Custom/Pure_Color_Shadow"
     {
         _Color("Color", Color) = (1, 1, 1, 1)
         _Cutoff("Alpha cutoff", Range(0, 1)) = 0.5
-        _CustomShadowMap("Custom Shadow Map", 2D) = "white" {} // Expose shadow map texture
     }
 
         SubShader
