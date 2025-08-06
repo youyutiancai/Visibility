@@ -21,6 +21,7 @@ public class TestClient : Singleton<TestClient>
     public GameObject invisibleFenses, client;
     public Toggle PrevButton, NextButton;
     public ToggleGroup answerGroup;
+    public GameObject answerTexts;
     private int[][] answers;
     private int totalPathNum = 4;
     private string[] Questions = new string[]
@@ -67,8 +68,7 @@ public class TestClient : Singleton<TestClient>
         {
             answerGroup.transform.GetChild(prevAnswer - 1).GetComponent<Toggle>().isOn = true;
         }
-        UpdateText();
-        UpdateVisibility();
+        UpdateAll();
     }
 
     private void OnNextToggleChanged(bool isOn)
@@ -115,8 +115,7 @@ public class TestClient : Singleton<TestClient>
         }
         NextButton.isOn = false;
         answerGroup.SetAllTogglesOff();
-        UpdateText();
-        UpdateVisibility();
+        UpdateAll();
     }
 
     private void OnAnswerToggleChanged(bool isOn)
@@ -127,7 +126,7 @@ public class TestClient : Singleton<TestClient>
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        testPhase = TestPhase.QuestionPhase;
+        testPhase = TestPhase.InitialPhase;
         currentQuestionNum = 0;
         currentPathNum = 0;
         currentNodeNum = 0;
@@ -136,15 +135,22 @@ public class TestClient : Singleton<TestClient>
         {
             answers[i] = new int[Questions.Length];
         }
+        UpdateAll();
+        TrapUser();
+    }
+
+    public void UpdateAll()
+    {
         UpdateText();
         UpdateVisibility();
-        TrapUser();
     }
 
     private void UpdateVisibility()
     {
         PrevButton.gameObject.SetActive(testPhase == TestPhase.QuestionPhase && currentQuestionNum > 0);
         NextButton.gameObject.SetActive(testPhase == TestPhase.QuestionPhase && currentQuestionNum < Questions.Length - 1 && answerGroup.ActiveToggles().Any());
+        answerGroup.gameObject.SetActive(testPhase == TestPhase.QuestionPhase);
+        answerTexts.SetActive(testPhase == TestPhase.QuestionPhase);
     }
 
     private void UpdateText()
@@ -176,7 +182,8 @@ public class TestClient : Singleton<TestClient>
         if (testPhase == TestPhase.MovingPhase)
             return;
         invisibleFenses.SetActive(true);
-        invisibleFenses.transform.position = client.transform.position;
+        Vector3 clientPosition = client.transform.position;
+        invisibleFenses.transform.position = new Vector3(clientPosition.x, 0, clientPosition.z);
     }
 
     public void UnTrapUser()
