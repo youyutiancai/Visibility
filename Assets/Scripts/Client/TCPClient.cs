@@ -25,6 +25,7 @@ public class TCPClient : MonoBehaviour
     public GameObject head, centerEye;
     public bool isPuppet = false, receivedInitPos;
     public UDPBroadcastClientNew udpClient;
+    public TestClient testClient;
 
     public event Action OnReceivedServerTable;
 
@@ -87,6 +88,7 @@ public class TCPClient : MonoBehaviour
         buffer.AddRange(BitConverter.GetBytes(rot.y));
         buffer.AddRange(BitConverter.GetBytes(rot.z));
         buffer.AddRange(BitConverter.GetBytes(rot.w));
+        buffer.AddRange(BitConverter.GetBytes((int)testClient.testPhase));
         return buffer.ToArray();
     }
     private void ListenToServer(TcpClient server)
@@ -240,6 +242,7 @@ public class TCPClient : MonoBehaviour
             }
             parsingTable = false;
             OnReceivedServerTable?.Invoke();
+            testClient.testPhase = TestPhase.StandPhase;
         }
     }
 

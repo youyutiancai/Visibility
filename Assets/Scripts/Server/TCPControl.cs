@@ -167,9 +167,11 @@ public class TCPControl : MonoBehaviour
                         float ry = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
                         float rz = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
                         float rw = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
+                        TestPhase testPhase = (TestPhase)BitConverter.ToInt32(data, cursor); cursor += sizeof(int);
 
                         realUser.latestPosition = new Vector3(px, py, pz);
                         realUser.latestRotation = new Quaternion(rx, ry, rz, rw);
+                        realUser.testPhase = testPhase;
 
                         if (!realUser.isPuppet)
                         {

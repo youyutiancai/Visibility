@@ -5,6 +5,7 @@ using UnityEngine;
 public class RealUser : User
 {
     public bool isPuppet;
+    public TestPhase testPhase;
     public IPEndPoint tcpEndPoint;
     public Vector3 latestPosition, simulatedPosition;
     public Quaternion latestRotation, simulatedRotation;
@@ -17,5 +18,6 @@ public class RealUser : User
         simulatedPosition = initialPos;
         simulatedRotation = Quaternion.identity;
         isPuppet = false;
+        testPhase = TestPhase.InitialPhase;
     }
 }
