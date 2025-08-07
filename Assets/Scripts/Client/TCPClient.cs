@@ -179,6 +179,13 @@ public class TCPClient : MonoBehaviour
         {
             udpClient.ParseMessageForChunks(message);
         }
+
+        if (mt == TCPMessageType.QUESTIONSTART)
+        {
+            testClient.testPhase = TestPhase.QuestionPhase;
+            testClient.UpdateAll();
+            return;
+        }
     }
 
     private void ParseTable(byte[] message)
@@ -243,6 +250,8 @@ public class TCPClient : MonoBehaviour
             parsingTable = false;
             OnReceivedServerTable?.Invoke();
             testClient.testPhase = TestPhase.StandPhase;
+            testClient.UpdateAll();
+            testClient.TrapUser();
         }
     }
 

@@ -16,8 +16,8 @@ public abstract class User : MonoBehaviour
     protected List<SyntheticPathNode> possibleNodes;
     public float speed;
     public int currentNodeIndex = 0, preX, preZ;
-    private Dictionary<int, long[]> chunkPlanned;
-    private Dictionary<int, int[]> chunkSentTimes;
+    protected Dictionary<int, long[]> chunkPlanned;
+    protected Dictionary<int, int[]> chunkSentTimes;
 
     public int ClusterId { get; set; } = -1;  // -1 indicates unvisited
 
@@ -119,32 +119,6 @@ public abstract class User : MonoBehaviour
                     }
                 }
             }
-        }
-    }
-
-    public void MarkAsSent(int objectID, int ChunkID, int chunkCountForObject, int sentCounts)
-    {
-        if (!chunkSentTimes.ContainsKey(objectID))
-        {
-            chunkSentTimes[objectID] = new int[chunkCountForObject];
-        }
-        chunkSentTimes[objectID][ChunkID]++;
-        if (ChunksWaitToSend.Contains((objectID, ChunkID)))
-        {
-            ChunksWaitToSend.DecreaseCount((objectID, ChunkID), sentCounts);
-        }
-    }
-
-    public void MarkAsSentMaxCount(int objectID, int ChunkID, int chunkCountForObject)
-    {
-        if (!chunkSentTimes.ContainsKey(objectID))
-        {
-            chunkSentTimes[objectID] = new int[chunkCountForObject];
-        }
-        chunkSentTimes[objectID][ChunkID] = cc.numChunkRepeat;
-        if (ChunksWaitToSend.Contains((objectID, ChunkID)))
-        {
-            ChunksWaitToSend.Remove((objectID, ChunkID));
         }
     }
 

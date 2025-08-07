@@ -83,7 +83,7 @@ public class NetworkControl : Singleton<NetworkControl>
         timePassedForSendingChunks = Time.time - timeStartSendingChunks;
         try
         {
-            tc.SendMessageToUser(user, chunk);
+            tc.SendChunkToUser(user, chunk);
         }
         catch (Exception e)
         {
@@ -115,7 +115,8 @@ public enum TCPMessageType
     POSE_UPDATE,
     POSE_FROM_SERVER,
     PUPPET_TOGGLE,
-    CHUNK
+    CHUNK,
+    QUESTIONSTART
 }
 
 public enum SendingMode

@@ -102,7 +102,7 @@ public class ClusterControl : Singleton<ClusterControl>
         if (vc.step == CityPreprocessSteps.NoPreProcessStep || vc.step == CityPreprocessSteps.CalculateFootprintChunk)
         {
             LoadAllChunks("Assets/Data/objectChunksGrouped", ref objectChunksVTGrouped);
-            LoadAllChunks("Assets/Data/ObjectChunks", ref objectChunksVTSeparate);
+            //LoadAllChunks("Assets/Data/ObjectChunks", ref objectChunksVTSeparate);
         }
         //Dictionary<int, long[]> result = new Dictionary<int, long[]>();
         //vc.ReadFootprintByChunkInRegion(initialClusterCenterPos + new Vector3(0, 0, -1), epsilon, ref result);
@@ -407,67 +407,55 @@ public class ClusterControl : Singleton<ClusterControl>
                 if (timeSinceLastUpdate >= updateInterval)
                 {
                     timeSinceLastUpdate = 0f;
-                    if (meshDecodeMethod == MeshDecodeMethod.VTGrouped && onlySendVisibleChunks)
+                    // everyone votes for the order of objects
+                    //SendObjectsToIndisByChunk();
+                    //CountObjectFootprintIndi();
+                    //foreach (int objectID in newChunksToSend.Keys)
+                    //{
+                    //    long[] footprints = newChunksToSend[objectID];
+                    //    for (int i = 0; i < footprints.Length; i++)
+                    //    {
+                    //        byte[] newChunk = objectChunksVTGrouped[objectID][i];
+                    //        if (footprints[i] > 0 && !chunksToSend.Contains((objectID, i)))
+                    //        {
+                    //            if (useChunkFootAsPriority)
+                    //            {
+                    //                chunksToSend.Enqueue(newChunk, (objectID, i), footprints[i], numChunkRepeat, 0);
+                    //            }
+                    //            else
+                    //            {
+                    //                chunksToSend.Enqueue(newChunk, (objectID, i), newObjectCount[objectID], numChunkRepeat, 0);
+                    //            }
+                    //        }
+                    //    }
+                    //}
+
+                    // send one object for users in turn
+                    for (int i = 0; i < transform.childCount; i++)
                     {
-                        // everyone votes for the order of objects
-                        //SendObjectsToIndisByChunk();
-                        //CountObjectFootprintIndi();
-                        //foreach (int objectID in newChunksToSend.Keys)
-                        //{
-                        //    long[] footprints = newChunksToSend[objectID];
-                        //    for (int i = 0; i < footprints.Length; i++)
-                        //    {
-                        //        byte[] newChunk = objectChunksVTGrouped[objectID][i];
-                        //        if (footprints[i] > 0 && !chunksToSend.Contains((objectID, i)))
-                        //        {
-                        //            if (useChunkFootAsPriority)
-                        //            {
-                        //                chunksToSend.Enqueue(newChunk, (objectID, i), footprints[i], numChunkRepeat, 0);
-                        //            }
-                        //            else
-                        //            {
-                        //                chunksToSend.Enqueue(newChunk, (objectID, i), newObjectCount[objectID], numChunkRepeat, 0);
-                        //            }
-                        //        }
-                        //    }
-                        //}
-
-                        // send one object for users in turn
-                        for (int i = 0; i < transform.childCount; i++)
+                        RealUser user = transform.GetChild(i).GetComponent<RealUser>();
+                        if (user.testPhase != TestPhase.StandPhase && user.testPhase != TestPhase.MovingPhase)
+                            continue;
+                        Vector3 userPosition = user.transform.position;
+                        int xStartIndex = Mathf.FloorToInt((userPosition.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+                        int zStartIndex = Mathf.FloorToInt((userPosition.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+                        if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
+                        user.preX = xStartIndex; user.preZ = zStartIndex;
+                        chunkFootprintInfo = new Dictionary<int, long[]>();
+                        vc.ReadFootprintByChunkInRegion(userPosition, epsilon, ref chunkFootprintInfo);
+                        newObjectCount = new long[vc.objectsInScene.Count];
+                        if (!useChunkFootAsPriority)
                         {
-                            User user = transform.GetChild(i).GetComponent<User>();
-                            Vector3 userPosition = user.transform.position;
-                            int xStartIndex = Mathf.FloorToInt((userPosition.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
-                            int zStartIndex = Mathf.FloorToInt((userPosition.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
-                            if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
-                            user.preX = xStartIndex; user.preZ = zStartIndex;
-                            chunkFootprintInfo = new Dictionary<int, long[]>();
-                            vc.ReadFootprintByChunkInRegion(userPosition, epsilon, ref chunkFootprintInfo);
-                            newObjectCount = new long[vc.objectsInScene.Count];
-                            if (!useChunkFootAsPriority)
-                            {
-                                vc.GetFootprintsInRegion(userPosition, epsilon, ref newObjectCount);
-                            }
-                            user.CleanChunksWaitToSend();
-                            user.UpdateChunkToSend(chunkFootprintInfo, newObjectCount, useChunkFootAsPriority);
-
-                            Debug.Log($"RealUserIndiStrategy chunks left to send: {user.ChunksWaitToSend.Count}");
+                            vc.GetFootprintsInRegion(userPosition, epsilon, ref newObjectCount);
                         }
-                    }
-                    else
-                    {
-                        SendObjectsToClusters();
+                        user.CleanChunksWaitToSend();
+                        user.UpdateChunkToSend(chunkFootprintInfo, newObjectCount, useChunkFootAsPriority);
 
-                        for (int i = 0; i < newObjectCount.Length; i++)
-                        {
-                            if (newObjectCount[i] > 0 && !objectsWaitToBeSent.Contains(i))
-                            {
-                                objectsWaitToBeSent.Enqueue(i, i, newObjectCount[i], 1, 0);
-                            }
-                        }
+                        Debug.Log($"RealUserIndiStrategy chunks left to send: {user.ChunksWaitToSend.Count}");
                     }
+                    
                 }
-                SimulateAndSendPuppetPoses();
+                //SimulateAndSendPuppetPoses();
                 break;
         }
 

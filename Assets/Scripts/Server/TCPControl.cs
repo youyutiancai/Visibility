@@ -256,13 +256,29 @@ public class TCPControl : MonoBehaviour
         }
     }
 
-    public void SendMessageToUser(RealUser user, byte[] message)
+    public void SendChunkToUser(RealUser user, byte[] message)
     {
         byte[] new_message = new byte[message.Length + sizeof(int) * 3];
         Buffer.BlockCopy(BitConverter.GetBytes(new_message.Length - sizeof(int)), 0, new_message, 0, sizeof(int));
         Buffer.BlockCopy(BitConverter.GetBytes((int)TCPMessageType.CHUNK), 0, new_message, sizeof(int), sizeof(int));
         Buffer.BlockCopy(BitConverter.GetBytes((int)nc.cc.meshDecodeMethod), 0, new_message, sizeof(int) * 2, sizeof(int));
         Buffer.BlockCopy(message, 0, new_message, sizeof(int) * 3, message.Length);
+        SendMessageToClient(user.tcpEndPoint.Address, new_message);
+    }
+
+    public void InformQuestionStart(RealUser user)
+    {
+        byte[] new_message = new byte[sizeof(int) * 2];
+        Buffer.BlockCopy(BitConverter.GetBytes(sizeof(int)), 0, new_message, 0, sizeof(int));
+        Buffer.BlockCopy(BitConverter.GetBytes((int) TCPMessageType.QUESTIONSTART), 0, new_message, sizeof(int), sizeof(int));
+        SendMessageToClient(user.tcpEndPoint.Address, new_message);
+    }
+
+    public void SendMessageToUser(RealUser user, byte[] message)
+    {
+        byte[] new_message = new byte[message.Length + sizeof(int)];
+        Buffer.BlockCopy(BitConverter.GetBytes(message.Length), 0, new_message, 0, sizeof(int));
+        Buffer.BlockCopy(message, 0, new_message, sizeof(int), message.Length);
         SendMessageToClient(user.tcpEndPoint.Address, new_message);
     }
 

@@ -7,7 +7,7 @@ using System.Collections;
 
 public enum TestPhase
 {
-    InitialPhase, StandPhase, MovingPhase, QuestionPhase, EndPhase
+    InitialPhase, StandPhase, MovingPhase, QuestionPhase, WaitPhase, EndPhase
 }
 
 public class TestClient : Singleton<TestClient>
@@ -16,14 +16,13 @@ public class TestClient : Singleton<TestClient>
     public TestPhase testPhase;
     [HideInInspector]
     public int currentPathNum, currentNodeNum, currentQuestionNum;
-    public TextMeshProUGUI title;
-    public TextMeshProUGUI instruction;
+    public TextMeshProUGUI title, instruction, nextButtonText;
     public GameObject invisibleFenses, client;
     public Toggle PrevButton, NextButton;
     public ToggleGroup answerGroup;
-    public GameObject answerTexts;
+    public GameObject answerTexts, paths;
+    private GameObject[][] pathNodes;
     private int[][] answers;
-    private int totalPathNum = 4;
     private string[] Questions = new string[]
     {
         "I noticed many missing parts in the scene while it was loading.",
@@ -73,7 +72,7 @@ public class TestClient : Singleton<TestClient>
 
     private void OnNextToggleChanged(bool isOn)
     {
-        if (!isOn || currentQuestionNum >= Questions.Length - 1 || testPhase != TestPhase.QuestionPhase)
+        if (!isOn || currentQuestionNum >= Questions.Length || testPhase != TestPhase.QuestionPhase)
             return;
 
         if (!answerGroup.ActiveToggles().Any())
@@ -91,31 +90,43 @@ public class TestClient : Singleton<TestClient>
         currentQuestionNum++;
         if (currentQuestionNum >= Questions.Length)
         {
-            currentPathNum++;
-            if (currentPathNum >= totalPathNum)
+            if (currentNodeNum == pathNodes[currentPathNum].Length)
             {
-                // Finish all paths
+                currentPathNum++;
+                currentNodeNum = 0;
+            }
+            if (currentPathNum >= pathNodes.Length)
+            {
                 testPhase = TestPhase.EndPhase;
-                instruction.text = "Thank you for participating in the experiment! You may now remove your headset.";
-                title.text = "Experiment Finished";
-                invisibleFenses.SetActive(false);
-                client.SetActive(false);
-                PrevButton.gameObject.SetActive(false);
-                NextButton.gameObject.SetActive(false);
-                answerGroup.gameObject.SetActive(false);
                 return;
             }
             else
             {
-                // Move to the next path
                 currentQuestionNum = 0;
-                currentNodeNum = 0;
-                testPhase = TestPhase.StandPhase;
+                QuitQuestion();
             }
         }
         NextButton.isOn = false;
         answerGroup.SetAllTogglesOff();
         UpdateAll();
+    }
+
+    private void QuitQuestion()
+    {
+        WriteCurrentAnswers();
+        if (currentNodeNum == 0)
+        {
+            testPhase = TestPhase.MovingPhase;
+            UnTrapUser();
+        } else
+        {
+            testPhase = TestPhase.WaitPhase;
+        }
+    }
+
+    private void WriteCurrentAnswers()
+    {
+
     }
 
     private void OnAnswerToggleChanged(bool isOn)
@@ -126,17 +137,38 @@ public class TestClient : Singleton<TestClient>
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        testPhase = TestPhase.InitialPhase;
+        InitializePathNodes();
+        testPhase = TestPhase.QuestionPhase;
         currentQuestionNum = 0;
         currentPathNum = 0;
         currentNodeNum = 0;
-        answers = new int[totalPathNum][];
-        for (int i = 0; i < totalPathNum; i++)
+        answers = new int[pathNodes.Length][];
+        for (int i = 0; i < pathNodes.Length; i++)
         {
             answers[i] = new int[Questions.Length];
         }
         UpdateAll();
         TrapUser();
+    }
+
+    private void InitializePathNodes()
+    {
+        int pathNum = 2;
+        int conditionNum = 2;
+        pathNodes = new GameObject[pathNum * conditionNum][];
+        for (int i = 0; i < pathNum; i++)
+        {
+            int nodeNumThisPath = paths.transform.childCount;
+            GameObject[] allNodesThisPath = new GameObject[nodeNumThisPath];
+            for (int j = 0; j < nodeNumThisPath; j++)
+            {
+                allNodesThisPath[j] = paths.transform.GetChild(i).GetChild(j).gameObject;
+            }
+            for (int j = 0; j < conditionNum; j++)
+            {
+                pathNodes[i * conditionNum + j] = allNodesThisPath;
+            }
+        }
     }
 
     public void UpdateAll()
@@ -148,7 +180,7 @@ public class TestClient : Singleton<TestClient>
     private void UpdateVisibility()
     {
         PrevButton.gameObject.SetActive(testPhase == TestPhase.QuestionPhase && currentQuestionNum > 0);
-        NextButton.gameObject.SetActive(testPhase == TestPhase.QuestionPhase && currentQuestionNum < Questions.Length - 1 && answerGroup.ActiveToggles().Any());
+        NextButton.gameObject.SetActive(testPhase == TestPhase.QuestionPhase && currentQuestionNum <= Questions.Length - 1 && answerGroup.ActiveToggles().Any());
         answerGroup.gameObject.SetActive(testPhase == TestPhase.QuestionPhase);
         answerTexts.SetActive(testPhase == TestPhase.QuestionPhase);
     }
@@ -161,18 +193,23 @@ public class TestClient : Singleton<TestClient>
             case TestPhase.StandPhase:
                 if (currentPathNum == 0)
                 {
-                    instruction.text = "Welcome to the VR experiment! Please wait for everyone to join before the instructor begins.\n" +
-                        "Use the right thumbstick to look around. If you feel any discomfort, feel free to look around by turning your head instead.\n";
+                    instruction.text = "You will see a virtual environment begin to load around you. Please remain seated, observe how the scene loads, and answer the questions that appear in front of you. You may raise your hand, take off the headset, or inform the researcher if you experience any discomfort.";
                 } else
                 {
                     instruction.text = "Please wait for the instructor to start the next path.";
                 }
-                title.text = $"Path {currentPathNum + 1}/{totalPathNum} - Standby";
+                title.text = $"Path {currentPathNum + 1}/{pathNodes.Length} - Standby";
                 break;
             
             case TestPhase.QuestionPhase:
                 title.text = $"Current Question: {currentQuestionNum + 1}/{Questions.Length}";
                 instruction.text = Questions[currentQuestionNum];
+                nextButtonText.text = currentQuestionNum == Questions.Length - 1 ? "Finish" : "Next";
+                break;
+
+            case TestPhase.MovingPhase:
+                title.text = $"Path {currentPathNum + 1}/{pathNodes.Length} - Move";
+                instruction.text = "Now please use the right thumbstick to move along the path toward the milestones. You may pause to look around, but continue moving forward until you return to the start point.";
                 break;
         }
     }
