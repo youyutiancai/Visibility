@@ -533,7 +533,10 @@ public class ClusterControl : Singleton<ClusterControl>
             for (int i = 0; i < transform.childCount; i++)
             {
                 allUsers[i] = transform.GetChild(i).GetComponent<RealUser>();
-                totalChunksWaitToSend += allUsers[i].ChunksWaitToSend.Count;
+                if (allUsers[i].ChunksWaitToSend is not null)
+                {
+                    totalChunksWaitToSend += allUsers[i].ChunksWaitToSend.Count;
+                }
             }
             if (totalChunksWaitToSend > 0)
             {

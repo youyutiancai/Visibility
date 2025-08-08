@@ -16,8 +16,9 @@ public class TestClient : Singleton<TestClient>
     public TestPhase testPhase;
     [HideInInspector]
     public int currentPathNum, currentNodeNum, currentQuestionNum;
+    public Camera clientCamera;
     public TextMeshProUGUI title, instruction, nextButtonText;
-    public GameObject invisibleFenses, client;
+    public GameObject invisibleFenses, client, mileStoneObject, questionBoard;
     public Toggle PrevButton, NextButton;
     public ToggleGroup answerGroup;
     public GameObject answerTexts, paths;
@@ -138,7 +139,7 @@ public class TestClient : Singleton<TestClient>
     void Start()
     {
         InitializePathNodes();
-        testPhase = TestPhase.QuestionPhase;
+        testPhase = TestPhase.InitialPhase;
         currentQuestionNum = 0;
         currentPathNum = 0;
         currentNodeNum = 0;
@@ -158,7 +159,8 @@ public class TestClient : Singleton<TestClient>
         pathNodes = new GameObject[pathNum * conditionNum][];
         for (int i = 0; i < pathNum; i++)
         {
-            int nodeNumThisPath = paths.transform.childCount;
+            Transform path = paths.transform.GetChild(i);
+            int nodeNumThisPath = path.childCount;
             GameObject[] allNodesThisPath = new GameObject[nodeNumThisPath];
             for (int j = 0; j < nodeNumThisPath; j++)
             {
@@ -183,6 +185,7 @@ public class TestClient : Singleton<TestClient>
         NextButton.gameObject.SetActive(testPhase == TestPhase.QuestionPhase && currentQuestionNum <= Questions.Length - 1 && answerGroup.ActiveToggles().Any());
         answerGroup.gameObject.SetActive(testPhase == TestPhase.QuestionPhase);
         answerTexts.SetActive(testPhase == TestPhase.QuestionPhase);
+        mileStoneObject.SetActive(testPhase == TestPhase.MovingPhase);
     }
 
     private void UpdateText()
@@ -229,5 +232,62 @@ public class TestClient : Singleton<TestClient>
             return;
         invisibleFenses.SetActive(false);
         invisibleFenses.transform.position = new Vector3(0, -1000, 0); // Move it out of sight
+    }
+
+    private void Update()
+    {
+        if (testPhase == TestPhase.MovingPhase)
+        {
+            CheckMilsStone();
+        }
+    }
+
+    private void CheckMilsStone()
+    {
+        if (currentNodeNum >= pathNodes[currentPathNum].Length)
+            return;
+
+        Vector3 clientPos = client.transform.position;
+        Vector3 mileStonePos = mileStoneObject.transform.position;
+        float distanceToMileStone = Mathf.Sqrt(Mathf.Pow(clientPos.x - mileStonePos.x, 2) + Mathf.Pow(clientPos.z - mileStonePos.z, 2));
+        float mileStoneRadius = mileStoneObject.transform.GetChild(0).GetComponent<CapsuleCollider>().radius;
+        if (distanceToMileStone <= mileStoneRadius)
+        {
+            currentNodeNum++;
+            if (currentNodeNum == pathNodes[currentPathNum].Length)
+            {
+                testPhase = TestPhase.QuestionPhase;
+                TrapUser();
+                MoveQuestionBoardInFront();
+                UpdateAll();
+            } else
+            {
+                mileStoneObject.transform.position = pathNodes[currentPathNum][currentNodeNum].transform.position;
+            }
+        }
+        if (mileStoneObject.activeSelf)
+        {
+            UpdateMileStoneColor();
+        }
+    }
+
+    private void MoveQuestionBoardInFront()
+    {
+        Vector3 clientCameraPos = clientCamera.transform.position;
+        Vector3 targetPosition = clientCameraPos + clientCamera.transform.forward * 1;
+        float height = questionBoard.transform.position.y;
+        questionBoard.transform.position = new Vector3(targetPosition.x, height, targetPosition.z);
+        questionBoard.transform.LookAt(questionBoard.transform.position * 2 - clientCameraPos);
+    }
+
+    private void UpdateMileStoneColor()
+    {
+        GameObject ring = mileStoneObject.transform.GetChild(0).GetChild(0).gameObject;
+        GameObject ball = mileStoneObject.transform.GetChild(1).gameObject;
+        Color mileStoneColor = ring.GetComponent<MeshRenderer>().material.color;
+        mileStoneColor = new Color(Random.Range(0, 1f), Random.Range(0, 1f), Random.Range(0, 1f));
+
+        ring.GetComponent<MeshRenderer>().material.color = mileStoneColor;
+        ball.GetComponent<MeshRenderer>().material.color = mileStoneColor;
     }
 }

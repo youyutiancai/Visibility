@@ -137,7 +137,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     private void OnRecevTable()
     {
-        Debug.Log($"[The first object info]: name-{m_TCPClient.objectHolders[0].prefabName}, vertN-{m_TCPClient.objectHolders[0].totalVertNum}, submeshN-{m_TCPClient.objectHolders[0].submeshCount}");
         StartListenToServer();
     }
 
@@ -319,7 +318,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
         {
             IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, portUDP);
             byte[] packet = udpClient.EndReceive(ar, ref remoteEP);
-
             if (packet.Length < HEADER_SIZE)
             {
                 Debug.LogWarning("Received packet too small to contain header.");
@@ -432,7 +430,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     private void DecodePacketMeshGrouped(byte[] packet, IPEndPoint remoteEP)
     {
-        //Debug.Log($"grouped");
         int cursor = 0;
         MeshDecodeMethod method = (MeshDecodeMethod)BitConverter.ToInt32(packet, cursor);
         cursor += sizeof(int);
@@ -449,7 +446,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
         byte[] chunkData = new byte[dataSize];
         Buffer.BlockCopy(packet, headerSize, chunkData, 0, dataSize);
 
-        //Debug.Log($"{chunkId}, {submeshType}, {objectId}, {submeshId}");
         // init the chunk in the client
         var newChunk = new Chunk
         {
@@ -497,7 +493,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 DecodePacketMeshGrouped(message, new IPEndPoint(IPAddress.Parse("192.168.1.188"), 13000));
                 break;
         }
-        //Debug.Log($"packet size: {packet.Length}");
         // parse the packet header
         //char submeshType = BitConverter.ToChar(packet, 0);
         //int objectId = -1, chunkId = -1, submeshId = -1, headerSize = -1;
@@ -517,7 +512,6 @@ public class UDPBroadcastClientNew : MonoBehaviour
         //}
         //else
         //{
-        //    Debug.LogError("Unknown packet type.");
         //    udpClient.BeginReceive(new AsyncCallback(ReceiveMeshChunks), null);
         //    return;
         //}

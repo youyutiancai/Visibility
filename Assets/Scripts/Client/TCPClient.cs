@@ -137,7 +137,6 @@ public class TCPClient : MonoBehaviour
     {
         int cursor = 0;
         TCPMessageType mt = (TCPMessageType)BitConverter.ToInt32(message, cursor);
-        //Debug.Log($"[+++++++++++++++] message type: {mt}");
 
         if (mt == TCPMessageType.TABLE && !parsingTable)
         {
@@ -159,7 +158,6 @@ public class TCPClient : MonoBehaviour
 
             Vector3 receivedPos = new Vector3(px, py, pz);
             Quaternion receivedRot = new Quaternion(rx, ry, rz, rw);
-            Debug.Log($"[+++++++++++++++] {receivedPos}, {receivedRot}");
 
             if (head != null)
             {
@@ -201,7 +199,6 @@ public class TCPClient : MonoBehaviour
             tcpType = BitConverter.ToInt32(message, 0);
             totalBytes = BitConverter.ToInt32(message, cursor += sizeof(int));
             totalObjectNum = BitConverter.ToInt32(message, cursor += sizeof(int));
-            Debug.Log($"HEADER: type: {tcpType}, object_num: {totalObjectNum}, total_bytes: {totalBytes}");
         }
 
         if (table_data.Count < totalBytes)
@@ -232,19 +229,12 @@ public class TCPClient : MonoBehaviour
                 objectHolders[i].submeshCount = BitConverter.ToInt32(table_data.ToArray(), cursor += sizeof(int));
                 cursor += sizeof(int);
 
-                // TODO: Currently not used for the isvisible and isowned
-
-                // Debug.Log($"{objectHolders[i].position} - {objectHolders[i].eulerAngles} - {objectHolders[i].scale}");
-
                 objectHolders[i].materialNames = new string[objectHolders[i].submeshCount];
-                //Transform transform = objectsInScene[i].transform;
                 for (int j = 0; j < objectHolders[i].submeshCount; j++)
                 {
                     int materialNameLength = BitConverter.ToInt32(table_data.ToArray(), cursor);
                     objectHolders[i].materialNames[j] = Encoding.ASCII.GetString(table_data.ToArray(), cursor += sizeof(int), materialNameLength);
                     cursor += materialNameLength;
-
-                    //Debug.Log($"ObjectID{i} - {objectHolders[i].materialNames[j]}");
                 }
             }
             parsingTable = false;
@@ -257,7 +247,6 @@ public class TCPClient : MonoBehaviour
 
     public void SendString(string message)
     {
-        Debug.Log(message);
         byte[] startmessage = System.Text.Encoding.ASCII.GetBytes(message);
         client.GetStream().Write(startmessage, 0, startmessage.Length);
     }

@@ -171,6 +171,10 @@ public class TCPControl : MonoBehaviour
 
                         realUser.latestPosition = new Vector3(px, py, pz);
                         realUser.latestRotation = new Quaternion(rx, ry, rz, rw);
+                        if (realUser.testPhase != testPhase)
+                        {
+                            realUser.testPhaseChanged = true;
+                        }
                         realUser.testPhase = testPhase;
 
                         if (!realUser.isPuppet)

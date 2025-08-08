@@ -5,7 +5,7 @@ using System;
 
 public class RealUser : User
 {
-    public bool isPuppet;
+    public bool isPuppet, testPhaseChanged;
     public TestPhase testPhase;
     public IPEndPoint tcpEndPoint;
     public Vector3 latestPosition, simulatedPosition;
@@ -19,6 +19,7 @@ public class RealUser : User
         simulatedPosition = initialPos;
         simulatedRotation = Quaternion.identity;
         isPuppet = false;
+        testPhaseChanged = false;
         testPhase = TestPhase.InitialPhase;
     }
 
@@ -61,7 +62,7 @@ public class RealUser : User
         }
     }
 
-    private void InformQuestionStart()
+    public void InformQuestionStart()
     {
         Debug.Log($"inform question start");
         byte[] message = new byte[sizeof(int) * 2];
