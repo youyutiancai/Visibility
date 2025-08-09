@@ -69,7 +69,7 @@ Shader "Custom/Pure_Color_Shadow"
                 float3 ambient = ShadeSH9(float4(normal, 1)); // Precomputed ambient lighting
 
                 // Shadow calculation (assuming you have your shadow setup correct)
-                float bias = 0.005f;
+                float bias = 0.0027f;
                 float4 shadowCoord = mul(_LightViewProjection, i.positionWS);
                 shadowCoord.xyz /= shadowCoord.w;
                 shadowCoord.xyz = shadowCoord.xyz * 0.5 + 0.5;

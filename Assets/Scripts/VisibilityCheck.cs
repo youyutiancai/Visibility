@@ -16,7 +16,7 @@ using System.Reflection;
 
 public enum CityPreprocessSteps
 {
-    CalculateFootprintCorner, CombineFootprintToUnit, NoPreProcessStep, CalculateFootprintChunk, VisibilityDataTest
+    NoPreProcessStep, CalculateFootprintCorner, CombineFootprintToUnit, CombineFootprintByChunkToUnit, CalculateFootprintChunk, VisibilityDataTest
 }
 
 [Serializable]
@@ -90,6 +90,10 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 break;
 
             case (CityPreprocessSteps.CombineFootprintToUnit):
+                sceneRoot.SetActive(false);
+                break;
+
+            case (CityPreprocessSteps.CombineFootprintByChunkToUnit):
                 sceneRoot.SetActive(false);
                 break;
 
@@ -827,6 +831,10 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                     StartCoroutine(WriteFootPrintsFromCornerToGridUnit());
                     break;
 
+                case CityPreprocessSteps.CombineFootprintByChunkToUnit:
+                    StartCoroutine(WriteFootPrintsFromCornerToGridByChunkUnit());
+                    break;
+
                 case CityPreprocessSteps.CalculateFootprintChunk:
                     
                     startPos = cc.footprintCalculateStartPos.transform.position;
@@ -1149,6 +1157,29 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         return result;
     }
 
+    //public void ReadFootprintByChunk(int x, int z, ref int[] visibleChunksAtCorner)
+    //{
+    //    string fileName = $"{x}_{z}";
+    //    if (chunkFootprintsAtCorner.ContainsKey(fileName))
+    //    {
+    //        visibleChunksAtCorner = chunkFootprintsAtCorner[fileName];
+    //        return;
+    //    }
+
+    //    string path = $"C:/Users/zhou1168/VRAR/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";
+    //    if (!File.Exists(path))
+    //    {
+    //        visibleChunksAtCorner = null;
+    //        return;
+    //    }
+
+    //    byte[] byteData = File.ReadAllBytes(path);
+    //    int[] intData = new int[byteData.Length / sizeof(int)];
+    //    Buffer.BlockCopy(byteData, 0, intData, 0, byteData.Length);
+    //    chunkFootprintsAtCorner.Add(fileName, intData);
+    //    visibleChunksAtCorner = intData;
+    //}
+
     public void ReadFootprintByChunk(int x, int z, ref int[] visibleChunksAtCorner)
     {
         string fileName = $"{x}_{z}";
@@ -1158,18 +1189,23 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
             return;
         }
 
-        string path = $"C:/Users/zhou1168/VRAR/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";
-        if (!File.Exists(path))
+        int unitX = x / numInUnitX, unitZ = z / numInUnitZ;
+        string path = $"C:/Users/zhou1168/VRAR/Data/CornerLevelFootprintsByChunkUnit/{unitX}_{unitZ}.bin";
+        byte[] bytes_read = File.ReadAllBytes(path);
+        int cursor = 0;
+        for (int k = 0; k < numInUnitX; k++)
         {
-            visibleChunksAtCorner = null;
-            return;
+            for (int l = 0; l < numInUnitZ; l++)
+            {
+                int gridX = unitX * numInUnitX + k, gridZ = unitZ * numInUnitZ + l;
+                int length = BitConverter.ToInt32(bytes_read, cursor);
+                int[] intData = new int[length / sizeof(int)]; cursor += sizeof(int);
+                Buffer.BlockCopy(bytes_read, cursor, intData, 0, length); cursor += length;
+                chunkFootprintsAtCorner.Add($"{gridX}_{gridZ}", intData);
+                visibleChunksAtCorner = intData;
+            }
         }
-
-        byte[] byteData = File.ReadAllBytes(path);
-        int[] intData = new int[byteData.Length / sizeof(int)];
-        Buffer.BlockCopy(byteData, 0, intData, 0, byteData.Length);
-        chunkFootprintsAtCorner.Add(fileName, intData);
-        visibleChunksAtCorner = intData;
+        visibleChunksAtCorner = chunkFootprintsAtCorner[fileName];
     }
 
     public void ReadFootprintByChunkInRegion(Vector3 position, float radius, ref Dictionary<int, long[]> result)
@@ -1417,6 +1453,44 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                             sum[d] = corner0[d] + corner1[d] + corner2[d] + corner3[d];
                         }
                         infoToWrite.AddRange(ConvertIntArrayToByteArrayNoHeader(sum));
+                    }
+                }
+                string fileName = $"{UnitFilePath}{i}_{j}.bin";
+                File.WriteAllBytes(fileName, infoToWrite.ToArray());
+                Debug.Log($"finished {i}_{j}");
+                yield return null;
+            }
+        }
+    }
+
+    private IEnumerator WriteFootPrintsFromCornerToGridByChunkUnit()
+    {
+        int numUnitX = Mathf.CeilToInt(gd.numGridX / numInUnitX);
+        int numUnitZ = Mathf.CeilToInt(gd.numGridZ / numInUnitZ);
+        string UnitFilePath = "C:\\Users\\zhou1168\\VRAR\\Data\\CornerLevelFootprintsByChunkUnit\\";
+        for (int i = 0; i < numUnitX; i++)
+        {
+            for (int j = 0; j < numUnitZ; j++)
+            {
+                List<byte> infoToWrite = new List<byte>();
+                for (int k = 0; k < numInUnitX; k++)
+                {
+                    for (int l = 0; l < numInUnitZ; l++)
+                    {
+                        int gridX = i * numInUnitX + k, gridZ = j * numInUnitZ + l;
+
+                        string path = $"C:/Users/zhou1168/VRAR/Data/CornerLevelFootprintsByChunk/{gridX}_{gridZ}.bin";
+                        if (!File.Exists(path))
+                        {
+                            //Debug.Log($"File does not exist: {path}");
+                            infoToWrite.AddRange(BitConverter.GetBytes(0));
+                            continue;
+                        }
+
+                        byte[] byteData = File.ReadAllBytes(path);
+                        //Debug.Log($"Reading footprint file by chunk: {gridX}_{gridZ} with size {byteData.Length}");
+                        infoToWrite.AddRange(BitConverter.GetBytes(byteData.Length));
+                        infoToWrite.AddRange(byteData);
                     }
                 }
                 string fileName = $"{UnitFilePath}{i}_{j}.bin";

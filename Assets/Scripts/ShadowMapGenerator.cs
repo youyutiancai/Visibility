@@ -41,17 +41,20 @@ public class ShadowMapGenerator : MonoBehaviour
             //Texture2D shadowMap = new Texture2D(2, 2);
             //shadowMap.LoadImage(shadowMapbytes);
             Texture2D shadowMap = Resources.Load<Texture2D>("Materials/Textures/shadowMap_new");
-            Matrix4x4 mainLightViewProjectionMatrix = lightCamera.projectionMatrix * lightCamera.worldToCameraMatrix;
+            //Matrix4x4 mainLightViewProjectionMatrix = lightCamera.projectionMatrix * lightCamera.worldToCameraMatrix;
+
+            //Matrix4x4 mainLightViewProjectionMatrix = new Matrix4x4(new Vector4(0.00694f, 0, 0, 0),
+            //    new Vector4(0, 0.00557f, -0.00119f, 0),
+            //    new Vector4(0, 0.00415f, 0.00160f, 0),
+            //    new Vector4(0.47222f, -0.18784f, -0.50314f, 1));
+            Matrix4x4 mainLightViewProjectionMatrix = new Matrix4x4(new Vector4(0.00631f, 0, 0, 0),
+                new Vector4(0, 0.02025f, -0.00119f, 0),
+                new Vector4(0, 0.01508f, 0.00160f, 0),
+                new Vector4(0.42929f, -2.66236f, -0.50335f, 1));
+            Debug.Log($"{mainLightViewProjectionMatrix}");
             Shader.SetGlobalTexture("_CustomShadowMap", shadowMap);
             Shader.SetGlobalMatrix("_LightViewProjection", mainLightViewProjectionMatrix);
         }
-
-        //Matrix4x4 lightViewProjMatrix = new Matrix4x4(new Vector4(0.00433f, -0.00192f, -0.00064f, 0.00000f),
-        //    new Vector4(0.00000f, 0.00321f, -0.00153f, 0.00000f),
-        //    new Vector4(0.00250f, 0.00332f, 0.00111f, 0.00000f),
-        //    new Vector4(0.00049f, -0.22139f, -0.39583f, 1.00000f));
-        //
-        //Debug.Log(lightViewProjMatrix);
     }
 
     void OnPostRenderCallback(Camera cam)
@@ -66,7 +69,7 @@ public class ShadowMapGenerator : MonoBehaviour
             bool updateMipMapsAutomatically = false;
 
             //int screenWidth = cam.activeTexture.width, screenHeight = cam.activeTexture.height;
-            int screenWidth = 2048, screenHeight = 2048;
+            int screenWidth = 4096, screenHeight = 1024;
             Texture2D destinationTexture = new Texture2D(screenWidth, screenHeight, TextureFormat.RGBA32, false);
 
             RenderTexture.active = cam.targetTexture;

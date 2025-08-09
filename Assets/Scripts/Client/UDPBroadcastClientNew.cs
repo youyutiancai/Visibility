@@ -113,7 +113,11 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private void Start()
     {
         shadowMap = Resources.Load<Texture2D>("Materials/Textures/shadowMap_new");
-        lightViewProjMatrix = lightCamera.projectionMatrix * lightCamera.worldToCameraMatrix;
+        lightViewProjMatrix = new Matrix4x4(new Vector4(0.00631f, 0, 0, 0),
+                new Vector4(0, 0.02025f, -0.00119f, 0),
+                new Vector4(0, 0.01508f, 0.00160f, 0),
+                new Vector4(0.42929f, -2.66236f, -0.50335f, 1));
+        //lightViewProjMatrix = lightCamera.projectionMatrix * lightCamera.worldToCameraMatrix;
         //Shader.SetGlobalTexture("_CustomShadowMap", shadowMap);
         //Shader.SetGlobalMatrix("_LightViewProjection", lightViewProjMatrix);
         colliderUpdateInterval = 2f;
