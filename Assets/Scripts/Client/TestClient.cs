@@ -4,6 +4,9 @@ using UnityEngine;
 using UnityTCPClient.Assets.Scripts;
 using System.Linq;
 using System.Collections;
+using System.Collections.Generic;
+using UnityEngine.XR;
+using Oculus.Interaction.Locomotion;
 
 public enum TestPhase
 {
@@ -18,12 +21,14 @@ public class TestClient : Singleton<TestClient>
     public int currentPathNum, currentNodeNum, currentQuestionNum;
     public Camera clientCamera;
     public TextMeshProUGUI title, instruction, nextButtonText;
-    public GameObject invisibleFenses, client, mileStoneObject, questionBoard;
+    public GameObject invisibleFenses, client, mileStoneObject, questionBoard, smoothTunnel;
     public Toggle PrevButton, NextButton;
     public ToggleGroup answerGroup;
     public GameObject answerTexts, paths;
+    public FirstPersonLocomotor firstPersonLocomotor;
     private GameObject[][] pathNodes;
     private int[][] answers;
+    private bool bWasPressedLastFrame = false;
     private string[] Questions = new string[]
     {
         "I noticed many missing parts in the scene while it was loading.",
@@ -239,6 +244,23 @@ public class TestClient : Singleton<TestClient>
         if (testPhase == TestPhase.MovingPhase)
         {
             CheckMilsStone();
+        }
+
+        var rightHandDevices = new List<InputDevice>();
+        InputDevices.GetDevicesAtXRNode(XRNode.RightHand, rightHandDevices);
+
+        foreach (var device in rightHandDevices)
+        {
+            if (device.TryGetFeatureValue(CommonUsages.secondaryButton, out bool bPressed))
+            {
+                if (bPressed && !bWasPressedLastFrame)
+                {
+                    firstPersonLocomotor.canRotate = !firstPersonLocomotor.canRotate;
+                    smoothTunnel.SetActive(firstPersonLocomotor.canRotate);
+                }
+
+                bWasPressedLastFrame = bPressed;
+            }
         }
     }
 

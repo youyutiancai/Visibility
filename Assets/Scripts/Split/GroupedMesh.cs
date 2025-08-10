@@ -33,7 +33,7 @@ public class GroupedMesh : MeshVariant
         {
             int[] triangles = mesh.GetTriangles(subMeshID);
             HashSet<int> visited = new HashSet<int>();
-            HashSet<int> addedVertexIndices = new HashSet<int>();
+            
 
             while (visited.Count < triangles.Length / 3)
             {
@@ -41,6 +41,7 @@ public class GroupedMesh : MeshVariant
                 List<Vector3> chunkNormals = new List<Vector3>();
                 List<int> chunkVertexIndices = new List<int>();
                 List<int> chunkTriangles = new List<int>();
+                HashSet<int> addedVertexIndices = new HashSet<int>();
                 int estimatedSize = sizeof(char) + sizeof(int) * 3;
 
                 for (int i = 0; i < triangles.Length; i += 3)
@@ -90,6 +91,14 @@ public class GroupedMesh : MeshVariant
                     visited.Add(bestTriIndex / 3);
                     estimatedSize += bestAdditionalSize;
                 }
+
+                //for (int i = 0; i < chunkTriangles.Count; i++)
+                //{
+                //    if (!chunkVertexIndices.Contains(chunkTriangles[i]))
+                //    {
+                //        Debug.Log("Vertex index not found in chunkVertexIndices!");
+                //    }
+                //}
 
                 List<byte> chunkData = new List<byte>();
                 chunkData.AddRange(BitConverter.GetBytes('G'));

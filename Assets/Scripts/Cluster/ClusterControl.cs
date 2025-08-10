@@ -11,6 +11,7 @@ using UnityEngine.InputSystem;
 using System.Net.Sockets;
 using UnityEngine.Assertions;
 using UnityEngine.UIElements;
+using System.Collections;
 
 public class ClusterControl : Singleton<ClusterControl>
 {
@@ -99,9 +100,13 @@ public class ClusterControl : Singleton<ClusterControl>
         
         objectChunksVTSeparate = new Dictionary<int, List<byte[]>>();
         objectChunksVTGrouped = new Dictionary<int, List<byte[]>>();
+        //objectChunksVTGroupedTest = new Dictionary<int, List<byte[]>>();
         if (vc.step == CityPreprocessSteps.NoPreProcessStep || vc.step == CityPreprocessSteps.CalculateFootprintChunk)
         {
+            //StartCoroutine(SaveAll()); // Save all chunks to files
             LoadAllChunks("Assets/Data/objectChunksGrouped", ref objectChunksVTGrouped);
+            //LoadAllChunks("Assets/Data/objectChunksGrouped", ref objectChunksVTGroupedTest);
+            //StartCoroutine(LoadAll());
             //LoadAllChunks("Assets/Data/ObjectChunks", ref objectChunksVTSeparate);
         }
         //Dictionary<int, long[]> result = new Dictionary<int, long[]>();
@@ -121,6 +126,53 @@ public class ClusterControl : Singleton<ClusterControl>
         //Debug.Log($"Total number of chunks in region: {count}");
         //int objectToSerialize = 0;
         //ReconstructFromChunks(vc.objectsInScene[objectToSerialize], objectChunksVTGrouped[objectToSerialize]);
+    }
+
+    //private IEnumerator LoadAll()
+    //{
+    //    for (int i = 0; i < vc.objectsInScene.Count; i++)
+    //    {
+    //        List<Byte[]> chunks = mv1.RequestChunks(i, CHUNK_SIZE);
+    //        objectChunksVTGroupedTest[i] = chunks;
+    //        Debug.Log($"{i}: old chunk num: {objectChunksVTGrouped[i].Count}, new chunk num: {chunks.Count}");
+    //        yield return null;
+    //    }
+    //}
+
+    private IEnumerator SaveAll()
+    {
+        string targetPath = "Assets/Data/ObjectChunksGroupedCorrect";
+
+        for (int i = 0; i < vc.objectsInScene.Count; i++)
+        {
+            string objectFilePath = Path.Combine(targetPath, $"object_{i}.bin");
+            List<Byte[]> chunks = mv1.RequestChunks(i, CHUNK_SIZE);
+            SaveChunksToFile(objectFilePath, chunks);
+            Debug.Log($"Saved {chunks.Count} chunks for object {i} to {objectFilePath}");
+            yield return null;
+        }
+    }
+    private void SaveChunksToFile(string objectFilePath, List<byte[]> chunks)
+    {
+        try
+        {
+            using (BinaryWriter writer = new BinaryWriter(File.Open(objectFilePath, FileMode.Create)))
+            {
+                // First write number of chunks
+                writer.Write(chunks.Count);
+
+                // Then write each chunk
+                foreach (byte[] chunk in chunks)
+                {
+                    writer.Write(chunk.Length); // chunk size
+                    writer.Write(chunk);        // chunk data
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Error writing chunks to {objectFilePath}: {e.Message}");
+        }
     }
 
     private void LoadAllChunks(string chunksDirectory, ref Dictionary<int, List<byte[]>> chunkDic)
@@ -552,6 +604,7 @@ public class ClusterControl : Singleton<ClusterControl>
                     if (nc.sendingMode == SendingMode.UNICAST_TCP)
                     {
                         allUsers[userIDToSend].MarkAsSentMaxCount(id.Item1, id.Item2, objectChunksVTGrouped[id.Item1].Count);
+                        //nc.SendChunkTCP(allUsers[userIDToSend], objectChunksVTGrouped[id.Item1][id.Item2]);
                         nc.SendChunkTCP(allUsers[userIDToSend], objectChunksVTGrouped[id.Item1][id.Item2]);
                     }
                     else
@@ -560,7 +613,8 @@ public class ClusterControl : Singleton<ClusterControl>
                         {
                             allUsers[i].MarkAsSent(id.Item1, id.Item2, objectChunksVTGrouped[id.Item1].Count, 1);
                         }
-                        nc.BroadcastChunk(objectChunksVTGrouped[id.Item1][id.Item2]);
+                        //nc.BroadcastChunk(objectChunksVTGrouped[id.Item1][id.Item2]);
+                        nc.SendChunkTCP(allUsers[userIDToSend], objectChunksVTGrouped[id.Item1][id.Item2]);
                     }
                     int nextUserID = userIDToSend;
                     do
@@ -1235,148 +1289,3 @@ public class PriorityQueue<TElement, TPriority, AElement, IDELement> where TPrio
         return _heap[index].AdditionalElement;
     }
 }
-
-//public class PriorityQueue<TElement, TPriority> where TPriority : IComparable<TPriority>
-//{
-//    private List<(TElement Element, string id, TPriority Priority, int Count)> _heap = new();
-//    private Dictionary<TElement, int> _indexMap = new();
-
-//    public int Count => _heap.Count;
-
-//    public void Enqueue(TElement element, string objectID, TPriority priority, int count)
-//    {
-//        if (_indexMap.TryGetValue(element, out int i))
-//        {
-//            _heap[i] = (element, objectID, _heap[i].Priority, count);
-//            return;
-//        }
-
-//        _heap.Add((element, objectID, priority, count));
-//        int index = _heap.Count - 1;
-//        _indexMap[element] = index;
-//        HeapifyUp(index);
-//    }
-
-//    public TElement Dequeue()
-//    {
-//        if (_heap.Count == 0)
-//            throw new InvalidOperationException("PriorityQueue is empty.");
-
-//        var root = _heap[0];
-
-//        if (root.Count > 1)
-//        {
-//            _heap[0] = (root.Element, root.id, root.Priority, root.Count - 1);
-//            return root.Element;
-//        }
-
-//        Swap(0, _heap.Count - 1);
-//        _heap.RemoveAt(_heap.Count - 1);
-//        _indexMap.Remove(root.Element);
-
-//        if (_heap.Count > 0)
-//            HeapifyDown(0);
-
-//        return root.Element;
-//    }
-
-
-//    public TElement Peek()
-//    {
-//        if (_heap.Count == 0)
-//            throw new InvalidOperationException("PriorityQueue is empty.");
-//        return _heap[0].Element;
-//    }
-
-//    public void UpdatePriority(TElement element, TPriority newPriority)
-//    {
-//        if (!_indexMap.TryGetValue(element, out int index))
-//            throw new KeyNotFoundException("Element not found in priority queue.");
-
-//        var current = _heap[index];
-//        int cmp = newPriority.CompareTo(current.Priority);
-//        _heap[index] = (element, current.id, newPriority, current.Count);
-
-//        if (cmp < 0)
-//            HeapifyUp(index);
-//        else if (cmp > 0)
-//            HeapifyDown(index);
-//    }
-
-//    public bool Contains(TElement element) => _indexMap.ContainsKey(element);
-
-//    public void Clear()
-//    {
-//        _heap.Clear();
-//        _indexMap.Clear();
-//    }
-
-//    private void HeapifyUp(int i)
-//    {
-//        while (i > 0)
-//        {
-//            int parent = (i - 1) / 2;
-//            if (_heap[i].Priority.CompareTo(_heap[parent].Priority) >= 0)
-//                break;
-
-//            Swap(i, parent);
-//            i = parent;
-//        }
-//    }
-
-//    private void HeapifyDown(int i)
-//    {
-//        int last = _heap.Count - 1;
-//        while (true)
-//        {
-//            int left = 2 * i + 1;
-//            int right = 2 * i + 2;
-//            int smallest = i;
-
-//            if (left <= last && _heap[left].Priority.CompareTo(_heap[smallest].Priority) < 0)
-//                smallest = left;
-//            if (right <= last && _heap[right].Priority.CompareTo(_heap[smallest].Priority) < 0)
-//                smallest = right;
-
-//            if (smallest == i) break;
-
-//            Swap(i, smallest);
-//            i = smallest;
-//        }
-//    }
-
-//    private void Swap(int i, int j)
-//    {
-//        var temp = _heap[i];
-//        _heap[i] = _heap[j];
-//        _heap[j] = temp;
-
-//        _indexMap[_heap[i].Element] = i;
-//        _indexMap[_heap[j].Element] = j;
-//    }
-
-
-//    public TPriority GetPriority(TElement element)
-//    {
-//        if (!_indexMap.TryGetValue(element, out int index))
-//            throw new KeyNotFoundException("Element not found in priority queue.");
-
-//        return _heap[index].Priority;
-//    }
-
-//    public int GetCount(TElement element)
-//    {
-//        if (!_indexMap.TryGetValue(element, out int index))
-//            throw new KeyNotFoundException("Element not found in priority queue.");
-
-//        return _heap[index].Count;
-//    }
-
-//    public string GetID(TElement element)
-//    {
-//        if (!_indexMap.TryGetValue(element, out int index))
-//            throw new KeyNotFoundException("Element not found in priority queue.");
-
-//        return _heap[index].id;
-//    }
-//}
