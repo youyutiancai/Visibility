@@ -392,6 +392,18 @@ public class ClusterControl : Singleton<ClusterControl>
             Debug.Log($"canSendObject changed to {canSendObjects}");
         }
 
+        if (Keyboard.current.rKey.wasPressedThisFrame)
+        {
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                RealUser user = transform.GetChild(i).GetComponent<RealUser>();
+                if (user.testPhase != TestPhase.WaitPhase)
+                    continue;
+                canSendObjects = false;
+                user.InformResetAll();
+            }
+        }
+
         if (users.Count == 0)
             return;
 

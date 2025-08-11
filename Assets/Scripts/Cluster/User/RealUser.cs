@@ -2,6 +2,7 @@ using System.Net.Sockets;
 using System.Net;
 using UnityEngine;
 using System;
+using Unity.VisualScripting;
 
 public class RealUser : User
 {
@@ -68,6 +69,16 @@ public class RealUser : User
         byte[] message = new byte[sizeof(int) * 2];
         Buffer.BlockCopy(BitConverter.GetBytes(sizeof(int)), 0, message, 0, sizeof(int));
         Buffer.BlockCopy(BitConverter.GetBytes((int)TCPMessageType.QUESTIONSTART), 0, message, sizeof(int), sizeof(int));
+        tcpClient.GetStream().Write(message, 0, message.Length);
+    }
+
+    public void InformResetAll()
+    {
+        InitializeUser();
+        Debug.Log($"resetting all");
+        byte[] message = new byte[sizeof(int) * 2];
+        Buffer.BlockCopy(BitConverter.GetBytes(sizeof(int)), 0, message, 0, sizeof(int));
+        Buffer.BlockCopy(BitConverter.GetBytes((int)TCPMessageType.RESETALL), 0, message, sizeof(int), sizeof(int));
         tcpClient.GetStream().Write(message, 0, message.Length);
     }
 }

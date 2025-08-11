@@ -116,7 +116,8 @@ public enum TCPMessageType
     POSE_FROM_SERVER,
     PUPPET_TOGGLE,
     CHUNK,
-    QUESTIONSTART
+    QUESTIONSTART,
+    RESETALL
 }
 
 public enum SendingMode

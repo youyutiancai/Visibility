@@ -28,7 +28,7 @@ public abstract class User : MonoBehaviour
     {
     }
 
-    private void Start()
+    protected void InitializeUser()
     {
         vc = VisibilityCheck.Instance;
         cc = ClusterControl.Instance;
@@ -47,7 +47,7 @@ public abstract class User : MonoBehaviour
     {
         if (vc == null)
         {
-            Start ();
+            InitializeUser();
         }
         for (int i = 0; i < vc.objectsInScene.Count; i++)
         {
@@ -63,7 +63,7 @@ public abstract class User : MonoBehaviour
     {
         if (vc == null)
         {
-            Start();
+            InitializeUser();
         }
         foreach (int objectID in visibleChunks.Keys)
         {
@@ -99,7 +99,7 @@ public abstract class User : MonoBehaviour
     {
         if (vc == null)
         {
-            Start();
+            InitializeUser();
         }
         foreach (int objectID in visibleChunks.Keys)
         {

@@ -34,20 +34,6 @@ public enum MeshDecodeMethod
     VTGrouped
 }
 
-public class ObjectHolder
-{
-    public int objectID;
-    public Vector3 position, eulerAngles, scale;
-    public string prefabName;
-    public string[] materialNames;
-    public int totalVertChunkNum, totalTriChunkNum, totalVertNum, submeshCount;
-    public bool ifVisible, ifOwned, needUpdateCollider;
-    public Dictionary<int, Chunk> chunks_VTSeparate = new Dictionary<int, Chunk>();
-    public Dictionary<int, Chunk> chunks_VTGrouped = new Dictionary<int, Chunk>();
-    public DateTime firstChunkTime, latestChunkTime;
-    public IPEndPoint remoteEP;
-}
-
 public class UDPBroadcastClientNew : MonoBehaviour
 {
     public TextMeshProUGUI m_TextLog;
@@ -127,6 +113,21 @@ public class UDPBroadcastClientNew : MonoBehaviour
         string filename = $"ClientRuntimeLog_{DateTime.UtcNow:yyyyMMdd_HHmmss}.jsonl";
         logFilePath = Path.Combine(Application.persistentDataPath, filename);
         logWriter = new StreamWriter(logFilePath, append: false);
+    }
+    public void ResetAll()
+    {
+        foreach (int objectID in recGameObjects.Keys)
+        {
+            GameObject go = recGameObjects[objectID];
+            if (go) Destroy(go);
+        }
+        recGameObjects.Clear(); 
+        verticesDict.Clear();
+        trianglesDict.Clear();
+        normalsDict.Clear();
+        recevTotalChunkN = 0;
+        chunkQueue.Clear();
+        activeMeshTransmissions.Clear();
     }
 
     private void OnEnable()

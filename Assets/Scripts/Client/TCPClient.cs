@@ -1,11 +1,24 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
-
+public class ObjectHolder
+{
+    public int objectID;
+    public Vector3 position, eulerAngles, scale;
+    public string prefabName;
+    public string[] materialNames;
+    public int totalVertChunkNum, totalTriChunkNum, totalVertNum, submeshCount;
+    public bool ifVisible, ifOwned, needUpdateCollider;
+    public Dictionary<int, Chunk> chunks_VTSeparate = new Dictionary<int, Chunk>();
+    public Dictionary<int, Chunk> chunks_VTGrouped = new Dictionary<int, Chunk>();
+    public DateTime firstChunkTime, latestChunkTime;
+    public IPEndPoint remoteEP;
+}
 public class TCPClient : MonoBehaviour
 {
     [HideInInspector]
@@ -50,6 +63,17 @@ public class TCPClient : MonoBehaviour
 
         listenerThread = new Thread(() => ListenToServer(client)) { IsBackground = true };
         listenerThread.Start();
+    }
+    public void ResetAll()
+    {
+        for (int i = 0; i < objectHolders.Length; i++)
+        {
+            objectHolders[i].ifVisible = false;
+            objectHolders[i].ifOwned = false;
+            objectHolders[i].needUpdateCollider = false;
+            objectHolders[i].chunks_VTSeparate.Clear();
+            objectHolders[i].chunks_VTGrouped.Clear();
+        }
     }
 
     private void Update()
@@ -147,22 +171,22 @@ public class TCPClient : MonoBehaviour
         {
             if (!receivedInitPos)
                 receivedInitPos = true;
-            cursor = sizeof(int);
-            float px = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
-            float py = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
-            float pz = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
-            float rx = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
-            float ry = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
-            float rz = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
-            float rw = BitConverter.ToSingle(message, cursor);
+            //cursor = sizeof(int);
+            //float px = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            //float py = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            //float pz = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            //float rx = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            //float ry = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            //float rz = BitConverter.ToSingle(message, cursor); cursor += sizeof(float);
+            //float rw = BitConverter.ToSingle(message, cursor);
 
-            Vector3 receivedPos = new Vector3(px, py, pz);
-            Quaternion receivedRot = new Quaternion(rx, ry, rz, rw);
+            //Vector3 receivedPos = new Vector3(px, py, pz);
+            //Quaternion receivedRot = new Quaternion(rx, ry, rz, rw);
 
-            if (head != null)
-            {
-                head.transform.SetPositionAndRotation(receivedPos, receivedRot);
-            }
+            //if (head != null)
+            //{
+            //    head.transform.SetPositionAndRotation(receivedPos, receivedRot);
+            //}
             return;
         }
 
@@ -183,6 +207,13 @@ public class TCPClient : MonoBehaviour
             testClient.testPhase = TestPhase.QuestionPhase;
             testClient.UpdateAll();
             return;
+        }
+
+        if (mt == TCPMessageType.RESETALL)
+        {
+            ResetAll();
+            testClient.ResetAll();
+            udpClient.ResetAll();
         }
     }
 
@@ -241,7 +272,7 @@ public class TCPClient : MonoBehaviour
             OnReceivedServerTable?.Invoke();
             testClient.testPhase = TestPhase.StandPhase;
             testClient.UpdateAll();
-            testClient.TrapUser();
+            //testClient.TrapUser();
         }
     }
 

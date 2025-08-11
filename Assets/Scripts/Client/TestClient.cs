@@ -96,21 +96,8 @@ public class TestClient : Singleton<TestClient>
         currentQuestionNum++;
         if (currentQuestionNum >= Questions.Length)
         {
-            if (currentNodeNum == pathNodes[currentPathNum].Length)
-            {
-                currentPathNum++;
-                currentNodeNum = 0;
-            }
-            if (currentPathNum >= pathNodes.Length)
-            {
-                testPhase = TestPhase.EndPhase;
-                return;
-            }
-            else
-            {
-                currentQuestionNum = 0;
-                QuitQuestion();
-            }
+            currentQuestionNum = 0;
+            QuitQuestion();
         }
         NextButton.isOn = false;
         answerGroup.SetAllTogglesOff();
@@ -123,6 +110,8 @@ public class TestClient : Singleton<TestClient>
         if (currentNodeNum == 0)
         {
             testPhase = TestPhase.MovingPhase;
+            currentNodeNum = 1;
+            UpdateMileStone();
             UnTrapUser();
         } else
         {
@@ -148,13 +137,25 @@ public class TestClient : Singleton<TestClient>
         currentQuestionNum = 0;
         currentPathNum = 0;
         currentNodeNum = 0;
+        client.transform.position = pathNodes[currentPathNum][currentNodeNum].transform.position;
+        TrapUser();
         answers = new int[pathNodes.Length][];
         for (int i = 0; i < pathNodes.Length; i++)
         {
             answers[i] = new int[Questions.Length];
         }
         UpdateAll();
+    }
+
+    public void ResetAll()
+    {
+        testPhase = TestPhase.StandPhase;
+        currentPathNum++;
+        currentQuestionNum = 0;
+        currentNodeNum = 0;
+        client.transform.position = pathNodes[currentPathNum][currentNodeNum].transform.position;
         TrapUser();
+        UpdateAll();
     }
 
     private void InitializePathNodes()
@@ -229,6 +230,7 @@ public class TestClient : Singleton<TestClient>
         invisibleFenses.SetActive(true);
         Vector3 clientPosition = client.transform.position;
         invisibleFenses.transform.position = new Vector3(clientPosition.x, 0, clientPosition.z);
+        MoveQuestionBoardInFront();
     }
 
     public void UnTrapUser()
@@ -280,17 +282,22 @@ public class TestClient : Singleton<TestClient>
             {
                 testPhase = TestPhase.QuestionPhase;
                 TrapUser();
-                MoveQuestionBoardInFront();
+                //MoveQuestionBoardInFront();
                 UpdateAll();
             } else
             {
-                mileStoneObject.transform.position = pathNodes[currentPathNum][currentNodeNum].transform.position;
+                UpdateMileStone();
             }
         }
         if (mileStoneObject.activeSelf)
         {
             UpdateMileStoneColor();
         }
+    }
+
+    public void UpdateMileStone()
+    {
+        mileStoneObject.transform.position = pathNodes[currentPathNum][currentNodeNum].transform.position;
     }
 
     private void MoveQuestionBoardInFront()
