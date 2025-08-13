@@ -1,16 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
 using TMPro;
-//using Unity.VisualScripting;
 using UnityTCPClient.Assets.Scripts;
 using System.IO;
 using System;
 using Random = UnityEngine.Random;
 using UnityEngine.InputSystem;
 using System.Net.Sockets;
-using UnityEngine.Assertions;
-using UnityEngine.UIElements;
 using System.Collections;
 
 public class ClusterControl : Singleton<ClusterControl>
@@ -21,11 +17,13 @@ public class ClusterControl : Singleton<ClusterControl>
         footprintCalculateEndPos;  // clusterPrefab is used to represent a cluster visually
     //public SyntheticPathNode[] clusterInitPoses;
     //public SyntheticPathNode[] paths;
-    public TextMeshProUGUI displayText;
+    public TextMeshProUGUI userStatusInfo;
 
     public float epsilon = 10;  // Radius for clustering
     public int numChunkRepeat;
     public int minPts = 2;      // Minimum points to form a cluster
+    [SerializeField]
+    public int pathNum;
     public float updateInterval, newObjectInterval, newChunkInterval, chunkCoolDownInterval, timegapForSwapUsers;  // How often to update (in seconds)
     public bool regularlySwapUsers, regularlySwapLeader, writeToData;
 
@@ -52,6 +50,7 @@ public class ClusterControl : Singleton<ClusterControl>
     private Dictionary<int, Color> clusterColors = new Dictionary<int, Color>();  // Cluster ID to color mapping
     private Dictionary<int, GameObject> clusterGameObjects = new Dictionary<int, GameObject>(); // Cluster ID to GameObject mapping
     private VisibilityCheck vc;
+    private TCPControl tc;
     private int[] visibleObjectsInRegion;
     private long[] objectFootPrintsInRegion, newObjectCount;
     private GridDivide gd;
@@ -79,12 +78,14 @@ public class ClusterControl : Singleton<ClusterControl>
     private void InitialValues()
     {
         vc = VisibilityCheck.Instance;
+        tc = TCPControl.Instance;
         nc = NetworkControl.Instance;
         gd = GridDivide.Instance;
         visibleObjectsInRegion = new int[vc.objectsInScene.Count];
         objectFootPrintsInRegion = new long[vc.objectsInScene.Count];
         objectSentIndi = 0;
         userIDToSend = 0;
+        pathNum = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
         initialClusterCenterPos = initialClusterCenter.transform.position;
         objectsWaitToBeSent = new PriorityQueue<int, long, float, int>();
@@ -388,21 +389,50 @@ public class ClusterControl : Singleton<ClusterControl>
 
         if ((SimulationStrategy == SimulationStrategyDropDown.RealUserCluster || SimulationStrategy == SimulationStrategyDropDown.RealUserIndi) && Keyboard.current.bKey.wasPressedThisFrame)
         {
-            canSendObjects = !canSendObjects;
+            if (canSendObjects)
+            {
+                canSendObjects = false;
+            } else
+            {
+                bool allUsersStandby = true;
+                foreach (RealUser user in tc.addressToUser.Values)
+                {
+                    if (user.testPhase != TestPhase.StandPhase)
+                    {
+                        allUsersStandby = false; break;
+                    }
+                }
+                if (allUsersStandby)
+                {
+                    canSendObjects = true;
+                }
+            }
             Debug.Log($"canSendObject changed to {canSendObjects}");
         }
 
-        if (Keyboard.current.rKey.wasPressedThisFrame)
+        if (Keyboard.current.rKey.wasPressedThisFrame && tc.addressToUser.Count != 0)
         {
-            for (int i = 0; i < transform.childCount; i++)
+            bool canResetAll = true;
+            foreach (RealUser user in tc.addressToUser.Values)
             {
-                RealUser user = transform.GetChild(i).GetComponent<RealUser>();
                 if (user.testPhase != TestPhase.WaitPhase)
-                    continue;
+                {
+                    canResetAll = false; break;
+                }
+            }
+            if (canResetAll)
+            {
+                pathNum++;
                 canSendObjects = false;
-                user.InformResetAll();
+                nc.sendingMode = pathNum % 2 == 0 ? SendingMode.UNICAST_TCP : SendingMode.MULTICAST;
+                foreach (RealUser user in tc.addressToUser.Values)
+                {
+                    user.InformResetAll();
+                }
             }
         }
+
+        UpdateUserStatus();
 
         if (users.Count == 0)
             return;
@@ -418,7 +448,6 @@ public class ClusterControl : Singleton<ClusterControl>
                     UpdateClusterParents(); // Update parents and scale clusters
                     SendObjectsToClusters();
                     SendObjectsToUsers();
-                    UpdateMethodComparison();
                 }
                 break;
 
@@ -604,6 +633,7 @@ public class ClusterControl : Singleton<ClusterControl>
             }
             if (totalChunksWaitToSend > 0)
             {
+                chunksSentEachTime = nc.sendingMode == SendingMode.UNICAST_TCP ? 50 : 30;
                 while (count < chunksSentEachTime)
                 {
                     userIDToSend = userIDToSend % allUsers.Length;
@@ -648,6 +678,21 @@ public class ClusterControl : Singleton<ClusterControl>
         //{
         //    ss.UpdateRegularly();
         //}
+    }
+
+    private void UpdateUserStatus()
+    {
+        userStatusInfo.text = "";
+        for (int i = 0; i < tc.headsetIDs.Length; i++)
+        {
+            if (tc.addressToUser.TryGetValue(tc.headsetIDs[i], out RealUser user)) {
+                userStatusInfo.text += $"User {i} ({tc.headsetIDs[i]}): {user.testPhase}\n";
+            }
+            else
+            {
+                userStatusInfo.text += $"User {i} ({tc.headsetIDs[i]}): Not connected\n";
+            } 
+        }
     }
 
     private void SimulateAndSendPuppetPoses()
@@ -1039,13 +1084,6 @@ public class ClusterControl : Singleton<ClusterControl>
         user.UpdateVisibleObjectsIndi(visibleObjectsInRegion, ref objectSentIndi, writer);
         user.preX = xStartIndex;
         user.preZ = zStartIndex;
-    }
-     
-    private void UpdateMethodComparison()
-    {
-        //displayText.text = "";
-        //displayText.text += $"# of objects sent based on clusters: {objectSentCluster}\n" +
-        //    $"# of objects sent based on individuals: {objectSentIndi}";
     }
 
     void OnApplicationQuit()

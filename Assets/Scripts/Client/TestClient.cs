@@ -3,10 +3,13 @@ using TMPro;
 using UnityEngine;
 using UnityTCPClient.Assets.Scripts;
 using System.Linq;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.XR;
 using Oculus.Interaction.Locomotion;
+using System.IO;
+using System;
+using Random = UnityEngine.Random;
+using System.Globalization;
 
 public enum TestPhase
 {
@@ -21,14 +24,18 @@ public class TestClient : Singleton<TestClient>
     public int currentPathNum, currentNodeNum, currentQuestionNum;
     public Camera clientCamera;
     public TextMeshProUGUI title, instruction, nextButtonText;
-    public GameObject invisibleFenses, client, mileStoneObject, questionBoard, smoothTunnel;
+    public GameObject invisibleFenses, client, milestoneObject, questionBoard, smoothTunnel;
     public Toggle PrevButton, NextButton;
     public ToggleGroup answerGroup;
     public GameObject answerTexts, paths;
     public FirstPersonLocomotor firstPersonLocomotor;
+    public UDPBroadcastClientNew udpBroadcastClient;
+    public int pathOrder;
     private GameObject[][] pathNodes;
     private int[][] answers;
     private bool bWasPressedLastFrame = false;
+    private StreamWriter answerWriter;
+    private string logFilePath;
     private string[] Questions = new string[]
     {
         "I noticed many missing parts in the scene while it was loading.",
@@ -111,17 +118,23 @@ public class TestClient : Singleton<TestClient>
         {
             testPhase = TestPhase.MovingPhase;
             currentNodeNum = 1;
-            UpdateMileStone();
+            UpdateMilestonePos();
             UnTrapUser();
         } else
         {
-            testPhase = TestPhase.WaitPhase;
+            testPhase = currentPathNum == pathNodes.Length - 1 ? TestPhase.EndPhase : TestPhase.WaitPhase;
         }
     }
 
     private void WriteCurrentAnswers()
     {
-
+        string answerString = $"";
+        for (int i = 0; i < answers[currentPathNum].Length; i++)
+        {
+            answerString += $"{answers[currentPathNum][i]},";
+        }
+        answerWriter.WriteLine(answerString);
+        answerWriter.Flush();
     }
 
     private void OnAnswerToggleChanged(bool isOn)
@@ -132,19 +145,45 @@ public class TestClient : Singleton<TestClient>
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        InitializePathNodes();
         testPhase = TestPhase.InitialPhase;
         currentQuestionNum = 0;
         currentPathNum = 0;
         currentNodeNum = 0;
-        client.transform.position = pathNodes[currentPathNum][currentNodeNum].transform.position;
-        TrapUser();
+        UpdatePathOrder();
         answers = new int[pathNodes.Length][];
         for (int i = 0; i < pathNodes.Length; i++)
         {
             answers[i] = new int[Questions.Length];
         }
         UpdateAll();
+        string filename = $"userAnswers_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
+        logFilePath = Path.Combine(Application.persistentDataPath, filename);
+        answerWriter = new StreamWriter(logFilePath, append: false);
+    }
+
+    public void UpdatePathOrder()
+    {
+        int pathNum = 2;
+        int conditionNum = 2;
+        pathNodes = new GameObject[pathNum * conditionNum][];
+        int[] pathOrderToProcess = pathOrder == 0 ? new int[] { 0, 1 } : new int[] { 1, 0 };
+        for (int i = 0; i < pathNum; i++)
+        {
+            int currentPathToAdd = pathOrderToProcess[i];
+            Transform path = paths.transform.GetChild(currentPathToAdd);
+            int nodeNumThisPath = path.childCount;
+            GameObject[] allNodesThisPath = new GameObject[nodeNumThisPath];
+            for (int j = 0; j < nodeNumThisPath; j++)
+            {
+                allNodesThisPath[j] = paths.transform.GetChild(currentPathToAdd).GetChild(j).gameObject;
+            }
+            for (int j = 0; j < conditionNum; j++)
+            {
+                pathNodes[i * conditionNum + j] = allNodesThisPath;
+            }
+        }
+        client.transform.position = pathNodes[currentPathNum][currentNodeNum].transform.position;
+        TrapUser();
     }
 
     public void ResetAll()
@@ -156,27 +195,6 @@ public class TestClient : Singleton<TestClient>
         client.transform.position = pathNodes[currentPathNum][currentNodeNum].transform.position;
         TrapUser();
         UpdateAll();
-    }
-
-    private void InitializePathNodes()
-    {
-        int pathNum = 2;
-        int conditionNum = 2;
-        pathNodes = new GameObject[pathNum * conditionNum][];
-        for (int i = 0; i < pathNum; i++)
-        {
-            Transform path = paths.transform.GetChild(i);
-            int nodeNumThisPath = path.childCount;
-            GameObject[] allNodesThisPath = new GameObject[nodeNumThisPath];
-            for (int j = 0; j < nodeNumThisPath; j++)
-            {
-                allNodesThisPath[j] = paths.transform.GetChild(i).GetChild(j).gameObject;
-            }
-            for (int j = 0; j < conditionNum; j++)
-            {
-                pathNodes[i * conditionNum + j] = allNodesThisPath;
-            }
-        }
     }
 
     public void UpdateAll()
@@ -191,7 +209,7 @@ public class TestClient : Singleton<TestClient>
         NextButton.gameObject.SetActive(testPhase == TestPhase.QuestionPhase && currentQuestionNum <= Questions.Length - 1 && answerGroup.ActiveToggles().Any());
         answerGroup.gameObject.SetActive(testPhase == TestPhase.QuestionPhase);
         answerTexts.SetActive(testPhase == TestPhase.QuestionPhase);
-        mileStoneObject.SetActive(testPhase == TestPhase.MovingPhase);
+        milestoneObject.SetActive(testPhase == TestPhase.MovingPhase);
     }
 
     private void UpdateText()
@@ -200,14 +218,20 @@ public class TestClient : Singleton<TestClient>
         {
             case TestPhase.InitialPhase:
             case TestPhase.StandPhase:
-                if (currentPathNum == 0)
+                title.text = $"Path {currentPathNum + 1}/{pathNodes.Length} - Standby";
+                if (udpBroadcastClient.recGameObjects.Count == 0)
                 {
-                    instruction.text = "You will see a virtual environment begin to load around you. Please remain seated, observe how the scene loads, and answer the questions that appear in front of you. You may raise your hand, take off the headset, or inform the researcher if you experience any discomfort.";
+                    if (currentPathNum == 0)
+                    {
+                        instruction.text = "You will see a virtual environment begin loading around you. Please remain seated, observe how the scene loads, and answer the questions that appear in front of you. If you experience any discomfort, you may raise your hand, remove the headset, or inform the researcher.";
+                    } else
+                    {
+                        instruction.text = "Please wait for the instructor to start the next path.";
+                    }
                 } else
                 {
-                    instruction.text = "Please wait for the instructor to start the next path.";
+                    instruction.text = "The scene is loading. You may look around, but please remain seated and do not move until instructed to do so.";
                 }
-                title.text = $"Path {currentPathNum + 1}/{pathNodes.Length} - Standby";
                 break;
             
             case TestPhase.QuestionPhase:
@@ -219,6 +243,16 @@ public class TestClient : Singleton<TestClient>
             case TestPhase.MovingPhase:
                 title.text = $"Path {currentPathNum + 1}/{pathNodes.Length} - Move";
                 instruction.text = "Now please use the right thumbstick to move along the path toward the milestones. You may pause to look around, but continue moving forward until you return to the start point.";
+                break;
+
+            case TestPhase.WaitPhase:
+                title.text = $"Path {currentPathNum + 1}/{pathNodes.Length} - Wait";
+                instruction.text = "Please wait for the instructor to start the next path.";
+                break;
+
+            case TestPhase.EndPhase:
+                title.text = "Test Completed";
+                instruction.text = "Thank you for participating in the test. Please remove the headset and inform the researcher.";
                 break;
         }
     }
@@ -245,7 +279,7 @@ public class TestClient : Singleton<TestClient>
     {
         if (testPhase == TestPhase.MovingPhase)
         {
-            CheckMilsStone();
+            CheckMilestone();
         }
 
         var rightHandDevices = new List<InputDevice>();
@@ -266,16 +300,16 @@ public class TestClient : Singleton<TestClient>
         }
     }
 
-    private void CheckMilsStone()
+    private void CheckMilestone()
     {
         if (currentNodeNum >= pathNodes[currentPathNum].Length)
             return;
 
         Vector3 clientPos = client.transform.position;
-        Vector3 mileStonePos = mileStoneObject.transform.position;
-        float distanceToMileStone = Mathf.Sqrt(Mathf.Pow(clientPos.x - mileStonePos.x, 2) + Mathf.Pow(clientPos.z - mileStonePos.z, 2));
-        float mileStoneRadius = mileStoneObject.transform.GetChild(0).GetComponent<CapsuleCollider>().radius;
-        if (distanceToMileStone <= mileStoneRadius)
+        Vector3 milestonePos = milestoneObject.transform.position;
+        float distanceToMilestone = Mathf.Sqrt(Mathf.Pow(clientPos.x - milestonePos.x, 2) + Mathf.Pow(clientPos.z - milestonePos.z, 2));
+        float milestoneRadius = milestoneObject.transform.GetChild(0).GetComponent<CapsuleCollider>().radius;
+        if (distanceToMilestone <= milestoneRadius)
         {
             currentNodeNum++;
             if (currentNodeNum == pathNodes[currentPathNum].Length)
@@ -286,18 +320,18 @@ public class TestClient : Singleton<TestClient>
                 UpdateAll();
             } else
             {
-                UpdateMileStone();
+                UpdateMilestonePos();
             }
         }
-        if (mileStoneObject.activeSelf)
+        if (milestoneObject.activeSelf)
         {
-            UpdateMileStoneColor();
+            UpdateMilestoneObjects();
         }
     }
 
-    public void UpdateMileStone()
+    public void UpdateMilestonePos()
     {
-        mileStoneObject.transform.position = pathNodes[currentPathNum][currentNodeNum].transform.position;
+        milestoneObject.transform.position = pathNodes[currentPathNum][currentNodeNum].transform.position;
     }
 
     private void MoveQuestionBoardInFront()
@@ -309,14 +343,32 @@ public class TestClient : Singleton<TestClient>
         questionBoard.transform.LookAt(questionBoard.transform.position * 2 - clientCameraPos);
     }
 
-    private void UpdateMileStoneColor()
+    private void UpdateMilestoneObjects()
     {
-        GameObject ring = mileStoneObject.transform.GetChild(0).GetChild(0).gameObject;
-        GameObject ball = mileStoneObject.transform.GetChild(1).gameObject;
-        Color mileStoneColor = ring.GetComponent<MeshRenderer>().material.color;
-        mileStoneColor = new Color(Random.Range(0, 1f), Random.Range(0, 1f), Random.Range(0, 1f));
+        GameObject ring = milestoneObject.transform.GetChild(0).GetChild(0).gameObject;
+        GameObject ball = milestoneObject.transform.GetChild(1).gameObject;
+        GameObject arrow = milestoneObject.transform.GetChild(2).GetChild(0).gameObject;
+        Color milestoneColor = ring.GetComponent<MeshRenderer>().material.color;
+        milestoneColor = new Color(Random.Range(0, 1f), Random.Range(0, 1f), Random.Range(0, 1f));
 
-        ring.GetComponent<MeshRenderer>().material.color = mileStoneColor;
-        ball.GetComponent<MeshRenderer>().material.color = mileStoneColor;
+        ring.GetComponent<MeshRenderer>().material.color = milestoneColor;
+        ball.GetComponent<MeshRenderer>().material.color = milestoneColor;
+        //arrow.GetComponent<MeshRenderer>().material.color = milestoneColor;
+
+        Vector3 ballPos = ball.transform.position;
+        Vector3 clientCameraPos = clientCamera.transform.position;
+        Vector3 projectedBallPos = new Vector3(ballPos.x, arrow.transform.position.y, ballPos.z);
+        Vector3 projectedCameraPos = new Vector3(clientCameraPos.x, arrow.transform.position.y, clientCameraPos.z);
+        arrow.transform.position = (projectedBallPos - projectedCameraPos).normalized * 2.5f + projectedCameraPos;
+        arrow.transform.LookAt(projectedBallPos);
+    }
+
+    private void OnDestroy()
+    {
+        if (answerWriter != null)
+        {
+            answerWriter.Flush();
+            answerWriter.Close();
+        }
     }
 }

@@ -214,6 +214,14 @@ public class TCPClient : MonoBehaviour
             ResetAll();
             testClient.ResetAll();
             udpClient.ResetAll();
+            testClient.UpdateAll();
+        }
+
+        if (mt == TCPMessageType.PATHORDER)
+        {
+            int pathOrder = BitConverter.ToInt32(message, sizeof(int));
+            testClient.pathOrder = pathOrder;
+            testClient.UpdatePathOrder();
         }
     }
 

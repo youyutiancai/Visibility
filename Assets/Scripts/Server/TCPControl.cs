@@ -5,10 +5,11 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
-using Random = UnityEngine.Random;
+using UnityTCPClient.Assets.Scripts;
 
-public class TCPControl : MonoBehaviour
+public class TCPControl : Singleton<TCPControl>
 {
+    public IPAddress[] headsetIDs = new IPAddress[] { IPAddress.Parse("192.168.1.173") };
     private IPAddress iP4Address;
     private int listenerport = 13000;
     private CancellationToken ct;
@@ -22,7 +23,7 @@ public class TCPControl : MonoBehaviour
     private ClusterControl cc;
     private NetworkControl nc;
     public Dictionary<IPAddress, RealUser> addressToUser;
-
+    private int userIDOrder;
 
     private void Start()
     {
@@ -35,6 +36,7 @@ public class TCPControl : MonoBehaviour
         clients = new Dictionary<IPAddress, TcpClient>();
         clientTasks = new Dictionary<IPAddress, Task>();
         addressToUser = new Dictionary<IPAddress, RealUser>();
+        userIDOrder = 0;
         listenerTask = ListenTCPAsync();
     }
 
@@ -231,6 +233,8 @@ public class TCPControl : MonoBehaviour
             realUser.tcpClient = client;
             realUser.tcpEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
             addressToUser[realUser.tcpEndPoint.Address] = realUser;
+            realUser.InformStartPath(userIDOrder % 2);
+            userIDOrder++;
             client.GetStream().Write(nc.objectTable);
             Debug.Log($"table size: {nc.objectTable.Length}");
 

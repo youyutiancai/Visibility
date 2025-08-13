@@ -38,9 +38,14 @@ public class RealUser : User
             ChunksWaitToSend.DecreaseCount((objectID, ChunkID), sentCounts);
         }
         int chunksLeftAfterRemoving = ChunksWaitToSend.Count;
-        if (testPhase == TestPhase.StandPhase && chunksLeftBeforeRemoving != 0 && chunksLeftAfterRemoving == 0)
+        //if (testPhase == TestPhase.StandPhase && chunksLeftBeforeRemoving != 0 && chunksLeftAfterRemoving == 0)
+        if (ChunksWaitToSend.Count > 0)
         {
-            InformQuestionStart();
+            (int, int) nextChunk = ChunksWaitToSend.Peek();
+            if (testPhase == TestPhase.StandPhase && ChunksWaitToSend.GetCount(nextChunk) <= cc.numChunkRepeat - 2)
+            {
+                InformQuestionStart();
+            }
         }
     }
 
@@ -65,7 +70,6 @@ public class RealUser : User
 
     public void InformQuestionStart()
     {
-        Debug.Log($"inform question start");
         byte[] message = new byte[sizeof(int) * 2];
         Buffer.BlockCopy(BitConverter.GetBytes(sizeof(int)), 0, message, 0, sizeof(int));
         Buffer.BlockCopy(BitConverter.GetBytes((int)TCPMessageType.QUESTIONSTART), 0, message, sizeof(int), sizeof(int));
@@ -79,6 +83,15 @@ public class RealUser : User
         byte[] message = new byte[sizeof(int) * 2];
         Buffer.BlockCopy(BitConverter.GetBytes(sizeof(int)), 0, message, 0, sizeof(int));
         Buffer.BlockCopy(BitConverter.GetBytes((int)TCPMessageType.RESETALL), 0, message, sizeof(int), sizeof(int));
+        tcpClient.GetStream().Write(message, 0, message.Length);
+    }
+
+    public void InformStartPath(int pathOrder)
+    {
+        byte[] message = new byte[sizeof(int) * 3];
+        Buffer.BlockCopy(BitConverter.GetBytes(sizeof(int) * 2), 0, message, 0, sizeof(int));
+        Buffer.BlockCopy(BitConverter.GetBytes((int)TCPMessageType.PATHORDER), 0, message, sizeof(int), sizeof(int));
+        Buffer.BlockCopy(BitConverter.GetBytes(pathOrder), 0, message, sizeof(int) * 2, sizeof(int));
         tcpClient.GetStream().Write(message, 0, message.Length);
     }
 }

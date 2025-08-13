@@ -43,6 +43,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     public bool isMulticast = true;
 
     [SerializeField] private TCPClient m_TCPClient;
+    [SerializeField] private TestClient m_TestClient;
     [SerializeField] private ResourceLoader m_ResourceLoader;
 
     public int portUDP = 5005;
@@ -56,7 +57,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private int bufferSize = 1024 * 1024;
 
     public int numVerticesPerChunk = 57;
-    private Dictionary<int, GameObject> recGameObjects = new Dictionary<int, GameObject>();
+    public Dictionary<int, GameObject> recGameObjects = new Dictionary<int, GameObject>();
     private Dictionary<int, Vector3[]> verticesDict = new Dictionary<int, Vector3[]>();
     private Dictionary<int, List<List<int>>> trianglesDict = new Dictionary<int, List<List<int>>>();
     private Dictionary<int, Vector3[]> normalsDict = new Dictionary<int, Vector3[]>();
@@ -103,9 +104,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
                 new Vector4(0, 0.02025f, -0.00119f, 0),
                 new Vector4(0, 0.01508f, 0.00160f, 0),
                 new Vector4(0.42929f, -2.66236f, -0.50335f, 1));
-        //lightViewProjMatrix = lightCamera.projectionMatrix * lightCamera.worldToCameraMatrix;
-        //Shader.SetGlobalTexture("_CustomShadowMap", shadowMap);
-        //Shader.SetGlobalMatrix("_LightViewProjection", lightViewProjMatrix);
+        Shader.SetGlobalTexture("_CustomShadowMap", Texture2D.whiteTexture);
+        Shader.SetGlobalMatrix("_LightViewProjection", lightViewProjMatrix);
         colliderUpdateInterval = 2f;
         colliderToUpdateEachFrame = 10;
         currentColliderToUpdate = 0;
@@ -128,6 +128,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
         recevTotalChunkN = 0;
         chunkQueue.Clear();
         activeMeshTransmissions.Clear();
+        Shader.SetGlobalTexture("_CustomShadowMap", Texture2D.whiteTexture);
     }
 
     private void OnEnable()
@@ -697,6 +698,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
             recGameObject.transform.localScale = scale;
 
             recGameObjects[objectID] = recGameObject;
+            m_TestClient.UpdateAll();
         }
         else
         {

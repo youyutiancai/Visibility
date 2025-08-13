@@ -117,7 +117,8 @@ public enum TCPMessageType
     PUPPET_TOGGLE,
     CHUNK,
     QUESTIONSTART,
-    RESETALL
+    RESETALL,
+    PATHORDER
 }
 
 public enum SendingMode
