@@ -9,6 +9,17 @@ using UnityEngine.InputSystem;
 using System.Net.Sockets;
 using System.Collections;
 
+public enum MeshDecodeMethod
+{
+    VTSeparate,
+    VTGrouped
+}
+
+public enum TestPhase
+{
+    InitialPhase, StandPhase, MovingPhase, QuestionPhase, WaitPhase, EndPhase
+}
+
 public class ClusterControl : Singleton<ClusterControl>
 {
     private const int CHUNK_SIZE = 1400;
@@ -655,8 +666,8 @@ public class ClusterControl : Singleton<ClusterControl>
                         {
                             allUsers[i].MarkAsSent(id.Item1, id.Item2, objectChunksVTGrouped[id.Item1].Count, 1);
                         }
-                        //nc.BroadcastChunk(objectChunksVTGrouped[id.Item1][id.Item2]);
-                        nc.SendChunkTCP(allUsers[userIDToSend], objectChunksVTGrouped[id.Item1][id.Item2]);
+                        nc.BroadcastChunk(objectChunksVTGrouped[id.Item1][id.Item2]);
+                        //nc.SendChunkTCP(allUsers[userIDToSend], objectChunksVTGrouped[id.Item1][id.Item2]);
                     }
                     int nextUserID = userIDToSend;
                     do

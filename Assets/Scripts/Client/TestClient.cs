@@ -11,11 +11,6 @@ using System;
 using Random = UnityEngine.Random;
 using System.Globalization;
 
-public enum TestPhase
-{
-    InitialPhase, StandPhase, MovingPhase, QuestionPhase, WaitPhase, EndPhase
-}
-
 public class TestClient : Singleton<TestClient>
 {
     [HideInInspector]

@@ -9,7 +9,7 @@ using UnityTCPClient.Assets.Scripts;
 
 public class TCPControl : Singleton<TCPControl>
 {
-    public IPAddress[] headsetIDs = new IPAddress[] { IPAddress.Parse("192.168.1.173") };
+    public IPAddress[] headsetIDs = new IPAddress[] { IPAddress.Parse("192.168.1.173"), IPAddress.Parse("192.168.1.101") };
     private IPAddress iP4Address;
     private int listenerport = 13000;
     private CancellationToken ct;

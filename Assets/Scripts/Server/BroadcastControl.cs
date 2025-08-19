@@ -8,7 +8,12 @@ using System.Text;
 using System.Threading;
 using UnityEngine;
 using UnityTCPClient.Assets.Scripts;
-
+[Serializable]
+public class RetransmissionRequest
+{
+    public int objectID;
+    public int[] missingChunks;
+}
 
 public class BroadcastControl : Singleton<BroadcastControl>
 {

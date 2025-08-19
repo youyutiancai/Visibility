@@ -11,12 +11,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
 
-[Serializable]
-public class RetransmissionRequest
-{
-    public int objectID;
-    public int[] missingChunks;
-}
 public class Chunk
 {
     public MeshDecodeMethod meshDecodeMethod;
@@ -26,12 +20,6 @@ public class Chunk
     public int subMeshIdx;
     public DateTime chunkRecvTime;
     public byte[] data;
-}
-
-public enum MeshDecodeMethod
-{
-    VTSeparate,
-    VTGrouped
 }
 
 public class UDPBroadcastClientNew : MonoBehaviour
