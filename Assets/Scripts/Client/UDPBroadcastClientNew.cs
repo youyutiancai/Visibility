@@ -202,13 +202,13 @@ public class UDPBroadcastClientNew : MonoBehaviour
             }
         }
 
-        if (headsetTransform != null)
+        if (headsetTransform != null && recGameObjects.Count != 0)
         {
             Vector3 pos = headsetTransform.position;
             Vector3 rot = headsetTransform.eulerAngles;
 
             string timeStamp = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
-            string frameEntry = $"{{\"time\":\"{timeStamp}\",\"headset\":{{\"position\":[{pos.x:F4},{pos.y:F4},{pos.z:F4}],\"rotationEuler\":[{rot.x:F1},{rot.y:F1},{rot.z:F1}]}},\"chunks\":[{string.Join(",", chunksThisFrame)}]}}";
+            string frameEntry = $"{{\"time\":\"{timeStamp}\", \"path\":\"{m_TestClient.currentPathNum}\", \"test phase\":\"{m_TestClient.testPhase}\",\"headset\":{{\"position\":[{pos.x:F4},{pos.y:F4},{pos.z:F4}],\"rotationEuler\":[{rot.x:F1},{rot.y:F1},{rot.z:F1}]}},\"chunks\":[{string.Join(",", chunksThisFrame)}]}}";
 
             logWriter.WriteLine(frameEntry);
             logWriter.Flush();

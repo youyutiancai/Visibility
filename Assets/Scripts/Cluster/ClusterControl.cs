@@ -538,7 +538,7 @@ public class ClusterControl : Singleton<ClusterControl>
                     for (int i = 0; i < transform.childCount; i++)
                     {
                         RealUser user = transform.GetChild(i).GetComponent<RealUser>();
-                        if (user.testPhase != TestPhase.StandPhase && user.testPhase != TestPhase.MovingPhase)
+                        if (user.testPhase != TestPhase.StandPhase && user.testPhase != TestPhase.MovingPhase && user.testPhase != TestPhase.QuestionPhase)
                             continue;
                         Vector3 userPosition = user.transform.position;
                         int xStartIndex = Mathf.FloorToInt((userPosition.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
@@ -644,7 +644,7 @@ public class ClusterControl : Singleton<ClusterControl>
             }
             if (totalChunksWaitToSend > 0)
             {
-                chunksSentEachTime = nc.sendingMode == SendingMode.UNICAST_TCP ? 50 : 30;
+                chunksSentEachTime = nc.sendingMode == SendingMode.UNICAST_TCP ? 100 : 30;
                 while (count < chunksSentEachTime)
                 {
                     userIDToSend = userIDToSend % allUsers.Length;
