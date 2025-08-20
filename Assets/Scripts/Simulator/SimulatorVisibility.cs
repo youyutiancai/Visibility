@@ -8,7 +8,7 @@ public class SimulatorVisibility
     private List<GameObject> objectsInScene;
     private long[] objectFootprintInfo;
     private Dictionary<string, int[]> diffInfoAdd, objectFootprintsInGrid;
-    private float numInUnitX = 10f, numInUnitZ = 10f;
+    private int numInUnitX = 10, numInUnitZ = 10;
     private GridDivide gd;
     private GameObject sceneRoot;
     private ObjectChunkManager chunkManager;
@@ -20,6 +20,7 @@ public class SimulatorVisibility
     private Dictionary<int, Vector3[]> normalsDict = new Dictionary<int, Vector3[]>();
     private Dictionary<int, List<List<int>>> trianglesDict = new Dictionary<int, List<List<int>>>();
     private GameObject chunkVisGroundTruthRoot;
+    private Dictionary<string, int[]> chunkFootprintsAtCorner = new Dictionary<string, int[]>();
 
     // public variables for total objects and chunks sent based on the visibility check
     public int totalObjectsSentByChunk = 0;
@@ -59,7 +60,7 @@ public class SimulatorVisibility
     public void ComputeVisibility(Vector3 position, float radius)
     {
         SetVisibilityChunksInRegion(position, radius);
-        SetVisibilityObjectsInRegion(position, radius);
+        //SetVisibilityObjectsInRegion(position, radius);
     }
 
     public SimulatorVisibility(GameObject sceneRoot, GridDivide gridDivide, ObjectChunkManager chunkManager, ObjectTableManager objectTableManager, ResourceLoader resourceLoader)
@@ -399,17 +400,44 @@ public class SimulatorVisibility
     private void ReadFootprintByChunk(int x, int z, ref int[] visibleChunksAtCorner)
     {
         string fileName = $"{x}_{z}";
-        string path = $"Assets/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";
-        if (!File.Exists(path))
+        if (chunkFootprintsAtCorner.ContainsKey(fileName))
         {
-            Debug.Log($"File {path} does not exist");
-            visibleChunksAtCorner = null;
+            visibleChunksAtCorner = chunkFootprintsAtCorner[fileName];
             return;
         }
-        byte[] byteData = File.ReadAllBytes(path);
-        int[] intData = new int[byteData.Length / sizeof(int)];
-        Buffer.BlockCopy(byteData, 0, intData, 0, byteData.Length);
-        visibleChunksAtCorner = intData;
+
+        int unitX = x / numInUnitX, unitZ = z / numInUnitZ;
+        string path = $"Assets/Data/CornerLevelFootprintsByChunkUnit/{unitX}_{unitZ}.bin";
+        byte[] bytes_read = File.ReadAllBytes(path);
+        int cursor = 0;
+        for (int k = 0; k < numInUnitX; k++)
+        {
+            for (int l = 0; l < numInUnitZ; l++)
+            {
+                int gridX = unitX * numInUnitX + k, gridZ = unitZ * numInUnitZ + l;
+                int length = BitConverter.ToInt32(bytes_read, cursor);
+                int[] intData = new int[length / sizeof(int)]; cursor += sizeof(int);
+                Buffer.BlockCopy(bytes_read, cursor, intData, 0, length); cursor += length;
+                chunkFootprintsAtCorner.Add($"{gridX}_{gridZ}", intData);
+                visibleChunksAtCorner = intData;
+            }
+        }
+        visibleChunksAtCorner = chunkFootprintsAtCorner[fileName];
+        // shuqi added
+        visibleChunksAtCorner = new int[0];
+
+        // string fileName = $"{x}_{z}";
+        // string path = $"Assets/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";
+        // if (!File.Exists(path))
+        // {
+        //     Debug.Log($"File {path} does not exist");
+        //     visibleChunksAtCorner = null;
+        //     return;
+        // }
+        // byte[] byteData = File.ReadAllBytes(path);
+        // int[] intData = new int[byteData.Length / sizeof(int)];
+        // Buffer.BlockCopy(byteData, 0, intData, 0, byteData.Length);
+        // visibleChunksAtCorner = intData;
     }
 
    
