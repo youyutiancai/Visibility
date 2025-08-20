@@ -23,8 +23,6 @@ public class TCPClient : MonoBehaviour
 {
     [HideInInspector]
     public static TCPClient instance;
-
-    private string serverIPAddress = "192.168.1.188";
     [SerializeField] private int port = 13000;
 
     public TcpClient client;
@@ -56,7 +54,7 @@ public class TCPClient : MonoBehaviour
         lastPoseSentTime = Time.time;
         try
         {
-            client = new TcpClient(serverIPAddress, port);
+            client = new TcpClient(Commons.SERVER_IP_ADDR, port);
             Debug.Log($"TCP client listening on port {port}");
         }
         catch (Exception e) { Debug.Log(e); }

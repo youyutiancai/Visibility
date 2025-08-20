@@ -347,7 +347,7 @@ public class ClusterControl : Singleton<ClusterControl>
 
     private void InitializeIndividualUserDataWriter()
     {
-        filePath = $"C:\\Users\\zhou1168\\VRAR\\Visibility\\Assets\\GeneratedData\\IndividualUserUpdateData\\{0}.csv";
+        filePath = $"Assets\\GeneratedData\\IndividualUserUpdateData\\{0}.csv";
         writer = new StreamWriter(filePath, false);
         //if (new FileInfo(filePath).Length == 0)
         //{
@@ -434,6 +434,7 @@ public class ClusterControl : Singleton<ClusterControl>
             if (canResetAll)
             {
                 pathNum++;
+                GC.Collect();
                 canSendObjects = false;
                 nc.sendingMode = pathNum % 2 == 0 ? SendingMode.UNICAST_TCP : SendingMode.MULTICAST;
                 foreach (RealUser user in tc.addressToUser.Values)

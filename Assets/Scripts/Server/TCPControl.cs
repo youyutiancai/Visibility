@@ -9,7 +9,13 @@ using UnityTCPClient.Assets.Scripts;
 
 public class TCPControl : Singleton<TCPControl>
 {
-    public IPAddress[] headsetIDs = new IPAddress[] { IPAddress.Parse("192.168.1.173"), IPAddress.Parse("192.168.1.101") };
+    public IPAddress[] headsetIDs = new IPAddress[] { 
+        IPAddress.Parse("192.168.1.155"),
+        IPAddress.Parse("192.168.1.239"),
+        IPAddress.Parse("192.168.1.111"),
+        IPAddress.Parse("192.168.1.153"),
+        IPAddress.Parse("192.168.1.157")
+    };
     private IPAddress iP4Address;
     private int listenerport = 13000;
     private CancellationToken ct;
@@ -233,8 +239,9 @@ public class TCPControl : Singleton<TCPControl>
             realUser.tcpClient = client;
             realUser.tcpEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
             addressToUser[realUser.tcpEndPoint.Address] = realUser;
-            realUser.InformStartPath(userIDOrder % 2);
-            userIDOrder++;
+            realUser.InformStartPath(0);
+            // realUser.InformStartPath(userIDOrder % 2);
+            // userIDOrder++;
             client.GetStream().Write(nc.objectTable);
             Debug.Log($"table size: {nc.objectTable.Length}");
 

@@ -1190,7 +1190,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
         }
 
         int unitX = x / numInUnitX, unitZ = z / numInUnitZ;
-        string path = $"C:/Users/zhou1168/VRAR/Visibility/Assets/Data/CornerLevelFootprintsByChunkUnit/{unitX}_{unitZ}.bin";
+        string path = $"Assets/Data/CornerLevelFootprintsByChunkUnit/{unitX}_{unitZ}.bin";
         byte[] bytes_read = File.ReadAllBytes(path);
         int cursor = 0;
         for (int k = 0; k < numInUnitX; k++)

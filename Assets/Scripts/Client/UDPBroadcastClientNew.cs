@@ -333,7 +333,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
         }
         catch (ObjectDisposedException)
         {
-            // Expected when shutting down — safe to ignore
+            // Expected when shutting down ï¿½ safe to ignore
         }
         catch (Exception ex)
         {
@@ -480,11 +480,11 @@ public class UDPBroadcastClientNew : MonoBehaviour
         switch (method)
         {
             case MeshDecodeMethod.VTSeparate:
-                DecodePacketMeshSeparate(message, new IPEndPoint(IPAddress.Parse("192.168.1.188"), 13000));
+                DecodePacketMeshSeparate(message, new IPEndPoint(IPAddress.Parse(Commons.SERVER_IP_ADDR), 13000));  //
                 break;
 
             case MeshDecodeMethod.VTGrouped:
-                DecodePacketMeshGrouped(message, new IPEndPoint(IPAddress.Parse("192.168.1.188"), 13000));
+                DecodePacketMeshGrouped(message, new IPEndPoint(IPAddress.Parse(Commons.SERVER_IP_ADDR), 13000));
                 break;
         }
         // parse the packet header
