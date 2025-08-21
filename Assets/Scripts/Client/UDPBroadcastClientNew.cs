@@ -202,7 +202,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
             }
         }
 
-        if (headsetTransform != null && recGameObjects.Count != 0)
+        if (headsetTransform != null && (recGameObjects.Count != 0 || chunksThisFrame.Count != 0))
         {
             Vector3 pos = headsetTransform.position;
             Vector3 rot = headsetTransform.eulerAngles;

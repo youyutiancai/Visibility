@@ -2127,7 +2127,7 @@ MonoBehaviour:
   isShowLog: 1
   isMulticast: 1
   m_TCPClient: {fileID: 1746569731}
-  m_TestClient: {fileID: 0}
+  m_TestClient: {fileID: 1887560913}
   m_ResourceLoader: {fileID: 742252864}
   portUDP: 5005
   portTCP: 5006
