@@ -546,6 +546,7 @@ public class ClusterControl : Singleton<ClusterControl>
                         int zStartIndex = Mathf.FloorToInt((userPosition.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
                         if (xStartIndex == user.preX && zStartIndex == user.preZ) { continue; }
                         user.preX = xStartIndex; user.preZ = zStartIndex;
+                        Debug.Log($"position: {userPosition}, radius: {epsilon}, xStartIndex: {xStartIndex}, zStartIndex: {zStartIndex}");
                         chunkFootprintInfo = new Dictionary<int, long[]>();
                         vc.ReadFootprintByChunkInRegion(userPosition, epsilon, ref chunkFootprintInfo);
                         newObjectCount = new long[vc.objectsInScene.Count];

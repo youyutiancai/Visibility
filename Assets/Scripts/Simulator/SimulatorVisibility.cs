@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using NUnit.Framework.Constraints;
 using UnityEngine;
 
 public class SimulatorVisibility
@@ -27,6 +28,9 @@ public class SimulatorVisibility
     public int totalChunksSentByChunk = 0;
     public int totalObjectsSentByObject = 0;
     public int totalChunksSentByObject = 0;
+
+    // Dynamic Visibility Check Per User
+    private int preX = 0, preZ = 0;
 
     public enum VisibilityType
     {
@@ -57,10 +61,56 @@ public class SimulatorVisibility
         return (0, 0);
     }
 
+    public void ResetVisibility()
+    {
+        totalObjectsSentByChunk = 0;
+        totalChunksSentByChunk = 0;
+        totalObjectsSentByObject = 0;
+        totalChunksSentByObject = 0;
+
+        preX = 0;
+        preZ = 0;
+
+        // Reset visualized chunks
+        foreach (var obj in visualizedObjects.Values)
+        {
+            if (obj != null)
+            {
+                GameObject.Destroy(obj);
+            }
+        }
+        visualizedObjects.Clear();
+        verticesDict.Clear();
+        normalsDict.Clear();
+        trianglesDict.Clear();
+    }
+
+    // Archived: for static visibility check
     public void ComputeVisibility(Vector3 position, float radius)
     {
         SetVisibilityChunksInRegion(position, radius);
         //SetVisibilityObjectsInRegion(position, radius);
+    }
+    
+
+    public void ComputeDynamicVisibility(Vector3 position, float radius, string testPhase)
+    {
+        if (testPhase != TestPhase.StandPhase.ToString() && 
+            testPhase != TestPhase.MovingPhase.ToString() && 
+            testPhase != TestPhase.QuestionPhase.ToString()
+        ) return;
+
+        Vector3 userPosition = position;
+        int xStartIndex = Mathf.FloorToInt((userPosition.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        int zStartIndex = Mathf.FloorToInt((userPosition.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+        
+        if (xStartIndex == preX && zStartIndex == preZ) return;
+
+        // update the visibility if user located in a new grid unit
+        preX = xStartIndex; preZ = zStartIndex;
+        UpdateVisibilityChunksInRegion(position, radius);
+
+        // Debug.Log($"position: {position}, radius: {radius}, xStartIndex: {xStartIndex}, zStartIndex: {zStartIndex}");
     }
 
     public SimulatorVisibility(GameObject sceneRoot, GridDivide gridDivide, ObjectChunkManager chunkManager, ObjectTableManager objectTableManager, ResourceLoader resourceLoader)
@@ -75,6 +125,7 @@ public class SimulatorVisibility
         objectFootprintsInGrid = new Dictionary<string, int[]>();
         AddAllObjects(sceneRoot.transform);
         chunkVisGroundTruthRoot = new GameObject("ChunkVisGroundTruthRoot");
+        chunkVisGroundTruthRoot.SetActive(false);
         Debug.Log($"SimulatorVisibility initialized with {objectsInScene.Count} objects in scene");
     }
 
@@ -113,6 +164,44 @@ public class SimulatorVisibility
         }
 
         Debug.Log($"Total objects sent: {totalObjectsSentByObject}, total chunks sent: {totalChunksSentByObject}");
+    }
+
+    private void UpdateVisibilityChunksInRegion(Vector3 position, float radius)
+    {
+        // Incremental update: preserve existing visibility state
+        // Don't reset totalObjectsSentByChunk and totalChunksSentByChunk
+        // Don't clear visualizedObjects and related dictionaries
+        
+        Debug.Log($"Updating visibility chunks in region at {position}");
+        
+        Dictionary<int, long[]> chunkFootprintInfo = new Dictionary<int, long[]>();
+        ReadFootprintByChunkInRegion(position, radius, ref chunkFootprintInfo);
+        // Debug.Log($"chunkFootprintInfo.Count: {chunkFootprintInfo.Count}");
+        
+        foreach (var objectID in chunkFootprintInfo.Keys)
+        {
+            long[] footprints = chunkFootprintInfo[objectID];
+            bool firstChunkOfObjectSent = true;
+            
+            // Check if this object is already being visualized
+            bool objectAlreadyVisible = visualizedObjects.ContainsKey(objectID);
+            
+            for (int chunkID = 0; chunkID < footprints.Length; chunkID++)
+            {
+                if (footprints[chunkID] > 0)
+                {
+                    if (firstChunkOfObjectSent && !objectAlreadyVisible)
+                    {
+                        totalObjectsSentByChunk++;
+                        firstChunkOfObjectSent = false;
+                    }
+
+                    totalChunksSentByChunk++;
+                    VisualizeChunk(objectID, chunkID);
+                }
+            }
+        }
+        // Debug.Log($"Updated totals - Objects: {totalObjectsSentByChunk}, Chunks: {totalChunksSentByChunk}");
     }
 
     public void SetVisibilityChunksInRegion(Vector3 position, float radius)
@@ -372,6 +461,7 @@ public class SimulatorVisibility
 
                 int[] intData = new int[0];
                 ReadFootprintByChunk(i, j, ref intData);
+                // Debug.Log($"intData.Length: {intData.Length}");
                 if (intData == null)
                 {
                     continue;
@@ -393,6 +483,7 @@ public class SimulatorVisibility
                 }
             }
         }
+        // Debug.Log($"object number: {result.Count}");
     }
 
 
@@ -423,8 +514,6 @@ public class SimulatorVisibility
             }
         }
         visibleChunksAtCorner = chunkFootprintsAtCorner[fileName];
-        // shuqi added
-        visibleChunksAtCorner = new int[0];
 
         // string fileName = $"{x}_{z}";
         // string path = $"Assets/Data/CornerLevelFootprintsByChunk/{x}_{z}.bin";

@@ -19,6 +19,8 @@ public class SimulatorManager : MonoBehaviour
     public GridDivide gd;
     public string jsonlFilePath = "Assets/Data/ClientLogData/with_interrupt.jsonl";
     public TMP_Text logTimePerFrame;
+    public TMP_Text pathText;
+    public TMP_Text testPhaseText;
     public Button toggleSimulateButton;
     public TMP_Dropdown fileSelectionDropdown;
     public TMP_Dropdown modeDropdown;
@@ -41,8 +43,8 @@ public class SimulatorManager : MonoBehaviour
     private double logDeltaTime;
     private double logBaseTime; // reference timestamp from first entry
     private ObjectChunkManager chunkManager;
-    private int totalObjectsSent;
-    private int totalChunksSent;
+    // private int totalObjectsSent;
+    // private int totalChunksSent;
     private ObjectTableManager objectTableManager;
     private ResourceLoader resourceLoader;
     private Dictionary<int, GameObject> visualizedObjects = new Dictionary<int, GameObject>();
@@ -61,6 +63,9 @@ public class SimulatorManager : MonoBehaviour
     // Elapsed time tracking
     private double firstChunkTime = -1.0;
     private double currentElapsedTime = 0.0;
+    
+    // Path tracking for reset detection
+    private string currentPath = "";
 
 
     // visibility check variables
@@ -90,13 +95,21 @@ public class SimulatorManager : MonoBehaviour
         private string _originalTimeString;
         public string originalTime => _originalTimeString;
 
+        [JsonProperty("path")]
+        public string path;
+
+        [JsonProperty("test phase")]
+        public string testPhase;
+
         public HeadsetData headset;
         public List<ChunkData> chunks;
 
-        public LogEntry(double relativeTime, string originalTimeStr, HeadsetData headsetData, List<ChunkData> chunkList)
+        public LogEntry(double relativeTime, string originalTimeStr, string pathValue, string testPhaseValue, HeadsetData headsetData, List<ChunkData> chunkList)
         {
             time = relativeTime;
             _originalTimeString = originalTimeStr;
+            path = pathValue;
+            testPhase = testPhaseValue;
             headset = headsetData;
             chunks = chunkList;
         }
@@ -158,10 +171,18 @@ public class SimulatorManager : MonoBehaviour
         InitializeModeDropdown();
         InitializeVisibilityTypeDropdown();
 
-        // Initialize elapsed time display
+        // Initialize UI displays
         if (elapsedTimeText != null)
         {
             elapsedTimeText.text = "Elapsed Time: --";
+        }
+        if (pathText != null)
+        {
+            pathText.text = "Path: --";
+        }
+        if (testPhaseText != null)
+        {
+            testPhaseText.text = "Test Phase: --";
         }
 
         // load default jsonl file
@@ -247,6 +268,7 @@ public class SimulatorManager : MonoBehaviour
     {
         string selectedFile = fileSelectionDropdown.options[index].text;
         jsonlFilePath = Path.Combine("Assets/Data/ClientLogData", selectedFile);
+        
         LoadUserLogJsonlData();
     }
 
@@ -339,6 +361,20 @@ public class SimulatorManager : MonoBehaviour
             cameraRig.position = entry.headset.position;
             cameraRig.rotation = Quaternion.Euler(entry.headset.rotationEuler);
 
+            // Check if path has changed and reset if necessary
+            if (currentPath != "" && currentPath != entry.path)
+            {
+                ResetForPathChange();
+            }
+            else if (currentPath == "")
+            {
+                // Initialize current path on first entry
+                currentPath = entry.path;
+            }
+
+            // Dynamic Visibility Check
+            DynamicVisibilityCheck(entry.headset.position);
+
             // Simulate based on mode
             if (modeDropdown.value == 0) // Replay
             {
@@ -366,6 +402,10 @@ public class SimulatorManager : MonoBehaviour
 
             // Update UI
             logTimePerFrame.text = entry.originalTime;
+            if (pathText != null)
+                pathText.text = $"Path: {entry.path}";
+            if (testPhaseText != null)
+                testPhaseText.text = $"Test Phase: {entry.testPhase}";
             UpdatePacketLossDisplay();
             UpdateElapsedTimeDisplay(entry.time);
 
@@ -376,7 +416,7 @@ public class SimulatorManager : MonoBehaviour
     private void ProcessReceivedChunksGrouped(List<ChunkData> chunks)
     {
         if (chunks == null) return;
-        
+
         // Track the first chunk received time
         if (firstChunkTime < 0 && chunks.Count > 0)
         {
@@ -479,6 +519,7 @@ public class SimulatorManager : MonoBehaviour
         }
     }
 
+    // Archived function for ProcessReceivedChunks, Now use ProcessReceivedChunksGrouped instead
     private void ProcessReceivedChunks(List<ChunkData> chunks)
     {
         if (chunks == null) return;
@@ -683,6 +724,10 @@ public class SimulatorManager : MonoBehaviour
                 var headsetData = jsonObj["headset"].ToObject<HeadsetData>();
                 string timeStr = ExtractRawTimeField(line);
                 
+                // Extract new fields
+                string pathValue = jsonObj["path"]?.ToString() ?? "";
+                string testPhaseValue = jsonObj["test phase"]?.ToString() ?? "";
+                
                 if (!DateTimeOffset.TryParseExact(
                         timeStr,
                         "yyyy-MM-ddTHH:mm:ss.fffffffZ",
@@ -702,7 +747,7 @@ public class SimulatorManager : MonoBehaviour
 
                 List<ChunkData> chunkList = jsonObj["chunks"]?.ToObject<List<ChunkData>>() ?? new List<ChunkData>();
 
-                logEntries.Add(new LogEntry(relativeTime, timeStr, headsetData, chunkList));
+                logEntries.Add(new LogEntry(relativeTime, timeStr, pathValue, testPhaseValue, headsetData, chunkList));
             }
 
             Debug.Log($"Successfully loaded {logEntries.Count} log entries");
@@ -723,8 +768,8 @@ public class SimulatorManager : MonoBehaviour
 
     public void CalculatePacketLog()
     {   
-        totalObjectsSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item1;
-        totalChunksSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item2;
+        int totalObjectsSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item1;
+        int totalChunksSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item2;
         
         if (totalObjectsSent > 0 && totalChunksSent > 0)
         {
@@ -778,6 +823,9 @@ public class SimulatorManager : MonoBehaviour
             totalReceived += receivedCount;
         }
 
+        int totalObjectsSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item1;
+        int totalChunksSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item2;
+
         float overallLossRate = 1f - ((float)totalReceived / totalChunksSent);
         packetLossText.text = $"Packet Loss Rate: {overallLossRate:P2}\n" +
                              $"Received Objects: {totalReceivedObjects}/{totalObjectsSent}\n" +
@@ -816,8 +864,8 @@ public class SimulatorManager : MonoBehaviour
             // ComputeChunkSentByVisibility(visibility);
             // sceneRoot.SetActive(false);
 
-            totalObjectsSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item1;
-            totalChunksSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item2;
+            // totalObjectsSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item1;
+            // totalChunksSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item2;
 
             // Reset packet loss tracking
             totalReceivedChunks.Clear();
@@ -826,6 +874,9 @@ public class SimulatorManager : MonoBehaviour
             // Reset elapsed time tracking
             firstChunkTime = -1.0;
             currentElapsedTime = 0.0;
+            
+            // Reset path tracking
+            currentPath = "";
 
             // Reset packet loss display
             if (packetLossText != null)
@@ -849,6 +900,9 @@ public class SimulatorManager : MonoBehaviour
             // Reset simulation
             startSimulating = false;
             currentEntryIndex = 0;
+
+            // Reset visibility
+            simulatorVisibility.ResetVisibility();
             
             // Reset camera position
             if (cameraRig != null)
@@ -871,12 +925,23 @@ public class SimulatorManager : MonoBehaviour
             verticesDict.Clear();
             normalsDict.Clear();
             trianglesDict.Clear();
+            
+            // Reset path tracking
+            currentPath = "";
 
             // Reset UI
             if (logTimePerFrame != null)
             {
                 logTimePerFrame.text = "Time log......";
                 toggleSimulateButton.GetComponentInChildren<TMP_Text>().text = "Simulate";
+            }
+            if (pathText != null)
+            {
+                pathText.text = "Path: --";
+            }
+            if (testPhaseText != null)
+            {
+                testPhaseText.text = "Test Phase: --";
             }
             if (packetLossText != null)
             {
@@ -889,10 +954,68 @@ public class SimulatorManager : MonoBehaviour
         }
     }
 
+    // Get current path and test phase information
+    public (string path, string testPhase) GetCurrentPathAndTestPhase()
+    {
+        if (logEntries != null && currentEntryIndex < logEntries.Count && currentEntryIndex >= 0)
+        {
+            return (logEntries[currentEntryIndex].path, logEntries[currentEntryIndex].testPhase);
+        }
+        return ("--", "--");
+    }
+
+    // Reset packet loss and visualization data when path changes
+    private void ResetForPathChange()
+    {
+        Debug.Log($"Path changed from '{currentPath}' to '{logEntries[currentEntryIndex].path}'. Resetting packet loss and visualization data.");
+        
+        // Reset packet loss tracking
+        totalReceivedChunks.Clear();
+        isReceivedChunks.Clear();
+        
+        // Reset elapsed time tracking
+        firstChunkTime = -1.0;
+        currentElapsedTime = 0.0;
+        
+        // Clear all visualized objects
+        foreach (var obj in visualizedObjects.Values)
+        {
+            if (obj != null)
+            {
+                Destroy(obj);
+            }
+        }
+        visualizedObjects.Clear();
+        
+        // Clear all data structures
+        verticesDict.Clear();
+        normalsDict.Clear();
+        trianglesDict.Clear();
+        
+        // Reset UI displays
+        if (packetLossText != null)
+        {
+            packetLossText.text = "Packet Loss Rate: --";
+        }
+        if (elapsedTimeText != null)
+        {
+            elapsedTimeText.text = "Elapsed Time: --";
+        }
+        
+        // Update current path
+        currentPath = logEntries[currentEntryIndex].path;
+    }
+
     // Might need to be refactored if users/clusters are dynamic
     public void ComputeAllVisibility()
     {
         simulatorVisibility.ComputeVisibility(serverSendHeadPosition, epsilon);
+    }
+
+    // Dynamic Visibility Check (for Grouth Truth and Packet Loss Monitoring)
+    private void DynamicVisibilityCheck(Vector3 currentHeadPosition)
+    {
+        simulatorVisibility.ComputeDynamicVisibility(currentHeadPosition, epsilon, logEntries[currentEntryIndex].testPhase);
     }
 
 }

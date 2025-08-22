@@ -1231,6 +1231,7 @@ public class VisibilityCheck : Singleton<VisibilityCheck>
                 //Buffer.BlockCopy(byteData, 0, intData, 0, byteData.Length);
                 int[] intData = new int[0];
                 ReadFootprintByChunk(i, j, ref intData);
+                Debug.Log($"intData.Length: {intData.Length}");
                 if (intData == null)
                 {
                     continue;
