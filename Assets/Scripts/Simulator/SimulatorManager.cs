@@ -815,21 +815,37 @@ public class SimulatorManager : MonoBehaviour
             return;
         }
 
-        int totalReceived = 0;
-        int totalReceivedObjects = totalReceivedChunks.Count;
+        int totalObjectsReceived = 0;
+        int totalChunksReceived = 0;
+        int totalObjectsSent = 0;
+        int totalChunksSent = 0;
 
-        foreach (var receivedCount in totalReceivedChunks.Values)
+        Dictionary<int, long[]> chunkFootprintInfo = simulatorVisibility.GetChunkFootprintInfo();
+        totalObjectsSent = chunkFootprintInfo.Count;
+
+        foreach (var objectFootprints in chunkFootprintInfo)
         {
-            totalReceived += receivedCount;
+            if (isReceivedChunks.ContainsKey(objectFootprints.Key))
+            {
+                totalObjectsReceived++;
+                
+                // check chunk received status
+                for (int i = 0; i < objectFootprints.Value.Length; i++)
+                {
+                    if (objectFootprints.Value[i] > 0)
+                    {
+                        totalChunksSent++;
+                        if (isReceivedChunks[objectFootprints.Key][i])
+                            totalChunksReceived++;
+                    }
+                }
+            }
         }
 
-        int totalObjectsSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item1;
-        int totalChunksSent = simulatorVisibility.GetTotalObjectsAndChunksSent(visibilityType).Item2;
-
-        float overallLossRate = 1f - ((float)totalReceived / totalChunksSent);
+        float overallLossRate = 1f - ((float)totalChunksReceived / totalChunksSent);
         packetLossText.text = $"Packet Loss Rate: {overallLossRate:P2}\n" +
-                             $"Received Objects: {totalReceivedObjects}/{totalObjectsSent}\n" +
-                             $"Received Chunks: {totalReceived}/{totalChunksSent}";
+                             $"Received Objects: {totalObjectsReceived}/{totalObjectsSent}\n" +
+                             $"Received Chunks: {totalChunksReceived}/{totalChunksSent}";
     }
 
     private void UpdateElapsedTimeDisplay(double currentTime)

@@ -23,6 +23,7 @@ public class SimulatorVisibility
     private GameObject chunkVisGroundTruthRoot;
     private Dictionary<string, int[]> chunkFootprintsAtCorner = new Dictionary<string, int[]>();
     private Dictionary<int, HashSet<int>> receivedChunksPerObject = new Dictionary<int, HashSet<int>>();
+    private Dictionary<int, long[]> chunkFootprintInfo = new Dictionary<int, long[]>();
 
     // public variables for total objects and chunks sent based on the visibility check
     public int totalObjectsSentByChunk = 0;
@@ -62,6 +63,16 @@ public class SimulatorVisibility
         return (0, 0);
     }
 
+    public Dictionary<int, long[]> GetChunkFootprintInfo()
+    {
+        if (chunkFootprintInfo.Count == 0)
+        {
+            Debug.LogError("Chunk footprint info is empty");
+            return new Dictionary<int, long[]>();
+        }
+        return chunkFootprintInfo;
+    }
+
     public void ResetVisibility()
     {
         totalObjectsSentByChunk = 0;
@@ -71,6 +82,7 @@ public class SimulatorVisibility
 
         preX = 0;
         preZ = 0;
+
 
         // Reset visualized chunks
         foreach (var obj in visualizedObjects.Values)
@@ -84,6 +96,9 @@ public class SimulatorVisibility
         verticesDict.Clear();
         normalsDict.Clear();
         trianglesDict.Clear();
+
+        // reset chunk footprint info
+        chunkFootprintInfo.Clear();
         receivedChunksPerObject.Clear();
     }
 
@@ -170,13 +185,14 @@ public class SimulatorVisibility
 
     private void UpdateVisibilityChunksInRegion(Vector3 position, float radius)
     {
+        if (chunkFootprintInfo.Count > 0)
+            chunkFootprintInfo.Clear();
         // Incremental update: preserve existing visibility state
         // Don't reset totalObjectsSentByChunk and totalChunksSentByChunk
         // Don't clear visualizedObjects and related dictionaries
         
         Debug.Log($"Updating visibility chunks in region at {position}");
         
-        Dictionary<int, long[]> chunkFootprintInfo = new Dictionary<int, long[]>();
         ReadFootprintByChunkInRegion(position, radius, ref chunkFootprintInfo);
         // Debug.Log($"chunkFootprintInfo.Count: {chunkFootprintInfo.Count}");
         
