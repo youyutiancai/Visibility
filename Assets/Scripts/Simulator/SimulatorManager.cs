@@ -976,6 +976,9 @@ public class SimulatorManager : MonoBehaviour
         // Reset elapsed time tracking
         firstChunkTime = -1.0;
         currentElapsedTime = 0.0;
+
+        // Reset visibility
+        simulatorVisibility.ResetVisibility();
         
         // Clear all visualized objects
         foreach (var obj in visualizedObjects.Values)

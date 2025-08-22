@@ -22,6 +22,7 @@ public class SimulatorVisibility
     private Dictionary<int, List<List<int>>> trianglesDict = new Dictionary<int, List<List<int>>>();
     private GameObject chunkVisGroundTruthRoot;
     private Dictionary<string, int[]> chunkFootprintsAtCorner = new Dictionary<string, int[]>();
+    private Dictionary<int, HashSet<int>> receivedChunksPerObject = new Dictionary<int, HashSet<int>>();
 
     // public variables for total objects and chunks sent based on the visibility check
     public int totalObjectsSentByChunk = 0;
@@ -83,6 +84,7 @@ public class SimulatorVisibility
         verticesDict.Clear();
         normalsDict.Clear();
         trianglesDict.Clear();
+        receivedChunksPerObject.Clear();
     }
 
     // Archived: for static visibility check
@@ -186,17 +188,31 @@ public class SimulatorVisibility
             // Check if this object is already being visualized
             bool objectAlreadyVisible = visualizedObjects.ContainsKey(objectID);
             
+            // Initialize tracking for this object if needed
+            if (!receivedChunksPerObject.ContainsKey(objectID))
+            {
+                receivedChunksPerObject[objectID] = new HashSet<int>();
+            }
+            
             for (int chunkID = 0; chunkID < footprints.Length; chunkID++)
             {
                 if (footprints[chunkID] > 0)
                 {
+                    // Check if this specific chunk has already been received
+                    bool chunkAlreadyReceived = receivedChunksPerObject[objectID].Contains(chunkID);
+                    
                     if (firstChunkOfObjectSent && !objectAlreadyVisible)
                     {
                         totalObjectsSentByChunk++;
                         firstChunkOfObjectSent = false;
                     }
 
-                    totalChunksSentByChunk++;
+                    if (!chunkAlreadyReceived)
+                    {
+                        totalChunksSentByChunk++;
+                        receivedChunksPerObject[objectID].Add(chunkID);
+                    }
+                    
                     VisualizeChunk(objectID, chunkID);
                 }
             }
@@ -498,6 +514,7 @@ public class SimulatorVisibility
         }
 
         int unitX = x / numInUnitX, unitZ = z / numInUnitZ;
+        // TODO: think about loading the file at the start of the simulation
         string path = $"Assets/Data/CornerLevelFootprintsByChunkUnit/{unitX}_{unitZ}.bin";
         byte[] bytes_read = File.ReadAllBytes(path);
         int cursor = 0;
