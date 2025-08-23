@@ -67,6 +67,9 @@ public class SimulatorManager : MonoBehaviour
     // Path tracking for reset detection
     private string currentPath = "";
 
+    // CSV logging for packet loss
+    private StreamWriter packetLossCsvWriter;
+    private string packetLossCsvPath;
 
     // visibility check variables
     private float epsilon = 3f;    // Radius for clustering
@@ -188,6 +191,39 @@ public class SimulatorManager : MonoBehaviour
         // load default jsonl file
         jsonlFilePath = Path.Combine("Assets/Data/ClientLogData", fileSelectionDropdown.options[0].text);
         LoadUserLogJsonlData();
+    }
+
+    private void InitializePacketLossCsv(string pathId = "null_path")
+    {
+        try
+        {
+            // Close existing CSV if any
+            if (packetLossCsvWriter != null)
+            {
+                packetLossCsvWriter.Close();
+                packetLossCsvWriter.Dispose();
+            }
+
+            string dataDir = Path.Combine(Application.dataPath, "Data/PacketLossLog");
+            if (!Directory.Exists(dataDir))
+            {
+                Directory.CreateDirectory(dataDir);
+            }
+
+            // Get the current log file name without extension
+            string logFileName = Path.GetFileNameWithoutExtension(jsonlFilePath);
+            string pathSuffix = string.IsNullOrEmpty(pathId) ? "" : $"_{pathId}";
+            packetLossCsvPath = Path.Combine(dataDir, $"packet_loss_{logFileName}{pathSuffix}.csv");
+            
+            packetLossCsvWriter = new StreamWriter(packetLossCsvPath, false, System.Text.Encoding.UTF8);
+            packetLossCsvWriter.WriteLine("ElapsedTime,PacketLossRate");
+            
+            Debug.Log($"Packet loss CSV initialized for path '{pathId}' at: {packetLossCsvPath}");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Failed to initialize packet loss CSV: {e.Message}");
+        }
     }
 
     private void InitializeModeDropdown()
@@ -368,8 +404,8 @@ public class SimulatorManager : MonoBehaviour
             }
             else if (currentPath == "")
             {
-                // Initialize current path on first entry
                 currentPath = entry.path;
+                InitializePacketLossCsv(entry.path);
             }
 
             // Dynamic Visibility Check
@@ -825,16 +861,21 @@ public class SimulatorManager : MonoBehaviour
 
         foreach (var objectFootprints in chunkFootprintInfo)
         {
-            if (isReceivedChunks.ContainsKey(objectFootprints.Key))
+            bool isObjectReceived = false;
+            for (int i = 0; i < objectFootprints.Value.Length; i++)
             {
-                totalObjectsReceived++;
-                
-                // check chunk received status
-                for (int i = 0; i < objectFootprints.Value.Length; i++)
+                if (objectFootprints.Value[i] > 0)
                 {
-                    if (objectFootprints.Value[i] > 0)
+                    // ground truth chunk number
+                    totalChunksSent++;
+
+                    if (isReceivedChunks.ContainsKey(objectFootprints.Key))
                     {
-                        totalChunksSent++;
+                        if (!isObjectReceived)
+                        {
+                            totalObjectsReceived++;
+                            isObjectReceived = true;
+                        }
                         if (isReceivedChunks[objectFootprints.Key][i])
                             totalChunksReceived++;
                     }
@@ -846,7 +887,28 @@ public class SimulatorManager : MonoBehaviour
         packetLossText.text = $"Packet Loss Rate: {overallLossRate:P2}\n" +
                              $"Received Objects: {totalObjectsReceived}/{totalObjectsSent}\n" +
                              $"Received Chunks: {totalChunksReceived}/{totalChunksSent}";
+
+        // Write to CSV
+        WritePacketLossToCsv(overallLossRate);
     }
+
+    private void WritePacketLossToCsv(float lossRate)
+    {
+        if (packetLossCsvWriter == null) return;
+
+        try
+        {
+            string csvLine = $"{currentElapsedTime:F3},{lossRate:F4}";
+            packetLossCsvWriter.WriteLine(csvLine);
+            packetLossCsvWriter.Flush(); // Flush immediately to ensure data is written
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Failed to write to CSV: {e.Message}");
+        }
+    }
+
+
 
     private void UpdateElapsedTimeDisplay(double currentTime)
     {
@@ -893,7 +955,7 @@ public class SimulatorManager : MonoBehaviour
             
             // Reset path tracking
             currentPath = "";
-
+            
             // Reset packet loss display
             if (packetLossText != null)
             {
@@ -989,6 +1051,10 @@ public class SimulatorManager : MonoBehaviour
         totalReceivedChunks.Clear();
         isReceivedChunks.Clear();
         
+        // Get the new path and create a new CSV file for it
+        string newPath = logEntries[currentEntryIndex].path;
+        InitializePacketLossCsv(newPath);
+        
         // Reset elapsed time tracking
         firstChunkTime = -1.0;
         currentElapsedTime = 0.0;
@@ -1037,4 +1103,21 @@ public class SimulatorManager : MonoBehaviour
         simulatorVisibility.ComputeDynamicVisibility(currentHeadPosition, epsilon, logEntries[currentEntryIndex].testPhase);
     }
 
+    private void OnDestroy()
+    {
+        if (packetLossCsvWriter != null)
+        {
+            packetLossCsvWriter.Close();
+            packetLossCsvWriter.Dispose();
+        }
+    }
+
+    // Public method to get current CSV file info
+    public string GetCurrentCsvInfo()
+    {
+        if (packetLossCsvWriter == null)
+            return "No CSV file active";
+        
+        return $"Path: {currentPath}, File: {packetLossCsvPath}";
+    }
 }
