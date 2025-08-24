@@ -1,7 +1,5 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
 using UnityTCPClient.Assets.Scripts;
 
 public class Dispatcher : Singleton<Dispatcher>
@@ -10,29 +8,20 @@ public class Dispatcher : Singleton<Dispatcher>
 
     void Update()
     {
-        lock(actions)
+        lock (actions)
         {
-            while(actions.Count > 0)
+            while (actions.Count > 0)
             {
                 actions.Dequeue().Invoke();
             }
         }
     }
 
-    public void Enqueue(IEnumerator action)
+    public void Enqueue(Action action)
     {
-        lock(actions)
+        lock (actions)
         {
-            actions.Enqueue(() => {
-                StartCoroutine(action);
-            });
+            actions.Enqueue(action);
         }
-    }
-
-    public void Enqueue(Action action) => Enqueue(ActionWrapper(action));
-
-    IEnumerator ActionWrapper(Action action) {
-        action();
-        yield return null;
     }
 }

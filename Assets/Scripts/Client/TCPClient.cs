@@ -44,6 +44,7 @@ public class TCPClient : MonoBehaviour
     private int readPos = 0, writePos = 0;
     private float poseSendingGap, lastPoseSentTime;
     private volatile bool isRunning = true;
+    private int decodedTotalChunkN;
 
     void Start()
     {
@@ -76,12 +77,12 @@ public class TCPClient : MonoBehaviour
 
     private void Update()
     {
-        if (OVRInput.GetDown(OVRInput.Button.Three))
-        {
-            isPuppet = !isPuppet;
-            SendPuppetStateChange(isPuppet);
-            Debug.Log($"Puppet mode toggled: {isPuppet}");
-        }
+        //if (OVRInput.GetDown(OVRInput.Button.Three))
+        //{
+        //    isPuppet = !isPuppet;
+        //    SendPuppetStateChange(isPuppet);
+        //    Debug.Log($"Puppet mode toggled: {isPuppet}");
+        //}
 
         if (client != null && client.Connected && centerEye != null && receivedInitPos && Time.time - lastPoseSentTime > poseSendingGap)
         {
@@ -102,6 +103,7 @@ public class TCPClient : MonoBehaviour
     private byte[] CreatePoseMessage(Vector3 pos, Quaternion rot)
     {
         var buffer = new List<byte>();
+        buffer.AddRange(BitConverter.GetBytes(0));
         buffer.AddRange(BitConverter.GetBytes((int)TCPMessageType.POSE_UPDATE));
         buffer.AddRange(BitConverter.GetBytes(pos.x));
         buffer.AddRange(BitConverter.GetBytes(pos.y));
@@ -111,7 +113,19 @@ public class TCPClient : MonoBehaviour
         buffer.AddRange(BitConverter.GetBytes(rot.z));
         buffer.AddRange(BitConverter.GetBytes(rot.w));
         buffer.AddRange(BitConverter.GetBytes((int)testClient.testPhase));
-        return buffer.ToArray();
+        int sentThisFrame = 0;
+        for (int i = 0; i < udpClient.chunksThisFrameToReport.Count; i++)
+        {
+            buffer.AddRange(BitConverter.GetBytes(udpClient.chunksThisFrameToReport[i].Item1));
+            buffer.AddRange(BitConverter.GetBytes(udpClient.chunksThisFrameToReport[i].Item2));
+            sentThisFrame++;
+            decodedTotalChunkN++;
+        }
+        Debug.Log($"sent this frame: {sentThisFrame}, sendecodedTotalChunkN: {decodedTotalChunkN}");
+        udpClient.chunksThisFrameToReport.Clear();
+        byte[] bytes = buffer.ToArray();
+        Buffer.BlockCopy(BitConverter.GetBytes(bytes.Length - sizeof(int)), 0, bytes, 0, sizeof(int));
+        return bytes;
     }
     private void ListenToServer(TcpClient server)
     {

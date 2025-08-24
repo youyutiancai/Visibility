@@ -9,7 +9,7 @@ public abstract class User : MonoBehaviour
     [HideInInspector]
     public int[] clusterReceived, indiReceived, preindiReceived;
     [HideInInspector]
-    public PriorityQueue<int, long, float, (int, int)> ChunksWaitToSend;
+    public PriorityQueue<int, long, float, (int, int)> ChunksWaitToSend = new PriorityQueue<int, long, float, (int, int)>();
 
     public SyntheticPathNode[] path;
     public Vector3 offset;
@@ -23,15 +23,17 @@ public abstract class User : MonoBehaviour
 
     protected VisibilityCheck vc;
     protected ClusterControl cc;
+    protected NetworkControl nc;
 
     public User(Vector3 initialPos)
     {
     }
 
-    protected void InitializeUser()
+    public void InitializeUser()
     {
         vc = VisibilityCheck.Instance;
         cc = ClusterControl.Instance;
+        nc = NetworkControl.Instance;
         userCamera = GetComponent<Camera>();
         currentNodeIndex = 0;
         clusterReceived = new int[vc.objectsInScene.Count];
@@ -39,6 +41,7 @@ public abstract class User : MonoBehaviour
         preindiReceived = new int[vc.objectsInScene.Count];
         chunkPlanned = new Dictionary<int, long[]>();
         chunkSentTimes = new Dictionary<int, int[]>();
+        ChunksWaitToSend = new PriorityQueue<int, long, float, (int, int)>();
         preX = 0;
         preZ = 0;
     }

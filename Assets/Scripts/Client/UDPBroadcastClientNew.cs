@@ -50,7 +50,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
     private Dictionary<int, List<List<int>>> trianglesDict = new Dictionary<int, List<List<int>>>();
     private Dictionary<int, Vector3[]> normalsDict = new Dictionary<int, Vector3[]>();
     private int recevTotalChunkPerObject = 0;
-    private int recevTotalChunkN = 0;
+    private int recevTotalChunkN = 0, decodedTotalChunkN;
 
     private float[] reusableFloatBuffer = new float[57 * 6];
     private int[] reusableIntBuffer = new int[1024];
@@ -79,6 +79,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     private StreamWriter logWriter;
     private List<string> chunksThisFrame = new List<string>();
+    [HideInInspector]
+    public List<(int, int)> chunksThisFrameToReport = new List<(int, int)>();
     private string logFilePath;
 
     private void Awake()
@@ -97,10 +99,12 @@ public class UDPBroadcastClientNew : MonoBehaviour
         colliderUpdateInterval = 2f;
         colliderToUpdateEachFrame = 10;
         currentColliderToUpdate = 0;
+        decodedTotalChunkN = 0;
         lastColliderUpdateTime = Time.time;
         string filename = $"ClientRuntimeLog_{DateTime.UtcNow:yyyyMMdd_HHmmss}.jsonl";
         logFilePath = Path.Combine(Application.persistentDataPath, filename);
         logWriter = new StreamWriter(logFilePath, append: false);
+        logWriter.AutoFlush = true;
     }
     public void ResetAll()
     {
@@ -736,6 +740,9 @@ public class UDPBroadcastClientNew : MonoBehaviour
         var trianglesArr = trianglesDict[objectID];
         string gEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunk.id},\"type\":\"G\",\"subMeshIdx\":{chunk.subMeshIdx},\"chunkRecvTime\":\"{chunk.chunkRecvTime}\"}}";
         chunksThisFrame.Add(gEntry);
+        chunksThisFrameToReport.Add((objectID, chunk.id));
+        //decodedTotalChunkN++;
+        //Debug.Log($"decodedTotalChunkN: {decodedTotalChunkN}");
 
         int cursor = 0;
         int vertexCount = BitConverter.ToInt32(chunk_data, cursor); cursor += sizeof(int);

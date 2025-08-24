@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -35,6 +36,10 @@ public class TCPControl : Singleton<TCPControl>
     private NetworkControl nc;
     public Dictionary<IPAddress, RealUser> addressToUser;
     private int userIDOrder;
+    private byte[] receiveBuffer = new byte[1024 * 1024];
+    private int readPos = 0, writePos = 0;
+    [HideInInspector]
+    public int accumulatedPacketReceived;
 
     private void Start()
     {
@@ -48,6 +53,7 @@ public class TCPControl : Singleton<TCPControl>
         clientTasks = new Dictionary<IPAddress, Task>();
         addressToUser = new Dictionary<IPAddress, RealUser>();
         userIDOrder = 0;
+        accumulatedPacketReceived = 0;
         listenerTask = ListenTCPAsync();
     }
 
@@ -100,33 +106,20 @@ public class TCPControl : Singleton<TCPControl>
         Debug.Log($"ClientID {ep} is connected and added to our clients...");
 
         NetworkStream stream = client.GetStream();
-        byte[] buffer = new byte[1000000];
-
+        byte[] tempBuffer = new byte[1000000];
         try
         {
             while (!ct.IsCancellationRequested)
             {
-                // Await data only if available (non-blocking), else yield
-                //if (!stream.DataAvailable)
-                //{
-                //    await Task.Delay(10, ct);
-                //    continue;
-                //}
-
-                int byteCount = await stream.ReadAsync(buffer, 0, buffer.Length, ct);
-
-                // Client disconnected
-                if (byteCount == 0)
-                    break;
-
-                byte[] data = new byte[byteCount];
-                Buffer.BlockCopy(buffer, 0, data, 0, byteCount);
-                dispatcher.Enqueue(() => HandleMessageTCP(client, data));
+                int bytesRead = await stream.ReadAsync(tempBuffer, 0, tempBuffer.Length, ct);
+                if (bytesRead == 0) break;
+                byte[] data = new byte[bytesRead];
+                Buffer.BlockCopy(tempBuffer, 0, data, 0, bytesRead);
+                if (addressToUser.TryGetValue(ep.Address, out RealUser realUser))
+                {
+                    dispatcher.Enqueue(() => realUser.StackReadMessageRealUser(data));
+                }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            Debug.Log($"Client {ep} read canceled");
         }
         catch (Exception e)
         {
@@ -153,76 +146,6 @@ public class TCPControl : Singleton<TCPControl>
     }
 
 
-    private void HandleMessageTCP(TcpClient client, byte[] data)
-    {
-        int cursor = 0;
-        IPEndPoint ep = client.Client.RemoteEndPoint as IPEndPoint;
-
-        while (cursor + sizeof(int) <= data.Length)
-        {
-            TCPMessageType mt = (TCPMessageType)BitConverter.ToInt32(data, cursor);
-            cursor += sizeof(int);
-
-            switch (mt)
-            {
-                case TCPMessageType.POSE_UPDATE:
-                    if (cursor + sizeof(float) * 7 > data.Length) {
-                        Debug.Log($"not enough data: {data.Length}");
-                        return;
-                    }
-                        
-                    if (addressToUser.TryGetValue(ep.Address, out RealUser realUser))
-                    {
-                        float px = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
-                        float py = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
-                        float pz = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
-                        float rx = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
-                        float ry = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
-                        float rz = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
-                        float rw = BitConverter.ToSingle(data, cursor); cursor += sizeof(float);
-                        TestPhase testPhase = (TestPhase)BitConverter.ToInt32(data, cursor); cursor += sizeof(int);
-
-                        realUser.latestPosition = new Vector3(px, py, pz);
-                        realUser.latestRotation = new Quaternion(rx, ry, rz, rw);
-                        if (realUser.testPhase != testPhase)
-                        {
-                            realUser.testPhaseChanged = true;
-                        }
-                        realUser.testPhase = testPhase;
-
-                        if (!realUser.isPuppet)
-                        {
-                            realUser.simulatedPosition = realUser.latestPosition;
-                            realUser.simulatedRotation = realUser.latestRotation;
-                        }
-
-                        //Debug.Log($"{realUser.simulatedPosition}, {realUser.simulatedRotation}, {realUser.latestPosition}, {realUser.latestRotation}");
-                        if (realUser.transform != null)
-                            realUser.transform.SetPositionAndRotation(realUser.latestPosition, realUser.latestRotation);
-                    }
-                    break;
-
-                case TCPMessageType.PUPPET_TOGGLE:
-                    if (cursor + sizeof(int) > data.Length) return; // not enough data
-                    if (addressToUser.TryGetValue(ep.Address, out realUser))
-                    {
-                        bool newState = BitConverter.ToInt32(data, cursor) == 1;
-                        cursor += sizeof(int);
-                        realUser.isPuppet = newState;
-                        //realUser.simulatedPosition = transform.position;
-                        //realUser.simulatedRotation = transform.rotation;
-                        Debug.Log($"User {ep} puppet mode set to: {newState}");
-                    }
-                    break;
-
-                default:
-                    Debug.LogWarning($"Unknown TCPMessageType: {mt}, remaining bytes: {data.Length - cursor}");
-                    return; // Avoid infinite loop
-            }
-        }
-    }
-
-
     private void SendTable(TcpClient client)
     {
         if (!(cc.SimulationStrategy == SimulationStrategyDropDown.RealUserCluster || cc.SimulationStrategy == SimulationStrategyDropDown.RealUserIndi))
@@ -241,6 +164,7 @@ public class TCPControl : Singleton<TCPControl>
             newUser.transform.parent = cc.transform;
             cc.users.Add(newUser.GetComponent<RealUser>());
             var realUser = newUser.GetComponent<RealUser>();
+            realUser.InitializeRealUser();
             realUser.tcpClient = client;
             realUser.tcpEndPoint = client.Client.RemoteEndPoint as IPEndPoint;
             addressToUser[realUser.tcpEndPoint.Address] = realUser;
