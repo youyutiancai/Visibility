@@ -6298,6 +6298,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1290289615}
     - target: {fileID: 6862901159742033649, guid: 5c149baf016750b42ac7e9cdbc905b96, type: 3}
+      propertyPath: _jumpForce
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6862901159742033649, guid: 5c149baf016750b42ac7e9cdbc905b96, type: 3}
       propertyPath: _playerEyes
       value: 
       objectReference: {fileID: 1290289617}
@@ -6305,6 +6309,10 @@ PrefabInstance:
       propertyPath: _playerOrigin
       value: 
       objectReference: {fileID: 1290289620}
+    - target: {fileID: 6862901159742033649, guid: 5c149baf016750b42ac7e9cdbc905b96, type: 3}
+      propertyPath: _crouchHeightOffset
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7263713533565146849, guid: 5c149baf016750b42ac7e9cdbc905b96, type: 3}
       propertyPath: m_IsActive
       value: 0

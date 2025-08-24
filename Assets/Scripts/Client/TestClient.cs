@@ -28,7 +28,7 @@ public class TestClient : Singleton<TestClient>
     public int pathOrder;
     private GameObject[][] pathNodes;
     private int[][] answers;
-    private bool bWasPressedLastFrame = false;
+    private bool aWasPressedLastFrame, bWasPressedLastFrame = false;
     private StreamWriter answerWriter;
     private string logFilePath;
     private string[] Questions = new string[]
@@ -257,7 +257,7 @@ public class TestClient : Singleton<TestClient>
         if (testPhase == TestPhase.MovingPhase)
             return;
         invisibleFenses.SetActive(true);
-        Vector3 clientPosition = client.transform.position;
+        Vector3 clientPosition = clientCamera.transform.position;
         invisibleFenses.transform.position = new Vector3(clientPosition.x, 0, clientPosition.z);
         MoveQuestionBoardInFront();
     }
@@ -292,6 +292,16 @@ public class TestClient : Singleton<TestClient>
 
                 bWasPressedLastFrame = bPressed;
             }
+            if (device.TryGetFeatureValue(CommonUsages.primaryButton, out bool aPressed))
+            {
+                if (aPressed && !aWasPressedLastFrame && testPhase == TestPhase.QuestionPhase)
+                {
+                    client.transform.position = invisibleFenses.transform.position;
+                    MoveQuestionBoardInFront();
+                }
+
+                aWasPressedLastFrame = aPressed;
+            }
         }
     }
 
@@ -300,7 +310,7 @@ public class TestClient : Singleton<TestClient>
         if (currentNodeNum >= pathNodes[currentPathNum].Length)
             return;
 
-        Vector3 clientPos = client.transform.position;
+        Vector3 clientPos = clientCamera.transform.position;
         Vector3 milestonePos = milestoneObject.transform.position;
         float distanceToMilestone = Mathf.Sqrt(Mathf.Pow(clientPos.x - milestonePos.x, 2) + Mathf.Pow(clientPos.z - milestonePos.z, 2));
         float milestoneRadius = milestoneObject.transform.GetChild(0).GetComponent<CapsuleCollider>().radius;
