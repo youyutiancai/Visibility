@@ -1,0 +1,34 @@
+{
+    "name": "Logger",
+    "maps": [
+        {
+            "name": "Logger",
+            "id": "c8dd00e6-b031-44d2-a409-46aa8d60457d",
+            "actions": [
+                {
+                    "name": "IntrinsicCamera",
+                    "type": "Button",
+                    "id": "c003f158-0222-468e-a8a1-75ac36f82363",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "9f61d7d5-b6fe-4f09-811f-3424a0256e50",
+                    "path": "<Keyboard>/l",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "IntrinsicCamera",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        }
+    ],
+    "controlSchemes": []
+}

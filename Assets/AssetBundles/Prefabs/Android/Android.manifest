@@ -1,0 +1,861 @@
+ManifestFileVersion: 0
+UnityVersion: 6000.0.25f1
+CRC: 4038010844
+HashAppended: 0
+AssetBundleManifest:
+  AssetBundleInfos:
+    Info_0:
+      Name: balcony_1
+      Dependencies: {}
+    Info_1:
+      Name: balcony_2
+      Dependencies: {}
+    Info_2:
+      Name: balcony_3
+      Dependencies: {}
+    Info_3:
+      Name: civilian_bridge_1_a
+      Dependencies: {}
+    Info_4:
+      Name: civilian_bridge_1_b
+      Dependencies: {}
+    Info_5:
+      Name: civilian_bridge_1_c
+      Dependencies: {}
+    Info_6:
+      Name: civilian_bridge_2_a
+      Dependencies: {}
+    Info_7:
+      Name: civilian_bridge_2_b
+      Dependencies: {}
+    Info_8:
+      Name: civilian_bridge_2_c
+      Dependencies: {}
+    Info_9:
+      Name: civilian_bridge_3_a
+      Dependencies: {}
+    Info_10:
+      Name: civilian_bridge_3_b
+      Dependencies: {}
+    Info_11:
+      Name: civilian_bridge_4_a
+      Dependencies: {}
+    Info_12:
+      Name: civilian_bridge_4_b
+      Dependencies: {}
+    Info_13:
+      Name: civilian_bridge_4_c
+      Dependencies: {}
+    Info_14:
+      Name: civilian_bridge_4_d
+      Dependencies: {}
+    Info_15:
+      Name: civilian_bridge_4_e
+      Dependencies: {}
+    Info_16:
+      Name: civilian_house_01
+      Dependencies: {}
+    Info_17:
+      Name: civilian_house_02
+      Dependencies: {}
+    Info_18:
+      Name: civilian_house_03
+      Dependencies: {}
+    Info_19:
+      Name: civilian_house_04
+      Dependencies: {}
+    Info_20:
+      Name: civilian_house_05
+      Dependencies: {}
+    Info_21:
+      Name: civilian_house_06
+      Dependencies: {}
+    Info_22:
+      Name: civilian_house_07
+      Dependencies: {}
+    Info_23:
+      Name: civilian_house_08
+      Dependencies: {}
+    Info_24:
+      Name: civilian_house_09
+      Dependencies: {}
+    Info_25:
+      Name: civilian_house_10
+      Dependencies: {}
+    Info_26:
+      Name: civilian_house_11
+      Dependencies: {}
+    Info_27:
+      Name: civilian_house_12
+      Dependencies: {}
+    Info_28:
+      Name: civilian_house_13
+      Dependencies: {}
+    Info_29:
+      Name: civilian_house_14
+      Dependencies: {}
+    Info_30:
+      Name: civilian_house_15
+      Dependencies: {}
+    Info_31:
+      Name: civilian_house_16
+      Dependencies: {}
+    Info_32:
+      Name: civilian_house_17
+      Dependencies: {}
+    Info_33:
+      Name: civilian_house_18_a
+      Dependencies: {}
+    Info_34:
+      Name: civilian_house_18_b
+      Dependencies: {}
+    Info_35:
+      Name: civilian_house_19
+      Dependencies: {}
+    Info_36:
+      Name: civilian_house_20
+      Dependencies: {}
+    Info_37:
+      Name: civilian_house_21
+      Dependencies: {}
+    Info_38:
+      Name: civilian_house_22
+      Dependencies: {}
+    Info_39:
+      Name: civilian_house_23
+      Dependencies: {}
+    Info_40:
+      Name: civilian_house_24_a
+      Dependencies: {}
+    Info_41:
+      Name: civilian_house_24_b
+      Dependencies: {}
+    Info_42:
+      Name: civilian_house_25
+      Dependencies: {}
+    Info_43:
+      Name: civilian_house_26
+      Dependencies: {}
+    Info_44:
+      Name: civilian_house_27
+      Dependencies: {}
+    Info_45:
+      Name: civilian_house_28
+      Dependencies: {}
+    Info_46:
+      Name: civilian_house_29
+      Dependencies: {}
+    Info_47:
+      Name: civilian_house_30_a
+      Dependencies: {}
+    Info_48:
+      Name: civilian_house_30_b
+      Dependencies: {}
+    Info_49:
+      Name: civilian_house_30_c
+      Dependencies: {}
+    Info_50:
+      Name: civilian_house_30_d
+      Dependencies: {}
+    Info_51:
+      Name: civilian_house_30_e
+      Dependencies: {}
+    Info_52:
+      Name: civilian_house_30_f
+      Dependencies: {}
+    Info_53:
+      Name: civilian_house_30_g
+      Dependencies: {}
+    Info_54:
+      Name: civilian_house_31_a
+      Dependencies: {}
+    Info_55:
+      Name: civilian_house_31_b
+      Dependencies: {}
+    Info_56:
+      Name: civilian_house_31_c
+      Dependencies: {}
+    Info_57:
+      Name: civilian_house_31_d
+      Dependencies: {}
+    Info_58:
+      Name: civilian_house_31_e
+      Dependencies: {}
+    Info_59:
+      Name: civilian_house_31_f
+      Dependencies: {}
+    Info_60:
+      Name: civilian_house_31_g
+      Dependencies: {}
+    Info_61:
+      Name: civilian_house_31_h
+      Dependencies: {}
+    Info_62:
+      Name: civilian_house_32_a
+      Dependencies: {}
+    Info_63:
+      Name: civilian_house_32_b
+      Dependencies: {}
+    Info_64:
+      Name: civilian_house_32_c
+      Dependencies: {}
+    Info_65:
+      Name: civilian_house_32_d
+      Dependencies: {}
+    Info_66:
+      Name: civilian_house_32_e
+      Dependencies: {}
+    Info_67:
+      Name: civilian_house_32_f
+      Dependencies: {}
+    Info_68:
+      Name: civilian_house_33_a
+      Dependencies: {}
+    Info_69:
+      Name: civilian_house_33_b
+      Dependencies: {}
+    Info_70:
+      Name: civilian_house_33_c
+      Dependencies: {}
+    Info_71:
+      Name: civilian_house_33_d
+      Dependencies: {}
+    Info_72:
+      Name: civilian_house_33_e
+      Dependencies: {}
+    Info_73:
+      Name: civilian_house_33_f
+      Dependencies: {}
+    Info_74:
+      Name: civilian_house_33_g
+      Dependencies: {}
+    Info_75:
+      Name: civilian_house_33_h
+      Dependencies: {}
+    Info_76:
+      Name: civilian_house_33_i
+      Dependencies: {}
+    Info_77:
+      Name: civilian_house_34_a
+      Dependencies: {}
+    Info_78:
+      Name: civilian_house_34_b
+      Dependencies: {}
+    Info_79:
+      Name: civilian_house_34_c
+      Dependencies: {}
+    Info_80:
+      Name: civilian_house_34_d
+      Dependencies: {}
+    Info_81:
+      Name: civilian_house_34_e
+      Dependencies: {}
+    Info_82:
+      Name: civilian_house_34_f
+      Dependencies: {}
+    Info_83:
+      Name: civilian_house_34_g
+      Dependencies: {}
+    Info_84:
+      Name: civilian_house_34_h
+      Dependencies: {}
+    Info_85:
+      Name: civilian_house_34_i
+      Dependencies: {}
+    Info_86:
+      Name: civilian_house_35_a
+      Dependencies: {}
+    Info_87:
+      Name: civilian_house_35_b
+      Dependencies: {}
+    Info_88:
+      Name: civilian_house_35_c
+      Dependencies: {}
+    Info_89:
+      Name: civilian_house_35_d
+      Dependencies: {}
+    Info_90:
+      Name: civilian_house_36_a
+      Dependencies: {}
+    Info_91:
+      Name: civilian_house_36_b
+      Dependencies: {}
+    Info_92:
+      Name: civilian_house_36_c
+      Dependencies: {}
+    Info_93:
+      Name: civilian_house_37_a
+      Dependencies: {}
+    Info_94:
+      Name: civilian_house_37_b
+      Dependencies: {}
+    Info_95:
+      Name: civilian_house_37_c
+      Dependencies: {}
+    Info_96:
+      Name: civilian_house_37_d
+      Dependencies: {}
+    Info_97:
+      Name: civilian_house_37_e
+      Dependencies: {}
+    Info_98:
+      Name: civilian_house_37_f
+      Dependencies: {}
+    Info_99:
+      Name: civilian_house_37_g
+      Dependencies: {}
+    Info_100:
+      Name: civilian_house_37_h
+      Dependencies: {}
+    Info_101:
+      Name: civilian_house_38_a
+      Dependencies: {}
+    Info_102:
+      Name: civilian_house_38_b
+      Dependencies: {}
+    Info_103:
+      Name: civilian_house_38_c
+      Dependencies: {}
+    Info_104:
+      Name: civilian_house_38_d
+      Dependencies: {}
+    Info_105:
+      Name: civilian_house_38_e
+      Dependencies: {}
+    Info_106:
+      Name: civilian_house_38_f
+      Dependencies: {}
+    Info_107:
+      Name: civilian_house_38_g
+      Dependencies: {}
+    Info_108:
+      Name: civilian_house_38_h
+      Dependencies: {}
+    Info_109:
+      Name: civilian_house_39_a
+      Dependencies: {}
+    Info_110:
+      Name: civilian_house_39_b
+      Dependencies: {}
+    Info_111:
+      Name: civilian_house_39_c
+      Dependencies: {}
+    Info_112:
+      Name: civilian_house_39_d
+      Dependencies: {}
+    Info_113:
+      Name: civilian_house_39_e
+      Dependencies: {}
+    Info_114:
+      Name: civilian_house_39_f
+      Dependencies: {}
+    Info_115:
+      Name: civilian_house_39_g
+      Dependencies: {}
+    Info_116:
+      Name: civilian_house_40_a
+      Dependencies: {}
+    Info_117:
+      Name: civilian_house_40_b
+      Dependencies: {}
+    Info_118:
+      Name: civilian_house_40_c
+      Dependencies: {}
+    Info_119:
+      Name: civilian_house_40_d
+      Dependencies: {}
+    Info_120:
+      Name: civilian_house_40_e
+      Dependencies: {}
+    Info_121:
+      Name: civilian_house_40_f
+      Dependencies: {}
+    Info_122:
+      Name: civilian_house_41_a
+      Dependencies: {}
+    Info_123:
+      Name: civilian_house_41_b
+      Dependencies: {}
+    Info_124:
+      Name: civilian_house_41_c
+      Dependencies: {}
+    Info_125:
+      Name: civilian_house_42
+      Dependencies: {}
+    Info_126:
+      Name: civilian_house_43
+      Dependencies: {}
+    Info_127:
+      Name: civilian_house_44
+      Dependencies: {}
+    Info_128:
+      Name: civilian_house_45
+      Dependencies: {}
+    Info_129:
+      Name: civilian_house_46
+      Dependencies: {}
+    Info_130:
+      Name: civilian_house_ruin_a
+      Dependencies: {}
+    Info_131:
+      Name: civilian_house_ruin_b
+      Dependencies: {}
+    Info_132:
+      Name: civilian_house_ruin_c
+      Dependencies: {}
+    Info_133:
+      Name: civilian_house_ruin_d
+      Dependencies: {}
+    Info_134:
+      Name: civilian_house_ruin_e
+      Dependencies: {}
+    Info_135:
+      Name: civilian_house_ruin_f
+      Dependencies: {}
+    Info_136:
+      Name: door_canopy_1
+      Dependencies: {}
+    Info_137:
+      Name: ladder_1
+      Dependencies: {}
+    Info_138:
+      Name: ladder_2
+      Dependencies: {}
+    Info_139:
+      Name: roof_building_1
+      Dependencies: {}
+    Info_140:
+      Name: roof_building_2
+      Dependencies: {}
+    Info_141:
+      Name: roof_building_3
+      Dependencies: {}
+    Info_142:
+      Name: roof_building_4
+      Dependencies: {}
+    Info_143:
+      Name: roof_building_5
+      Dependencies: {}
+    Info_144:
+      Name: roof_building_6_a
+      Dependencies: {}
+    Info_145:
+      Name: roof_building_6_b
+      Dependencies: {}
+    Info_146:
+      Name: roof_building_7
+      Dependencies: {}
+    Info_147:
+      Name: roof_building_8
+      Dependencies: {}
+    Info_148:
+      Name: roof_building_9
+      Dependencies: {}
+    Info_149:
+      Name: roof_building_10
+      Dependencies: {}
+    Info_150:
+      Name: roof_building_11
+      Dependencies: {}
+    Info_151:
+      Name: roof_building_12
+      Dependencies: {}
+    Info_152:
+      Name: roof_building_13
+      Dependencies: {}
+    Info_153:
+      Name: standard_rooftop_1
+      Dependencies: {}
+    Info_154:
+      Name: standard_rooftop_2
+      Dependencies: {}
+    Info_155:
+      Name: standard_rooftop_funnel
+      Dependencies: {}
+    Info_156:
+      Name: standard_rooftop_window
+      Dependencies: {}
+    Info_157:
+      Name: standard_wooden_roof_1
+      Dependencies: {}
+    Info_158:
+      Name: standard_wooden_roof_2
+      Dependencies: {}
+    Info_159:
+      Name: standard_wooden_roof_3
+      Dependencies: {}
+    Info_160:
+      Name: standard_wooden_roof_4
+      Dependencies: {}
+    Info_161:
+      Name: standard_wooden_roof_5
+      Dependencies: {}
+    Info_162:
+      Name: stone_stairs_1
+      Dependencies: {}
+    Info_163:
+      Name: wooden_support_1
+      Dependencies: {}
+    Info_164:
+      Name: banner
+      Dependencies: {}
+    Info_165:
+      Name: barrel
+      Dependencies: {}
+    Info_166:
+      Name: barrel_group
+      Dependencies: {}
+    Info_167:
+      Name: boat_01
+      Dependencies: {}
+    Info_168:
+      Name: boat_02
+      Dependencies: {}
+    Info_169:
+      Name: boat_03
+      Dependencies: {}
+    Info_170:
+      Name: box
+      Dependencies: {}
+    Info_171:
+      Name: fence
+      Dependencies: {}
+    Info_172:
+      Name: fence_stick
+      Dependencies: {}
+    Info_173:
+      Name: fire_cage
+      Dependencies: {}
+    Info_174:
+      Name: fountain_a
+      Dependencies: {}
+    Info_175:
+      Name: fountain_b
+      Dependencies: {}
+    Info_176:
+      Name: port_chains
+      Dependencies: {}
+    Info_177:
+      Name: port_wooden_bridge_a
+      Dependencies: {}
+    Info_178:
+      Name: port_wooden_bridge_a_corner
+      Dependencies: {}
+    Info_179:
+      Name: port_wooden_bridge_a_short
+      Dependencies: {}
+    Info_180:
+      Name: port_wooden_bridge_b
+      Dependencies: {}
+    Info_181:
+      Name: port_wooden_bridge_b_stairs
+      Dependencies: {}
+    Info_182:
+      Name: street_green_belt_a
+      Dependencies: {}
+    Info_183:
+      Name: street_oil_light
+      Dependencies: {}
+    Info_184:
+      Name: street_pond_a
+      Dependencies: {}
+    Info_185:
+      Name: tent_a
+      Dependencies: {}
+    Info_186:
+      Name: tent_b
+      Dependencies: {}
+    Info_187:
+      Name: tent_c
+      Dependencies: {}
+    Info_188:
+      Name: wagon
+      Dependencies: {}
+    Info_189:
+      Name: well
+      Dependencies: {}
+    Info_190:
+      Name: cliff_01
+      Dependencies: {}
+    Info_191:
+      Name: cliff_02
+      Dependencies: {}
+    Info_192:
+      Name: cliff_03
+      Dependencies: {}
+    Info_193:
+      Name: cliff_04
+      Dependencies: {}
+    Info_194:
+      Name: cliff_05
+      Dependencies: {}
+    Info_195:
+      Name: cliff_06
+      Dependencies: {}
+    Info_196:
+      Name: cliff_big_a
+      Dependencies: {}
+    Info_197:
+      Name: sea
+      Dependencies: {}
+    Info_198:
+      Name: sky
+      Dependencies: {}
+    Info_199:
+      Name: terrain_01
+      Dependencies: {}
+    Info_200:
+      Name: terrain_02
+      Dependencies: {}
+    Info_201:
+      Name: terrain_03
+      Dependencies: {}
+    Info_202:
+      Name: terrain_04
+      Dependencies: {}
+    Info_203:
+      Name: terrain_05
+      Dependencies: {}
+    Info_204:
+      Name: terrain_06
+      Dependencies: {}
+    Info_205:
+      Name: terrain_07
+      Dependencies: {}
+    Info_206:
+      Name: terrain_08
+      Dependencies: {}
+    Info_207:
+      Name: terrain_09
+      Dependencies: {}
+    Info_208:
+      Name: terrain_10
+      Dependencies: {}
+    Info_209:
+      Name: terrain_city_inner
+      Dependencies: {}
+    Info_210:
+      Name: terrain_standard
+      Dependencies: {}
+    Info_211:
+      Name: dead_tree_a
+      Dependencies: {}
+    Info_212:
+      Name: dead_tree_b
+      Dependencies: {}
+    Info_213:
+      Name: dead_tree_c
+      Dependencies: {}
+    Info_214:
+      Name: dead_tree_d
+      Dependencies: {}
+    Info_215:
+      Name: dead_tree_e
+      Dependencies: {}
+    Info_216:
+      Name: dead_tree_f
+      Dependencies: {}
+    Info_217:
+      Name: dead_tree_g
+      Dependencies: {}
+    Info_218:
+      Name: dead_tree_h
+      Dependencies: {}
+    Info_219:
+      Name: dead_tree_i
+      Dependencies: {}
+    Info_220:
+      Name: dead_tree_j
+      Dependencies: {}
+    Info_221:
+      Name: pine_a
+      Dependencies: {}
+    Info_222:
+      Name: pine_b
+      Dependencies: {}
+    Info_223:
+      Name: pine_c
+      Dependencies: {}
+    Info_224:
+      Name: pine_d
+      Dependencies: {}
+    Info_225:
+      Name: building_base_a
+      Dependencies: {}
+    Info_226:
+      Name: building_base_b
+      Dependencies: {}
+    Info_227:
+      Name: castle_door_1
+      Dependencies: {}
+    Info_228:
+      Name: castle_gate_a
+      Dependencies: {}
+    Info_229:
+      Name: castle_gate_b
+      Dependencies: {}
+    Info_230:
+      Name: castle_portcullis
+      Dependencies: {}
+    Info_231:
+      Name: castle_tower_octagon
+      Dependencies: {}
+    Info_232:
+      Name: castle_tower_rectangular
+      Dependencies: {}
+    Info_233:
+      Name: castle_tower_round
+      Dependencies: {}
+    Info_234:
+      Name: castle_wall_2,5m
+      Dependencies: {}
+    Info_235:
+      Name: castle_wall_5m
+      Dependencies: {}
+    Info_236:
+      Name: castle_wall_5m_h21m
+      Dependencies: {}
+    Info_237:
+      Name: castle_wall_10m
+      Dependencies: {}
+    Info_238:
+      Name: castle_wall_15m
+      Dependencies: {}
+    Info_239:
+      Name: castle_wall_corner_a
+      Dependencies: {}
+    Info_240:
+      Name: castle_wall_corner_b
+      Dependencies: {}
+    Info_241:
+      Name: castle_wall_incline_lower
+      Dependencies: {}
+    Info_242:
+      Name: castle_wall_incline_uper
+      Dependencies: {}
+    Info_243:
+      Name: church_a
+      Dependencies: {}
+    Info_244:
+      Name: church_b
+      Dependencies: {}
+    Info_245:
+      Name: church_c
+      Dependencies: {}
+    Info_246:
+      Name: citadel_base_a
+      Dependencies: {}
+    Info_247:
+      Name: citadel_bridge
+      Dependencies: {}
+    Info_248:
+      Name: citadel_gate
+      Dependencies: {}
+    Info_249:
+      Name: citadel_main
+      Dependencies: {}
+    Info_250:
+      Name: citadel_tower_a
+      Dependencies: {}
+    Info_251:
+      Name: citadel_tower_b
+      Dependencies: {}
+    Info_252:
+      Name: citadel_tower_c
+      Dependencies: {}
+    Info_253:
+      Name: citadel_tower_corner
+      Dependencies: {}
+    Info_254:
+      Name: citadel_tower_d
+      Dependencies: {}
+    Info_255:
+      Name: citadel_tower_e
+      Dependencies: {}
+    Info_256:
+      Name: citadel_tower_f
+      Dependencies: {}
+    Info_257:
+      Name: citadel_wall_a
+      Dependencies: {}
+    Info_258:
+      Name: citadel_wall_b
+      Dependencies: {}
+    Info_259:
+      Name: citadel_wall_incline
+      Dependencies: {}
+    Info_260:
+      Name: city_tower_a
+      Dependencies: {}
+    Info_261:
+      Name: crusader_headquarter
+      Dependencies: {}
+    Info_262:
+      Name: fortification_gate
+      Dependencies: {}
+    Info_263:
+      Name: fortification_tower_big
+      Dependencies: {}
+    Info_264:
+      Name: fortification_tower_small
+      Dependencies: {}
+    Info_265:
+      Name: fortress_a
+      Dependencies: {}
+    Info_266:
+      Name: overhang_building_a
+      Dependencies: {}
+    Info_267:
+      Name: port_base
+      Dependencies: {}
+    Info_268:
+      Name: port_house_base
+      Dependencies: {}
+    Info_269:
+      Name: port_wall_a
+      Dependencies: {}
+    Info_270:
+      Name: port_wall_b
+      Dependencies: {}
+    Info_271:
+      Name: port_wall_b_corner
+      Dependencies: {}
+    Info_272:
+      Name: port_wall_corner_a
+      Dependencies: {}
+    Info_273:
+      Name: port_wall_corner_b
+      Dependencies: {}
+    Info_274:
+      Name: port_wall_corner_c
+      Dependencies: {}
+    Info_275:
+      Name: sentinel_tower_a
+      Dependencies: {}
+    Info_276:
+      Name: sentinel_tower_b
+      Dependencies: {}
+    Info_277:
+      Name: street_gate
+      Dependencies: {}
+    Info_278:
+      Name: tower_gates
+      Dependencies: {}
+    Info_279:
+      Name: wall_h10m_corner
+      Dependencies: {}
+    Info_280:
+      Name: wall_h10m_l15m
+      Dependencies: {}
+    Info_281:
+      Name: wall_h10m_l50m
+      Dependencies: {}
+    Info_282:
+      Name: wall_h10m_l50m_destoryed
+      Dependencies: {}
+    Info_283:
+      Name: wall_h10m_short
+      Dependencies: {}
+    Info_284:
+      Name: wall_h10m_short_2
+      Dependencies: {}
