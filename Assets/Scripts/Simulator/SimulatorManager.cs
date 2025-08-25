@@ -239,7 +239,8 @@ public class SimulatorManager : MonoBehaviour
         {
             new TMP_Dropdown.OptionData("Replay"),
             new TMP_Dropdown.OptionData("Capture Frames - Ground Truth"),
-            new TMP_Dropdown.OptionData("Capture Frames - Recevied")
+            new TMP_Dropdown.OptionData("Capture Frames - Recevied"),
+            new TMP_Dropdown.OptionData("Depth Error Analysis")
         });
 
         modeDropdown.onValueChanged.AddListener(OnModeSelected);
@@ -265,6 +266,12 @@ public class SimulatorManager : MonoBehaviour
         else if (index == 2)
         {
             // Capture Frames - Recevied
+            //sceneRoot.SetActive(false);
+            simulatorVisibility.ShowVisibilityGroundTruthByType(visibilityType, false);
+        }
+        else if (index == 3)
+        {
+            // Optimized for Computing depth error by depth map between ground truth and received
             //sceneRoot.SetActive(false);
             simulatorVisibility.ShowVisibilityGroundTruthByType(visibilityType, false);
         }
@@ -332,6 +339,11 @@ public class SimulatorManager : MonoBehaviour
         Debug.Log($"Visibility type changed to: {visibilityType}");
     }
 
+    private void DepthErrorAnalaysisPerFrame()
+    {
+        
+    }
+
     private void CaptureFrame()
     {
         if (cameraSetupManager == null)
@@ -345,6 +357,7 @@ public class SimulatorManager : MonoBehaviour
         {
             1 => "Screenshots_Ground_Truth",
             2 => "Screenshots_Received",
+            3 => "Screenshots_Depth_Analysis",
             _ => "Screenshots" // Default folder for replay mode
         };
 
@@ -421,6 +434,11 @@ public class SimulatorManager : MonoBehaviour
                 CaptureFrame();
             }
             else if (modeDropdown.value == 2) // Capture Frames - Recevied
+            {
+                ProcessReceivedChunksGrouped(entry.chunks);
+                CaptureFrame();
+            }
+            else if (modeDropdown.value == 3) // Depth Error Analysis
             {
                 ProcessReceivedChunksGrouped(entry.chunks);
                 CaptureFrame();
