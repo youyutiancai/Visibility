@@ -47,6 +47,7 @@ public class SimulatorManager : MonoBehaviour
     // private int totalChunksSent;
     private ObjectTableManager objectTableManager;
     private ResourceLoader resourceLoader;
+    private GameObject chunksVisReceivedRoot;
     private Dictionary<int, GameObject> visualizedObjects = new Dictionary<int, GameObject>();
     private Dictionary<int, Vector3[]> verticesDict = new Dictionary<int, Vector3[]>();
     private Dictionary<int, Vector3[]> normalsDict = new Dictionary<int, Vector3[]>();
@@ -158,6 +159,8 @@ public class SimulatorManager : MonoBehaviour
             return;
         }
         isReceivedChunks = new Dictionary<int, bool[]>();
+
+        chunksVisReceivedRoot = new GameObject("ChunksVisReceivedRoot");
         
         // Initialize SimulatorVisibility FIRST
         if (sceneRoot != null && gd != null)
@@ -685,6 +688,7 @@ public class SimulatorManager : MonoBehaviour
         {
             // Create new object if it doesn't exist
             GameObject newObject = new GameObject($"Object_{objectID}");
+            newObject.layer = LayerMask.NameToLayer(Commons.RECEIVED_LAYER_NAME);
             newObject.AddComponent<MeshFilter>();
             MeshRenderer renderer = newObject.AddComponent<MeshRenderer>();
 
@@ -717,6 +721,7 @@ public class SimulatorManager : MonoBehaviour
             newObject.transform.position = holder.position;
             newObject.transform.eulerAngles = holder.eulerAngles;
             newObject.transform.localScale = holder.scale;
+            newObject.transform.SetParent(chunksVisReceivedRoot.transform);
 
             visualizedObjects[objectID] = newObject;
         }

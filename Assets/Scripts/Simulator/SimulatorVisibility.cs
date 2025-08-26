@@ -142,7 +142,7 @@ public class SimulatorVisibility
         objectFootprintsInGrid = new Dictionary<string, int[]>();
         AddAllObjects(sceneRoot.transform);
         chunkVisGroundTruthRoot = new GameObject("ChunkVisGroundTruthRoot");
-        chunkVisGroundTruthRoot.SetActive(false);
+        // chunkVisGroundTruthRoot.SetActive(false);  // change to use layer instead
         Debug.Log($"SimulatorVisibility initialized with {objectsInScene.Count} objects in scene");
     }
 
@@ -654,6 +654,7 @@ public class SimulatorVisibility
         {
             // Create new object if it doesn't exist
             GameObject newObject = new GameObject($"Object_{objectID}");
+            newObject.layer = LayerMask.NameToLayer(Commons.GROUND_TRUTH_LAYER_NAME);
             newObject.AddComponent<MeshFilter>();
             MeshRenderer renderer = newObject.AddComponent<MeshRenderer>();
 
