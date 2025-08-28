@@ -142,7 +142,7 @@ public class SimulatorVisibility
         objectFootprintsInGrid = new Dictionary<string, int[]>();
         AddAllObjects(sceneRoot.transform);
         chunkVisGroundTruthRoot = new GameObject("ChunkVisGroundTruthRoot");
-        chunkVisGroundTruthRoot.SetActive(false);
+        // chunkVisGroundTruthRoot.SetActive(false); // use the layer to control the visibility
         Debug.Log($"SimulatorVisibility initialized with {objectsInScene.Count} objects in scene");
     }
 
@@ -654,6 +654,10 @@ public class SimulatorVisibility
         {
             // Create new object if it doesn't exist
             GameObject newObject = new GameObject($"Object_{objectID}");
+
+            // Set the layer to the depth analysis camera
+            newObject.layer = LayerMask.NameToLayer(CameraSetupManager.layer_GT);
+            
             newObject.AddComponent<MeshFilter>();
             MeshRenderer renderer = newObject.AddComponent<MeshRenderer>();
 

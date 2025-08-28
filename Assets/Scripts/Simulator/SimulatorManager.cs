@@ -55,6 +55,7 @@ public class SimulatorManager : MonoBehaviour
     private int[] reusableIntBuffer = new int[1024];
     private int captureFrameCount = 0;
     //private Dictionary<int, int> totalExpectedChunks = new Dictionary<int, int>();
+    private GameObject receivedObjectsRoot;
     private Dictionary<int, int> totalReceivedChunks = new Dictionary<int, int>();
     private Dictionary<int, bool[]> isReceivedChunks;  // record the chunk i whehter received in object j
 
@@ -158,6 +159,8 @@ public class SimulatorManager : MonoBehaviour
             return;
         }
         isReceivedChunks = new Dictionary<int, bool[]>();
+
+        receivedObjectsRoot = new GameObject("ReceivedObjectsRoot");
         
         // Initialize SimulatorVisibility FIRST
         if (sceneRoot != null && gd != null)
@@ -667,6 +670,10 @@ public class SimulatorManager : MonoBehaviour
         {
             // Create new object if it doesn't exist
             GameObject newObject = new GameObject($"Object_{objectID}");
+
+            // Set the layer and tag to the depth analysis camera
+            newObject.layer = LayerMask.NameToLayer(CameraSetupManager.layer_Received);
+            
             newObject.AddComponent<MeshFilter>();
             MeshRenderer renderer = newObject.AddComponent<MeshRenderer>();
 
@@ -701,6 +708,7 @@ public class SimulatorManager : MonoBehaviour
             newObject.transform.localScale = holder.scale;
 
             visualizedObjects[objectID] = newObject;
+            newObject.transform.SetParent(receivedObjectsRoot.transform);
         }
         else
         {
@@ -922,6 +930,12 @@ public class SimulatorManager : MonoBehaviour
 
         currentElapsedTime = currentTime - firstChunkTime;
         elapsedTimeText.text = $"Elapsed Time: {currentElapsedTime:F3}s";
+    }
+
+    public void ShowReceivedObjects(bool active)
+    {
+        if (receivedObjectsRoot != null)
+            receivedObjectsRoot.SetActive(active);
     }
 
     public void StartSimulation()

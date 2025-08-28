@@ -9,22 +9,38 @@ using UnityEngine.UI;
 [RequireComponent(typeof(Camera))]
 public class CameraSetupManager : MonoBehaviour
 {
+    [Header("Settings for Depth Error Analysis")]
+    public Camera GT_Camera;
+    public Camera Received_Camera;
+    // public Shader writeDepthShader;
+    // private RenderTexture depthRT_GroundTruth;
+    // private RenderTexture depthRT_Received;
+    public const string layer_GT = "GroundTruth";
+    public const string layer_Received = "Received";
+    public RawImage debugImage_GT;
+    public RawImage debugImage_Received;
+    private Material matDebug_GT;
+    private Material matDebug_Received;
+
     private float fx, fy, cx, cy;
     private int width, height;
     private RenderTexture colorRenderTexture;
     private RenderTexture depthRenderTexture;
     private Camera renderCamera;
+
+    [Header("UI Settings")]
     public TMP_Dropdown outputModeDropdown;
     private Material depthMaterial;
 
     public enum OutputMode
     {
         Depth,
-        RGB
+        RGB,
+        GPU_Depth
     }
 
     [HideInInspector]
-    public OutputMode currentOutputMode = OutputMode.Depth;
+    public OutputMode currentOutputMode = OutputMode.GPU_Depth;
 
     void Start()
     {
@@ -73,6 +89,36 @@ public class CameraSetupManager : MonoBehaviour
         depthRenderTexture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32);
         depthRenderTexture.Create();
 
+        // Optimized: Create depth render texture for ground truth and received
+        // int w = width, h = height;
+        // var desc = new RenderTextureDescriptor(w, h, RenderTextureFormat.ARGB32, 0) {
+        //     sRGB = false,
+        //     useMipMap = false,
+        //     autoGenerateMips = false,
+        //     enableRandomWrite = false
+        // };
+        // depthRT_GroundTruth = new RenderTexture(desc); 
+        // depthRT_GroundTruth.Create();
+        // depthRT_Received = new RenderTexture(desc); 
+        // depthRT_Received.Create();
+        // GT_Camera.targetTexture = depthRT_GroundTruth;
+        // Received_Camera.targetTexture = depthRT_Received;
+
+        // GT_Camera.depthTextureMode |= DepthTextureMode.Depth;
+        // Received_Camera.depthTextureMode |= DepthTextureMode.Depth;
+
+
+        // Debug the optimized depth render texture
+        // matDebug_GT = new Material(Shader.Find("Hidden/DepthDebugRange"));
+        // matDebug_Received = new Material(Shader.Find("Hidden/DepthDebugRange"));
+        // matDebug_GT.SetFloat("_Far", GT_Camera.farClipPlane);
+        // matDebug_Received.SetFloat("_Far", Received_Camera.farClipPlane);
+        // debugImage_GT.texture = depthRT_GroundTruth;
+        // debugImage_Received.texture = depthRT_Received;
+        // debugImage_GT.material = matDebug_GT;
+        // debugImage_Received.material = matDebug_Received;
+
+
         // Create depth material
         depthMaterial = new Material(Shader.Find("Hidden/DepthToLinear"));
         Debug.Log($"depthMaterial: {depthMaterial}");
@@ -113,10 +159,24 @@ public class CameraSetupManager : MonoBehaviour
             outputModeDropdown.AddOptions(new List<TMP_Dropdown.OptionData>
             {
                 new TMP_Dropdown.OptionData("Depth"),
-                new TMP_Dropdown.OptionData("RGB Color")
+                new TMP_Dropdown.OptionData("RGB Color"),
+                new TMP_Dropdown.OptionData("GPU Depth")
             });
             outputModeDropdown.onValueChanged.AddListener(OnOutputModeChanged);
+            
+            // Set the dropdown to match the current output mode
+            outputModeDropdown.value = (int)currentOutputMode;
         }
+    }
+
+
+    private void Update()
+    {
+        // if (currentOutputMode != OutputMode.GPU_Depth)
+        //     return;
+        
+        // GT_Camera.RenderWithShader(writeDepthShader, "");
+        // Received_Camera.RenderWithShader(writeDepthShader, "");
     }
 
     private void OnOutputModeChanged(int index)
@@ -127,18 +187,22 @@ public class CameraSetupManager : MonoBehaviour
 
     void OnRenderImage(RenderTexture src, RenderTexture dest)
     {
-        if (currentOutputMode == OutputMode.Depth)
-        {
-            RenderTexture.active = depthRenderTexture;
-            Graphics.Blit(null, depthRenderTexture, depthMaterial); // convert depth to linear
-            RenderTexture.active = null;
-        }
-        else if (currentOutputMode == OutputMode.RGB)
-        {
-            RenderTexture.active = colorRenderTexture;
-            Graphics.Blit(src, colorRenderTexture);
-            RenderTexture.active = null;
-        }
+        // Graphics.Blit(src, depthRT_GroundTruth, depthMaterial);
+        // Graphics.Blit(src, dest);
+
+       
+        // if (currentOutputMode == OutputMode.Depth)
+        // {
+        //     RenderTexture.active = depthRenderTexture;
+        //     Graphics.Blit(null, depthRenderTexture, depthMaterial); // convert depth to linear
+        //     RenderTexture.active = null;
+        // }
+        // else if (currentOutputMode == OutputMode.RGB)
+        // {
+        //     RenderTexture.active = colorRenderTexture;
+        //     Graphics.Blit(src, colorRenderTexture);
+        //     RenderTexture.active = null;
+        // }
     }
 
 
@@ -197,5 +261,7 @@ public class CameraSetupManager : MonoBehaviour
         {
             Destroy(depthMaterial);
         }
+        if (matDebug_GT != null) Destroy(matDebug_GT);
+        if (matDebug_Received != null) Destroy(matDebug_Received);
     }
 }
