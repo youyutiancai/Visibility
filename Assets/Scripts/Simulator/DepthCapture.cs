@@ -18,13 +18,15 @@ public class DepthCapture : MonoBehaviour
         renderCam.depthTextureMode |= DepthTextureMode.Depth;
 
         // TODO: need to change later
-        depthLinearRT = new RenderTexture(1024, 1024, 24, RenderTextureFormat.ARGB32);
-        // var rtDesc = new RenderTextureDescriptor(1024, 1024, RenderTextureFormat.RFloat, 0);
-        // rtDesc.sRGB = false;              // avoid sRGB write conversion
-        // var depthLinearRT = new RenderTexture(rtDesc) {
-        //     filterMode = FilterMode.Point, // depth shouldn’t be filtered
-        //     wrapMode   = TextureWrapMode.Clamp
-        // };
+        //depthLinearRT = new RenderTexture(1024, 1024, 24, RenderTextureFormat.ARGB32);
+        var desc = new RenderTextureDescriptor(1024, 1024, RenderTextureFormat.ARGB32, 32)
+        {
+            useMipMap = false,
+            autoGenerateMips = false,   // we'll call GenerateMips() explicitly
+            msaaSamples = 1,            // IMPORTANT: no MSAA
+            sRGB = false
+        };
+        depthLinearRT = new RenderTexture(desc);
         depthLinearRT.Create();
 
         // Dummy color target, camera must render somewhere

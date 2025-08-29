@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 using System.Collections;
+using System.Collections.Generic;
 
 public class PixelErrorEvaluator : MonoBehaviour
 {
@@ -15,6 +16,7 @@ public class PixelErrorEvaluator : MonoBehaviour
     Material pixelErrorMat;
     RenderTexture errorMaskRT;     // binary mask (0/1), with mips
     float pixelErrorPercent;
+    List<float> pixelErrorPercentList = new List<float>();
     int smallestMip;
 
     void Start()
@@ -29,14 +31,24 @@ public class PixelErrorEvaluator : MonoBehaviour
         pixelErrorMat = new Material(Shader.Find("Hidden/PixelErrorMask"));
 
         // Create the mask RT with mipmaps; let Unity auto-gen mips after Blit
-        errorMaskRT = new RenderTexture(w, h, 0, RenderTextureFormat.RHalf) {
+        var desc = new RenderTextureDescriptor(w, h, RenderTextureFormat.RFloat, 0)
+        {
             useMipMap = true,
-            autoGenerateMips = true,
-            filterMode = FilterMode.Bilinear
+            autoGenerateMips = false,
+            msaaSamples = 1,
+            sRGB = false,
         };
+        errorMaskRT = new RenderTexture(desc);
+        errorMaskRT.filterMode = FilterMode.Bilinear;
         errorMaskRT.Create();
+        // errorMaskRT = new RenderTexture(w, h, 0, RenderTextureFormat.RHalf) {
+        //     useMipMap = true,
+        //     autoGenerateMips = true,
+        //     filterMode = FilterMode.Bilinear
+        // };
+        // errorMaskRT.Create();
 
-        smallestMip = Mathf.FloorToInt(Mathf.Log(Mathf.Max(w, h), 2));
+        smallestMip = errorMaskRT.mipmapCount - 1;
 
         if (errorMaskImage) errorMaskImage.texture = errorMaskRT;
 
@@ -61,19 +73,36 @@ public class PixelErrorEvaluator : MonoBehaviour
             Graphics.Blit(null, errorMaskRT, pixelErrorMat);
             // (autoGenerateMips=true => mips are built automatically here)
 
+            errorMaskRT.GenerateMips();
+
             // 2) Read the 1x1 mip asynchronously
             AsyncGPUReadback.Request(errorMaskRT, mipIndex: smallestMip, (req) =>
             {
                 if (req.hasError) return;
-                var data = req.GetData<Color>();
+
+                var data = req.GetData<float>();
                 if (data.Length > 0)
                 {
-                    float fractionWrong = data[0].r;   // average of 0/1 mask
+                    float fractionWrong = data[0];   // average of 0/1 mask
                     pixelErrorPercent = fractionWrong * 100f;
+                    pixelErrorPercentList.Add(pixelErrorPercent);
                 }
             });
+        }
+    }
 
-            Debug.Log($"Pixel Error Percent: {pixelErrorPercent}");
+    void OnDestroy()
+    {
+        if (errorMaskRT)
+        {
+            errorMaskRT.Release();
+        }
+
+        Debug.Log($"Pixel Error Percent List: {pixelErrorPercentList.Count}");
+        foreach (var tex in pixelErrorPercentList)
+        {
+            if (tex > 0f)
+            Debug.Log($"Pixel Error Percent: {tex}");
         }
     }
 }
