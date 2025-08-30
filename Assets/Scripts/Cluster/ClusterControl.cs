@@ -435,6 +435,7 @@ public class ClusterControl : Singleton<ClusterControl>
             {
                 pathNum++;
                 GC.Collect();
+                nc.ResetTotalSentLog();
                 canSendObjects = false;
                 nc.sendingMode = pathNum % 2 == 0 ? SendingMode.UNICAST_TCP : SendingMode.MULTICAST;
                 foreach (RealUser user in tc.addressToUser.Values)
