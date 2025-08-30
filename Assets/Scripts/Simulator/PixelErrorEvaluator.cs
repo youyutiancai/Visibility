@@ -27,6 +27,7 @@ public class PixelErrorEvaluator : MonoBehaviour
         // Make sure sizes match your depth RTs
         int w = depthRT_GroundTruth.width;
         int h = depthRT_GroundTruth.height;
+        Debug.Log($"w={w}, h={h}");
 
         pixelErrorMat = new Material(Shader.Find("Hidden/PixelErrorMask"));
 
@@ -45,6 +46,15 @@ public class PixelErrorEvaluator : MonoBehaviour
         smallestMip = errorMaskRT.mipmapCount - 1;
 
         if (errorMaskImage) errorMaskImage.texture = errorMaskRT;
+        if (errorMaskImage != null && errorMaskRT != null)
+        {
+            float aspect = (float)errorMaskRT.width / errorMaskRT.height;
+            RectTransform rt = errorMaskImage.rectTransform;
+            // Set width to current, adjust height to match aspect
+            float width = rt.sizeDelta.x;
+            float height = width / aspect;
+            rt.sizeDelta = new Vector2(width, height);
+        }
 
         // Run AFTER all cameras render
         StartCoroutine(PerFrameEvaluation());

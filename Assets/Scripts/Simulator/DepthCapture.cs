@@ -11,18 +11,18 @@ public class DepthCapture : MonoBehaviour
     private Camera renderCam;
     private RenderTexture dummyColor;
 
-    void Awake()
+    void Start()
     {
-        // TODO: need to reset to the parent cam later
         renderCam = GetComponent<Camera>();
         renderCam.depthTextureMode |= DepthTextureMode.Depth;
+        
+        CameraParameters cameraParameters = parentCam.GetComponent<CameraSetupManager>().GetCameraParameters();
+        renderCam.projectionMatrix = cameraParameters.projectionMatrix;
 
-        // TODO: need to change later
-        //depthLinearRT = new RenderTexture(1024, 1024, 24, RenderTextureFormat.ARGB32);
-        var desc = new RenderTextureDescriptor(1024, 1024, RenderTextureFormat.ARGB32, 32)
+        var desc = new RenderTextureDescriptor(cameraParameters.width, cameraParameters.height, RenderTextureFormat.ARGB32, 32)
         {
             useMipMap = false,
-            autoGenerateMips = false,   // we'll call GenerateMips() explicitly
+            autoGenerateMips = false,   
             msaaSamples = 1,            // IMPORTANT: no MSAA
             sRGB = false
         };
@@ -36,6 +36,16 @@ public class DepthCapture : MonoBehaviour
 
         depthToLinearMat = new Material(Shader.Find("Hidden/DepthToLinear"));
         debugImage.texture = depthLinearRT;
+        // Set the RawImage's rectTransform to match the depthLinearRT's aspect ratio
+        if (debugImage != null && depthLinearRT != null)
+        {
+            float aspect = (float)depthLinearRT.width / depthLinearRT.height;
+            RectTransform rt = debugImage.rectTransform;
+            // Set width to current, adjust height to match aspect
+            float width = rt.sizeDelta.x;
+            float height = width / aspect;
+            rt.sizeDelta = new Vector2(width, height);
+        }
     }
 
     public RenderTexture GetRenderTexture()

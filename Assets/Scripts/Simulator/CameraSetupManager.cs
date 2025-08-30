@@ -5,6 +5,30 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine.UI;
+using UnityEngine.Windows.WebCam;
+
+public struct CameraParameters
+{
+        public float fx;
+        public float fy;
+        public float cx;
+        public float cy;
+        public int width;
+        public int height;
+        public Matrix4x4 projectionMatrix;
+
+        public CameraParameters(float fx, float fy, float cx, float cy, int width, int height, Matrix4x4 projectionMatrix)
+        {
+            this.fx = fx;
+            this.fy = fy;
+            this.cx = cx;
+            this.cy = cy;
+            this.width = width;
+            this.height = height;
+            this.projectionMatrix = projectionMatrix;
+        }
+}
+
 
 [RequireComponent(typeof(Camera))]
 public class CameraSetupManager : MonoBehaviour
@@ -18,16 +42,20 @@ public class CameraSetupManager : MonoBehaviour
     public TMP_Dropdown outputModeDropdown;
     private Material depthMaterial;
 
+    [HideInInspector]
+    public OutputMode currentOutputMode = OutputMode.Depth;
+
     public enum OutputMode
     {
         Depth,
         RGB
     }
 
-    [HideInInspector]
-    public OutputMode currentOutputMode = OutputMode.Depth;
+    private CameraParameters cameraParameters;
 
-    void Start()
+    
+    // use Awake to guarantee the render camera is set before start
+    void Awake()
     {
         // Read intrinsics from file
         string filePath = Path.Combine(Application.dataPath, "Data/quest3_intrinsics.txt");
@@ -106,6 +134,8 @@ public class CameraSetupManager : MonoBehaviour
 
         renderCamera.projectionMatrix = proj;
 
+        cameraParameters = new CameraParameters(fx, fy, cx, cy, width, height, proj);
+
         // Initialize output mode dropdown if assigned
         if (outputModeDropdown != null)
         {
@@ -117,6 +147,16 @@ public class CameraSetupManager : MonoBehaviour
             });
             outputModeDropdown.onValueChanged.AddListener(OnOutputModeChanged);
         }
+    }
+
+    public void SetupRenderCamera(Camera otherCam)
+    {
+        otherCam.CopyFrom(renderCamera);
+    }
+
+    public CameraParameters GetCameraParameters()
+    {
+        return cameraParameters;
     }
 
     private void OnOutputModeChanged(int index)
