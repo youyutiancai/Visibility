@@ -14,6 +14,8 @@ using System.Globalization;
 [RequireComponent(typeof(ResourceLoader))]
 public class SimulatorManager : MonoBehaviour
 {
+    public PixelErrorEvaluator pixelErrorEvaluator;
+    public TMP_Text m_DepthErrorLog;
     public Transform cameraRig;
     public GameObject sceneRoot;
     public GridDivide gd;
@@ -910,6 +912,10 @@ public class SimulatorManager : MonoBehaviour
         packetLossText.text = $"Packet Loss Rate: {overallLossRate:P2}\n" +
                              $"Received Objects: {totalObjectsReceived}/{totalObjectsSent}\n" +
                              $"Received Chunks: {totalChunksReceived}/{totalChunksSent}";
+
+        
+        // Temporary: Update the pixel error display
+        m_DepthErrorLog.text = $"Pixel Error: {pixelErrorEvaluator.GetCurrentPixelError():F4}";
 
         // Write to CSV
         WritePacketLossToCsv(overallLossRate);

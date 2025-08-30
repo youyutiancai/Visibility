@@ -10,9 +10,6 @@ using UnityEngine.UI;
 public class CameraSetupManager : MonoBehaviour
 {
     [Header("Depth Error Cameras Settings")]
-    public Camera GT_Depth_Camera;
-    public Camera RECV_Depth_Camera;
-    
     private float fx, fy, cx, cy;
     private int width, height;
     private RenderTexture colorRenderTexture;
