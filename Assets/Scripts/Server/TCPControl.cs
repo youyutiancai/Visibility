@@ -21,6 +21,15 @@ public class TCPControl : Singleton<TCPControl>
         IPAddress.Parse("192.168.1.221"),
         IPAddress.Parse("192.168.1.185"),
         IPAddress.Parse("192.168.1.139"),
+        IPAddress.Parse("192.168.1.203"),
+        IPAddress.Parse("192.168.1.218"),
+        IPAddress.Parse("192.168.1.195"),
+        IPAddress.Parse("192.168.1.245"),
+        IPAddress.Parse("192.168.1.198"),
+        IPAddress.Parse("192.168.1.165"),
+        IPAddress.Parse("192.168.1.109"),
+        IPAddress.Parse("192.168.1.234"),
+        IPAddress.Parse("192.168.1.240"),
     };
     private IPAddress iP4Address;
     private int listenerport = 13000;

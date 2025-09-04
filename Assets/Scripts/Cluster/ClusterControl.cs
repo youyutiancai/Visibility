@@ -8,6 +8,8 @@ using Random = UnityEngine.Random;
 using UnityEngine.InputSystem;
 using System.Net.Sockets;
 using System.Collections;
+using Meta.Voice.Logging;
+using System.Globalization;
 
 public enum MeshDecodeMethod
 {
@@ -74,6 +76,7 @@ public class ClusterControl : Singleton<ClusterControl>
     private Dictionary<int, long[]> newChunksToSend = new Dictionary<int, long[]>(), chunkFootprintInfo;
 
     private StreamWriter writer;
+    private string sengingLog;
     private string filePath;
 
     void Start()
@@ -98,6 +101,7 @@ public class ClusterControl : Singleton<ClusterControl>
         userIDToSend = 0;
         pathNum = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
+        sengingLog = "";
         initialClusterCenterPos = initialClusterCenter.transform.position;
         objectsWaitToBeSent = new PriorityQueue<int, long, float, int>();
         chunksToSend = new PriorityQueue<byte[], long, float, (int, int)>();
@@ -347,13 +351,14 @@ public class ClusterControl : Singleton<ClusterControl>
 
     private void InitializeIndividualUserDataWriter()
     {
-        filePath = $"Assets\\GeneratedData\\IndividualUserUpdateData\\{0}.csv";
-        writer = new StreamWriter(filePath, false);
+        filePath = $"Assets/Data/ChunkSendingLog/{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
+        //writer = new StreamWriter(filePath, false);
+        //writer.AutoFlush = true;
         //if (new FileInfo(filePath).Length == 0)
         //{
-        writer.WriteLine("Timestamp,UserID,ObjectID,UserX,UserY,UserZ,ObjectX,ObjectY,ObjectZ,Object_dis,Object_size");
+        //writer.WriteLine("Timestamp,UserID,ObjectID,UserX,UserY,UserZ,ObjectX,ObjectY,ObjectZ,Object_dis,Object_size");
         //}
-        Debug.Log("CSV file created or opened at: " + filePath);
+        //Debug.Log("CSV file created or opened at: " + filePath);
     }
 
     private void CreateClusters()
@@ -442,6 +447,21 @@ public class ClusterControl : Singleton<ClusterControl>
                 {
                     user.InformResetAll();
                 }
+            }
+        }
+        if (Keyboard.current.cKey.wasPressedThisFrame && pathNum == 3)
+        {
+            bool canWriteLog = true;
+            foreach (RealUser user in tc.addressToUser.Values)
+            {
+                if (user.testPhase != TestPhase.EndPhase)
+                {
+                    canWriteLog = false; break;
+                }
+            }
+            if (canWriteLog)
+            {
+                Conclude();
             }
         }
 
@@ -671,6 +691,13 @@ public class ClusterControl : Singleton<ClusterControl>
                         }
                         nc.BroadcastChunk(objectChunksVTGrouped[id.Item1][id.Item2]);
                         //nc.SendChunkTCP(allUsers[userIDToSend], objectChunksVTGrouped[id.Item1][id.Item2]);
+                    }
+
+                    if (writeToData)
+                    {
+                        string timeStamp = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+                        string frameEntry = $"{{\"time\":\"{timeStamp}\", \"type\":\"{nc.sendingMode}\", \"client\":\"{allUsers[userIDToSend].tcpEndPoint}\", \"object\":\"{id.Item1}\", \"packet\":\"{id.Item2}\"}}\n";
+                        sengingLog += frameEntry;
                     }
                     int nextUserID = userIDToSend;
                     do
@@ -1098,6 +1125,15 @@ public class ClusterControl : Singleton<ClusterControl>
         user.UpdateVisibleObjectsIndi(visibleObjectsInRegion, ref objectSentIndi, writer);
         user.preX = xStartIndex;
         user.preZ = zStartIndex;
+    }
+
+    private void Conclude()
+    {
+        filePath = $"Assets/Data/ChunkSendingLog/{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
+        writer = new StreamWriter(filePath, false);
+        writer.Write(sengingLog);
+        writer.Close();
+        writer.Dispose();
     }
 
     void OnApplicationQuit()
