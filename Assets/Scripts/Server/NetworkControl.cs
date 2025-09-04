@@ -91,6 +91,12 @@ public class NetworkControl : Singleton<NetworkControl>
         }
         
     }
+    
+    public void ResetTotalSentLog()
+    {
+        totalChunkSent = 0;
+        totalBytesSent = 0;
+    }
 
     private async void OnApplicationQuit()
     {

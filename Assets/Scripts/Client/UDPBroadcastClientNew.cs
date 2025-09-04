@@ -57,7 +57,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     private readonly Queue<Chunk> chunkQueue = new Queue<Chunk>();
     private readonly object chunkQueueLock = new object();
-    private int maxChunksPerFrame = 50, currentColliderToUpdate, colliderToUpdateEachFrame; // You can tweak this
+    private int maxChunksPerFrame, currentColliderToUpdate, colliderToUpdateEachFrame; // You can tweak this
     private float lastAdjustTime = 0f, adjustCooldown = 0.3f, lastColliderUpdateTime, colliderUpdateInterval;
     private bool isShuttingDown = false;
 
@@ -140,6 +140,7 @@ public class UDPBroadcastClientNew : MonoBehaviour
 
     void Update()
     {
+        maxChunksPerFrame = 100;
         if (isShowLog && m_TextLog != null)
         {
             m_TextLog.text = $"Received Chunks Numbers - [{recevTotalChunkN}]" +
