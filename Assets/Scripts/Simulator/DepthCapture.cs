@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -10,6 +11,10 @@ public class DepthCapture : MonoBehaviour
     private Material depthToLinearMat;     // material using your Hidden/DepthToLinear shader
     private Camera renderCam;
     private RenderTexture dummyColor;
+
+    #region Event
+    public event Action OnRenerCameraSetupFinished;
+    #endregion
 
     void Start()
     {
@@ -46,6 +51,8 @@ public class DepthCapture : MonoBehaviour
             float height = width / aspect;
             rt.sizeDelta = new Vector2(width, height);
         }
+
+        OnRenerCameraSetupFinished?.Invoke();
     }
 
     public RenderTexture GetRenderTexture()

@@ -74,8 +74,12 @@ public class SimulatorManager : MonoBehaviour
     private StreamWriter packetLossCsvWriter;
     private string packetLossCsvPath;
 
+    // CSV logging for percentage pixel of depth error
+    private StreamWriter depthPixelErrorCsvWriter;
+    private string depthPixelErrorCsvPath; 
+
     // visibility check variables
-    private float epsilon = 3f;    // Radius for clustering
+    private float epsilon = 1f;    // Radius for clustering
 
     [Serializable]
     private class ChunkData
@@ -228,6 +232,39 @@ public class SimulatorManager : MonoBehaviour
         catch (Exception e)
         {
             Debug.LogError($"Failed to initialize packet loss CSV: {e.Message}");
+        }
+    }
+
+    private void InitializeDepthPixelErrorCsv(string pathId = "null_path")
+    {
+        try
+        {
+            // Close existing CSV if any
+            if (depthPixelErrorCsvWriter != null)
+            {
+                depthPixelErrorCsvWriter.Close();
+                depthPixelErrorCsvWriter.Dispose();
+            }
+
+            string dataDir = Path.Combine(Application.dataPath, "Data/DepthPixelErrorLog");
+            if (!Directory.Exists(dataDir))
+            {
+                Directory.CreateDirectory(dataDir);
+            }
+
+            // Get the current log file name without extension
+            string logFileName = Path.GetFileNameWithoutExtension(jsonlFilePath);
+            string pathSuffix = string.IsNullOrEmpty(pathId) ? "" : $"_{pathId}";
+            depthPixelErrorCsvPath = Path.Combine(dataDir, $"depth_pixel_error_{logFileName}{pathSuffix}.csv");
+            
+            depthPixelErrorCsvWriter = new StreamWriter(depthPixelErrorCsvPath, false, System.Text.Encoding.UTF8);
+            depthPixelErrorCsvWriter.WriteLine("ElapsedTime,PixelErrorPercent");
+            
+            Debug.Log($"Pixel error CSV initialized for path '{pathId}' at: {depthPixelErrorCsvPath}");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Failed to initialize pixel error CSV: {e.Message}");
         }
     }
 
@@ -424,6 +461,7 @@ public class SimulatorManager : MonoBehaviour
             {
                 currentPath = entry.path;
                 InitializePacketLossCsv(entry.path);
+                InitializeDepthPixelErrorCsv(entry.path);
             }
 
             // Dynamic Visibility Check
@@ -465,8 +503,8 @@ public class SimulatorManager : MonoBehaviour
                 pathText.text = $"Path: {entry.path}";
             if (testPhaseText != null)
                 testPhaseText.text = $"Test Phase: {entry.testPhase}";
-            UpdatePacketLossDisplay();
             UpdateElapsedTimeDisplay(entry.time);
+            UpdatePacketLossDisplay();
 
             currentEntryIndex++;
         }
@@ -866,6 +904,32 @@ public class SimulatorManager : MonoBehaviour
         }
     }
 
+    private void LogDepthPixelErrorData()
+    {
+        if (pixelErrorEvaluator == null || depthPixelErrorCsvWriter == null) return;
+        
+        try
+        {
+            var pixelErrorHistory = pixelErrorEvaluator.GetPixelErrorHistory();
+            
+            foreach (var (time, pixelError) in pixelErrorHistory)
+            {
+                string csvLine = $"{time:F3},{pixelError:F4}";
+                depthPixelErrorCsvWriter.WriteLine(csvLine);
+            }
+            
+            depthPixelErrorCsvWriter.Flush();
+            Debug.Log($"Logged {pixelErrorHistory.Count} pixel error measurements to CSV");
+            
+            // Clear the history after logging
+            pixelErrorEvaluator.ClearHistory();
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Failed to log pixel error data: {e.Message}");
+        }
+    }
+
     private void UpdatePacketLossDisplay()
     {
         if (packetLossText == null) return;
@@ -984,7 +1048,13 @@ public class SimulatorManager : MonoBehaviour
             
             // Reset path tracking
             currentPath = "";
-            
+
+            // Start depth pixel error logging
+            if (pixelErrorEvaluator != null)
+            {
+                pixelErrorEvaluator.StartLogging();
+            }
+                 
             // Reset packet loss display
             if (packetLossText != null)
             {
@@ -1004,12 +1074,21 @@ public class SimulatorManager : MonoBehaviour
             // Calculate and log packet loss rates before resetting
             CalculatePacketLog();
 
+            // Log pixel error data before resetting
+            LogDepthPixelErrorData();
+
             // Reset simulation
             startSimulating = false;
             currentEntryIndex = 0;
 
             // Reset visibility
             simulatorVisibility.ResetVisibility();
+
+            // Stop pixel error logging
+            if (pixelErrorEvaluator != null)
+            {
+                pixelErrorEvaluator.StopLogging();
+            }
             
             // Reset camera position
             if (cameraRig != null)
@@ -1083,6 +1162,7 @@ public class SimulatorManager : MonoBehaviour
         // Get the new path and create a new CSV file for it
         string newPath = logEntries[currentEntryIndex].path;
         InitializePacketLossCsv(newPath);
+        InitializeDepthPixelErrorCsv(newPath);
         
         // Reset elapsed time tracking
         firstChunkTime = -1.0;
@@ -1139,14 +1219,21 @@ public class SimulatorManager : MonoBehaviour
             packetLossCsvWriter.Close();
             packetLossCsvWriter.Dispose();
         }
+
+        if (depthPixelErrorCsvWriter != null)
+        {
+            depthPixelErrorCsvWriter.Close();
+            depthPixelErrorCsvWriter.Dispose();
+        }
     }
 
     // Public method to get current CSV file info
     public string GetCurrentCsvInfo()
     {
-        if (packetLossCsvWriter == null)
-            return "No CSV file active";
-        
-        return $"Path: {currentPath}, File: {packetLossCsvPath}";
+        string packetLossInfo = packetLossCsvWriter != null ? 
+            $"Packet Loss: {packetLossCsvPath}" : "No packet loss CSV active";
+        string pixelErrorInfo = depthPixelErrorCsvWriter != null ? 
+            $"Pixel Error: {depthPixelErrorCsvPath}" : "No pixel error CSV active";
+        return $"{packetLossInfo}\n{pixelErrorInfo}";
     }
 }

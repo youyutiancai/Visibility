@@ -13,51 +13,77 @@ public class PixelErrorEvaluator : MonoBehaviour
     RenderTexture depthRT_GroundTruth;
     RenderTexture depthRT_Received;
 
-    Material pixelErrorMat;
-    RenderTexture errorMaskRT;     // binary mask (0/1), with mips
-    float pixelErrorPercent;
-    List<float> pixelErrorList = new List<float>();
-    int smallestMip;
+    private Material pixelErrorMat;
+    private RenderTexture errorMaskRT;     // binary mask (0/1), with mips
+    private float pixelErrorPercent;
+    private int smallestMip;
+    private List<(float time, float pixelError)> pixelErrorHistory = new List<(float, float)>();
+    private bool isLoggingEnabled = false;
+    private float startTime = 0f;
+    private bool isGT_SetupFinished = false;
+    private bool isRCV_SetupFinished = false;
 
     void Start()
     {
-        depthRT_GroundTruth = GT_Camera.GetComponent<DepthCapture>().GetRenderTexture();
-        depthRT_Received = RCV_Camera.GetComponent<DepthCapture>().GetRenderTexture();
+        GT_Camera.GetComponent<DepthCapture>().OnRenerCameraSetupFinished += OnRenderGT_CameraSetupFinished;
+        RCV_Camera.GetComponent<DepthCapture>().OnRenerCameraSetupFinished += OnRenderREV_SetupFinished;
+    }
 
-        // Make sure sizes match your depth RTs
-        int w = depthRT_GroundTruth.width;
-        int h = depthRT_GroundTruth.height;
-        Debug.Log($"w={w}, h={h}");
+    private void OnRenderGT_CameraSetupFinished()
+    {
+        isGT_SetupFinished = true;
+        StartPerFrameEvaluation();
+    }
 
-        pixelErrorMat = new Material(Shader.Find("Hidden/PixelErrorMask"));
+    private void OnRenderREV_SetupFinished()
+    {
+        isRCV_SetupFinished = true;
+        StartPerFrameEvaluation();
+    }
 
-        // Create the mask RT with mipmaps; let Unity auto-gen mips after Blit
-        var desc = new RenderTextureDescriptor(w, h, RenderTextureFormat.RFloat, 0)
+    private void StartPerFrameEvaluation()
+    {
+        if (isGT_SetupFinished && isRCV_SetupFinished)
         {
-            useMipMap = true,
-            autoGenerateMips = false,
-            msaaSamples = 1,
-            sRGB = false,
-        };
-        errorMaskRT = new RenderTexture(desc);
-        errorMaskRT.filterMode = FilterMode.Bilinear;
-        errorMaskRT.Create();
+            Debug.Log("StartPerFrameEvaluation");
 
-        smallestMip = errorMaskRT.mipmapCount - 1;
+            depthRT_GroundTruth = GT_Camera?.GetComponent<DepthCapture>().GetRenderTexture();
+            depthRT_Received = RCV_Camera?.GetComponent<DepthCapture>().GetRenderTexture();
 
-        if (errorMaskImage) errorMaskImage.texture = errorMaskRT;
-        if (errorMaskImage != null && errorMaskRT != null)
-        {
-            float aspect = (float)errorMaskRT.width / errorMaskRT.height;
-            RectTransform rt = errorMaskImage.rectTransform;
-            // Set width to current, adjust height to match aspect
-            float width = rt.sizeDelta.x;
-            float height = width / aspect;
-            rt.sizeDelta = new Vector2(width, height);
+            // Make sure sizes match your depth RTs
+            int w = depthRT_GroundTruth.width;
+            int h = depthRT_GroundTruth.height;
+            Debug.Log($"w={w}, h={h}");
+
+            pixelErrorMat = new Material(Shader.Find("Hidden/PixelErrorMask"));
+
+            // Create the mask RT with mipmaps; let Unity auto-gen mips after Blit
+            var desc = new RenderTextureDescriptor(w, h, RenderTextureFormat.RFloat, 0)
+            {
+                useMipMap = true,
+                autoGenerateMips = false,
+                msaaSamples = 1,
+                sRGB = false,
+            };
+            errorMaskRT = new RenderTexture(desc);
+            errorMaskRT.filterMode = FilterMode.Bilinear;
+            errorMaskRT.Create();
+
+            smallestMip = errorMaskRT.mipmapCount - 1;
+
+            if (errorMaskImage) errorMaskImage.texture = errorMaskRT;
+            if (errorMaskImage != null && errorMaskRT != null)
+            {
+                float aspect = (float)errorMaskRT.width / errorMaskRT.height;
+                RectTransform rt = errorMaskImage.rectTransform;
+                // Set width to current, adjust height to match aspect
+                float width = rt.sizeDelta.x;
+                float height = width / aspect;
+                rt.sizeDelta = new Vector2(width, height);
+            }
+
+            StartCoroutine(PerFrameEvaluation());
         }
-
-        // Run AFTER all cameras render
-        StartCoroutine(PerFrameEvaluation());
     }
 
     IEnumerator PerFrameEvaluation()
@@ -88,10 +114,38 @@ public class PixelErrorEvaluator : MonoBehaviour
                 {
                     float fractionWrong = data[0];   // average of 0/1 mask
                     pixelErrorPercent = fractionWrong * 100f;
-                    pixelErrorList.Add(pixelErrorPercent);
+
+                    if (isLoggingEnabled)
+                    {
+                        float currentTime = Time.time - startTime;
+                        pixelErrorHistory.Add((currentTime, pixelErrorPercent));
+                    }
                 }
             });
         }
+    }
+
+    public void StartLogging()
+    {
+        isLoggingEnabled = true;
+        startTime = Time.time;
+        pixelErrorHistory.Clear();
+    }
+
+    public void StopLogging()
+    {
+        isLoggingEnabled = false;
+    }
+
+    public void ClearHistory()
+    {
+        pixelErrorHistory.Clear();
+    }
+
+    public List<(float time, float pixelError)> GetPixelErrorHistory()
+    {
+        // deep copy
+        return new List<(float, float)>(pixelErrorHistory);
     }
 
     public float GetCurrentPixelError()
@@ -103,15 +157,6 @@ public class PixelErrorEvaluator : MonoBehaviour
     void OnDestroy()
     {
         if (errorMaskRT)
-        {
             errorMaskRT.Release();
-        }
-
-        Debug.Log($"Pixel Error Percent List: {pixelErrorList.Count}");
-        foreach (var tex in pixelErrorList)
-        {
-            if (tex > 0f)
-            Debug.Log($"Pixel Error Percent: {tex}");
-        }
     }
 }
