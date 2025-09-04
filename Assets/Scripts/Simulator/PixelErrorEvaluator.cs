@@ -9,6 +9,7 @@ public class PixelErrorEvaluator : MonoBehaviour
     public Camera GT_Camera;
     public Camera RCV_Camera;
     public RawImage errorMaskImage;
+    public SimulatorManager simulatorManager;
 
     RenderTexture depthRT_GroundTruth;
     RenderTexture depthRT_Received;
@@ -17,7 +18,7 @@ public class PixelErrorEvaluator : MonoBehaviour
     private RenderTexture errorMaskRT;     // binary mask (0/1), with mips
     private float pixelErrorPercent;
     private int smallestMip;
-    private List<(float time, float pixelError)> pixelErrorHistory = new List<(float, float)>();
+    private Dictionary<double, float> pixelErrorHistory = new Dictionary<double, float>();
     private bool isLoggingEnabled = false;
     private float startTime = 0f;
     private bool isGT_SetupFinished = false;
@@ -104,6 +105,9 @@ public class PixelErrorEvaluator : MonoBehaviour
 
             errorMaskRT.GenerateMips();
 
+            //int frameAtRequest = Time.frameCount;
+            double timeAtRequest = simulatorManager.GetCurrentElapsedTime();
+
             // 2) Read the 1x1 mip asynchronously
             AsyncGPUReadback.Request(errorMaskRT, mipIndex: smallestMip, (req) =>
             {
@@ -117,8 +121,8 @@ public class PixelErrorEvaluator : MonoBehaviour
 
                     if (isLoggingEnabled)
                     {
-                        float currentTime = Time.time - startTime;
-                        pixelErrorHistory.Add((currentTime, pixelErrorPercent));
+                        //float currentTime = Time.time - startTime;
+                        pixelErrorHistory[timeAtRequest] = pixelErrorPercent;
                     }
                 }
             });
@@ -142,10 +146,9 @@ public class PixelErrorEvaluator : MonoBehaviour
         pixelErrorHistory.Clear();
     }
 
-    public List<(float time, float pixelError)> GetPixelErrorHistory()
+    public Dictionary<double, float> GetPixelErrorHistory()
     {
-        // deep copy
-        return new List<(float, float)>(pixelErrorHistory);
+        return pixelErrorHistory;
     }
 
     public float GetCurrentPixelError()

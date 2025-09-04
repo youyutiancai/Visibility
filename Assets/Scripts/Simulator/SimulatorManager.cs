@@ -79,7 +79,7 @@ public class SimulatorManager : MonoBehaviour
     private string depthPixelErrorCsvPath; 
 
     // visibility check variables
-    private float epsilon = 1f;    // Radius for clustering
+    private float epsilon = 3f;    // Radius for clustering
 
     [Serializable]
     private class ChunkData
@@ -1162,6 +1162,8 @@ public class SimulatorManager : MonoBehaviour
         // Get the new path and create a new CSV file for it
         string newPath = logEntries[currentEntryIndex].path;
         InitializePacketLossCsv(newPath);
+        
+        LogDepthPixelErrorData();
         InitializeDepthPixelErrorCsv(newPath);
         
         // Reset elapsed time tracking
@@ -1235,5 +1237,10 @@ public class SimulatorManager : MonoBehaviour
         string pixelErrorInfo = depthPixelErrorCsvWriter != null ? 
             $"Pixel Error: {depthPixelErrorCsvPath}" : "No pixel error CSV active";
         return $"{packetLossInfo}\n{pixelErrorInfo}";
+    }
+
+    public double GetCurrentElapsedTime()
+    {
+        return currentElapsedTime;
     }
 }
