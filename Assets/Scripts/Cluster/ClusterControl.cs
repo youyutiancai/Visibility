@@ -76,7 +76,7 @@ public class ClusterControl : Singleton<ClusterControl>
     private Dictionary<int, long[]> newChunksToSend = new Dictionary<int, long[]>(), chunkFootprintInfo;
 
     private StreamWriter writer;
-    private string sengingLog;
+    private List<string> sengingLog;
     private string filePath;
 
     void Start()
@@ -101,7 +101,6 @@ public class ClusterControl : Singleton<ClusterControl>
         userIDToSend = 0;
         pathNum = 0;
         pathNodesRoot = GameObject.Find("PathNodes");
-        sengingLog = "";
         initialClusterCenterPos = initialClusterCenter.transform.position;
         objectsWaitToBeSent = new PriorityQueue<int, long, float, int>();
         chunksToSend = new PriorityQueue<byte[], long, float, (int, int)>();
@@ -351,6 +350,7 @@ public class ClusterControl : Singleton<ClusterControl>
 
     private void InitializeIndividualUserDataWriter()
     {
+        sengingLog = new List<string>();
         filePath = $"Assets/Data/ChunkSendingLog/{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
         //writer = new StreamWriter(filePath, false);
         //writer.AutoFlush = true;
@@ -695,9 +695,9 @@ public class ClusterControl : Singleton<ClusterControl>
 
                     if (writeToData)
                     {
-                        string timeStamp = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
-                        string frameEntry = $"{{\"time\":\"{timeStamp}\", \"type\":\"{nc.sendingMode}\", \"client\":\"{allUsers[userIDToSend].tcpEndPoint}\", \"object\":\"{id.Item1}\", \"packet\":\"{id.Item2}\"}}\n";
-                        sengingLog += frameEntry;
+                        // string timeStamp = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+                        string frameEntry = $"{{\"time\":\"{Time.time}\", \"type\":\"{nc.sendingMode}\", \"client\":\"{allUsers[userIDToSend].tcpEndPoint}\", \"object\":\"{id.Item1}\", \"packet\":\"{id.Item2}\"}}";
+                        sengingLog.Add(frameEntry);
                     }
                     int nextUserID = userIDToSend;
                     do
@@ -1131,7 +1131,7 @@ public class ClusterControl : Singleton<ClusterControl>
     {
         filePath = $"Assets/Data/ChunkSendingLog/{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
         writer = new StreamWriter(filePath, false);
-        writer.Write(sengingLog);
+        writer.Write(string.Join("\n", sengingLog));
         writer.Close();
         writer.Dispose();
     }

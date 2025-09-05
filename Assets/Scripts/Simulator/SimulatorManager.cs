@@ -79,7 +79,7 @@ public class SimulatorManager : MonoBehaviour
     private string depthPixelErrorCsvPath; 
 
     // visibility check variables
-    private float epsilon = 3f;    // Radius for clustering
+    private float epsilon = 1f;    // Radius for clustering
 
     [Serializable]
     private class ChunkData
@@ -442,7 +442,7 @@ public class SimulatorManager : MonoBehaviour
         deltaTime += Time.deltaTime;
 
         // Check if it's time to show the next frame
-        if (deltaTime >= logDeltaTime && currentEntryIndex < logEntries.Count)
+        if ((deltaTime >= logDeltaTime || deltaTime >= 1.0) && currentEntryIndex < logEntries.Count)
         {
             //Debug.Log($"Current Entry Index: {currentEntryIndex}, currentTime: {currentTime}, nextFrameTime: {nextFrameTime}");
 
