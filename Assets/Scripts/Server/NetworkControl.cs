@@ -60,7 +60,7 @@ public class NetworkControl : Singleton<NetworkControl>
     {
     }
 
-    public void BroadcastChunk(byte[] chunk)
+    public void BroadcastChunk(byte[] chunk, int packetIDBeingSent)
     {
         if (totalChunkSent == 0)
         {
@@ -69,7 +69,10 @@ public class NetworkControl : Singleton<NetworkControl>
         totalChunkSent++;
         totalBytesSent += chunk.Length;
         timePassedForSendingChunks = Time.time - timeStartSendingChunks;
-        bcc.BroadcastChunk(chunk);
+        byte[] newChunk = new byte[chunk.Length + sizeof(int)];
+        Buffer.BlockCopy(chunk, 0, newChunk, 0, chunk.Length);
+        Buffer.BlockCopy(BitConverter.GetBytes(packetIDBeingSent), 0, newChunk, chunk.Length, sizeof(int));
+        bcc.BroadcastChunk(newChunk);
     }
 
     public void SendChunkTCP(RealUser user, byte[] chunk)

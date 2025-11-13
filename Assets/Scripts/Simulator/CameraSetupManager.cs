@@ -4,8 +4,6 @@ using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using TMPro;
-using UnityEngine.UI;
-using UnityEngine.Windows.WebCam;
 
 public struct CameraParameters
 {

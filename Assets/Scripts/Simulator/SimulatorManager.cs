@@ -8,6 +8,8 @@ using Newtonsoft.Json.Linq;
 using TMPro;
 using UnityEngine.UI;
 using System.Globalization;
+using UnityEngine.InputSystem;
+using UnityEditor;
 
 [RequireComponent(typeof(ObjectChunkManager))]
 [RequireComponent(typeof(ObjectTableManager))]
@@ -80,6 +82,8 @@ public class SimulatorManager : MonoBehaviour
 
     // visibility check variables
     private float epsilon = 1f;    // Radius for clustering
+    private Matrix4x4 lightViewProjMatrix;
+    private Texture2D shadowMap;
 
     [Serializable]
     private class ChunkData
@@ -200,6 +204,14 @@ public class SimulatorManager : MonoBehaviour
         // load default jsonl file
         jsonlFilePath = Path.Combine("Assets/Data/ClientLogData", fileSelectionDropdown.options[0].text);
         LoadUserLogJsonlData();
+
+        shadowMap = Resources.Load<Texture2D>("Materials/Textures/shadowMap_new");
+        lightViewProjMatrix = new Matrix4x4(new Vector4(0.00631f, 0, 0, 0),
+                new Vector4(0, 0.02025f, -0.00119f, 0),
+                new Vector4(0, 0.01508f, 0.00160f, 0),
+                new Vector4(0.42929f, -2.66236f, -0.50335f, 1));
+        Shader.SetGlobalTexture("_CustomShadowMap", Texture2D.whiteTexture);
+        Shader.SetGlobalMatrix("_LightViewProjection", lightViewProjMatrix);
     }
 
     private void InitializePacketLossCsv(string pathId = "null_path")
@@ -426,6 +438,11 @@ public class SimulatorManager : MonoBehaviour
 
     void Update()
     {
+        if (Keyboard.current.sKey.wasPressedThisFrame)
+        {
+            Debug.Log($"s is pressed");
+            StartSimulation();
+        }
         if (!startSimulating || logEntries == null || logEntries.Count == 0)
         {
             // noted: the current user position is hardcoded (fixed), not updatd per frame
@@ -434,7 +451,7 @@ public class SimulatorManager : MonoBehaviour
             cameraRig.rotation = Quaternion.Euler(0f, 0f, 0f);
             if (packetLossText != null)
             {
-                packetLossText.text = "Packet Loss Rate: --";
+                packetLossText.text = "Missing Packets: --";
             }
             return;
         }
@@ -500,7 +517,7 @@ public class SimulatorManager : MonoBehaviour
             // Update UI
             logTimePerFrame.text = entry.originalTime;
             if (pathText != null)
-                pathText.text = $"Path: {entry.path}";
+                pathText.text = $"Path: {entry.path + 1}";
             if (testPhaseText != null)
                 testPhaseText.text = $"Test Phase: {entry.testPhase}";
             UpdateElapsedTimeDisplay(entry.time);
@@ -750,11 +767,42 @@ public class SimulatorManager : MonoBehaviour
             newObject.GetComponent<MeshFilter>().mesh = newMesh;
 
             // Set up materials using ResourceLoader
+
             List<Material> materials = new List<Material>();
-            foreach (string matName in holder.materialNames)
+            if (objectID != 1173)
             {
-                materials.Add(resourceLoader.LoadMaterialByName(matName));
+                foreach (string matName in holder.materialNames)
+                {
+                    materials.Add(resourceLoader.LoadMaterialByName(matName));
+                }
+                renderer.materials = materials.ToArray();
+            } else
+            {
+                foreach (string matName in holder.materialNames)
+                {
+                    if (matName == "null")
+                    {
+                        materials.Add(resourceLoader.LoadMaterialByName(matName));
+                        continue;
+                    }
+                    //Debug.Log($"{matName}, {matName == "null"}, {matName is null}");
+                    Material oldMaterial = resourceLoader.LoadMaterialByName(matName);
+                    Material newMaterial = new Material(Shader.Find("Custom/Pure_Color_Shadow"));
+                    //int mode = oldMaterial.GetInt("_Mode");
+                    //if (mode == 1)
+                    //{
+                    //    newMaterial.SetFloat("_Cutoff", oldMaterial.GetFloat("_Cutoff"));
+                    //}
+                    //else
+                    //{
+                    //    newMaterial.SetFloat("_Cutoff", 0);
+                    //}
+                    newMaterial.SetColor("_Color", oldMaterial.GetColor("_Color"));
+                    materials.Add(newMaterial);
+                }
+                newObject.SetActive(false);
             }
+                
             renderer.materials = materials.ToArray();
 
             // Set transform
@@ -764,6 +812,8 @@ public class SimulatorManager : MonoBehaviour
             newObject.transform.SetParent(chunksVisReceivedRoot.transform);
 
             visualizedObjects[objectID] = newObject;
+            Shader.SetGlobalTexture("_CustomShadowMap", shadowMap);
+            Shader.SetGlobalMatrix("_LightViewProjection", lightViewProjMatrix);
         }
         else
         {
@@ -973,13 +1023,13 @@ public class SimulatorManager : MonoBehaviour
         }
 
         float overallLossRate = 1f - ((float)totalChunksReceived / totalChunksSent);
-        packetLossText.text = $"Packet Loss Rate: {overallLossRate:P2}\n" +
-                             $"Received Objects: {totalObjectsReceived}/{totalObjectsSent}\n" +
-                             $"Received Chunks: {totalChunksReceived}/{totalChunksSent}";
+        packetLossText.text = $"Packet Loss Rate: {overallLossRate:P2}";
+                             //$"Received Objects: {totalObjectsReceived}/{totalObjectsSent}\n" +
+                             //$"Received Chunks: {totalChunksReceived}/{totalChunksSent}";
 
         
         // Temporary: Update the pixel error display
-        m_DepthErrorLog.text = $"Pixel Error: {pixelErrorEvaluator.GetCurrentPixelError():F4}";
+        m_DepthErrorLog.text = $"Depth Error: {pixelErrorEvaluator.GetCurrentPixelError():F3}%";
 
         // Write to CSV
         WritePacketLossToCsv(overallLossRate);
@@ -1014,7 +1064,7 @@ public class SimulatorManager : MonoBehaviour
         }
 
         currentElapsedTime = currentTime - firstChunkTime;
-        elapsedTimeText.text = $"Elapsed Time: {currentElapsedTime:F3}s";
+        elapsedTimeText.text = $"Elapsed Time: {currentElapsedTime:F1}s";
     }
 
     public void StartSimulation()

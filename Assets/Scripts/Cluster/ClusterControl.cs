@@ -56,7 +56,7 @@ public class ClusterControl : Singleton<ClusterControl>
     [HideInInspector]
     public PriorityQueue<byte[], long, float, (int, int)> chunksToSend;
     public Dictionary<int, List<byte[]>> objectChunksVTSeparate, objectChunksVTGrouped;
-    public int chunksSentEachTime;
+    public int chunksSentEachTime, packetIDBeingSent;
     private float timeSinceLastUpdate = 0f, timeSinceLastChunksent = 0f;
     public SimulationStrategyDropDown SimulationStrategy;
     private SimulationStrategy ss;
@@ -449,18 +449,20 @@ public class ClusterControl : Singleton<ClusterControl>
                 }
             }
         }
-        if (Keyboard.current.cKey.wasPressedThisFrame && pathNum == 3)
+        if (Keyboard.current.cKey.wasPressedThisFrame)
         {
             bool canWriteLog = true;
-            foreach (RealUser user in tc.addressToUser.Values)
-            {
-                if (user.testPhase != TestPhase.EndPhase)
-                {
-                    canWriteLog = false; break;
-                }
-            }
+            //foreach (RealUser user in tc.addressToUser.Values)
+            //{
+            //    if (user.testPhase != TestPhase.EndPhase)
+            //    {
+            //        Debug.Log($"{user.name} is not at the end phase");
+            //        canWriteLog = false; break;
+            //    }
+            //}
             if (canWriteLog)
             {
+                Debug.Log($"concluding!");
                 Conclude();
             }
         }
@@ -689,14 +691,15 @@ public class ClusterControl : Singleton<ClusterControl>
                         {
                             allUsers[i].MarkAsSent(id.Item1, id.Item2, objectChunksVTGrouped[id.Item1].Count, 1);
                         }
-                        nc.BroadcastChunk(objectChunksVTGrouped[id.Item1][id.Item2]);
+                        packetIDBeingSent++;
+                        nc.BroadcastChunk(objectChunksVTGrouped[id.Item1][id.Item2], packetIDBeingSent);
                         //nc.SendChunkTCP(allUsers[userIDToSend], objectChunksVTGrouped[id.Item1][id.Item2]);
                     }
 
                     if (writeToData)
                     {
                         // string timeStamp = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
-                        string frameEntry = $"{{\"time\":\"{Time.time}\", \"type\":\"{nc.sendingMode}\", \"client\":\"{allUsers[userIDToSend].tcpEndPoint}\", \"object\":\"{id.Item1}\", \"packet\":\"{id.Item2}\"}}";
+                        string frameEntry = $"{{\"time\":\"{Time.time}\", \"type\":\"{nc.sendingMode}\", \"client\":\"{allUsers[userIDToSend].tcpEndPoint}\", \"object\":\"{id.Item1}\", \"packet\":\"{id.Item2}\", \"univeral_packet\":\"{packetIDBeingSent}\"}}";
                         sengingLog.Add(frameEntry);
                     }
                     int nextUserID = userIDToSend;

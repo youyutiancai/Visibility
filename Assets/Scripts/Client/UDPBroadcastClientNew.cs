@@ -438,6 +438,8 @@ public class UDPBroadcastClientNew : MonoBehaviour
         int objectId = BitConverter.ToInt32(packet, cursor += 2);
         int chunkId = BitConverter.ToInt32(packet, cursor += sizeof(int));
         int submeshId = BitConverter.ToInt32(packet, cursor += sizeof(int));
+        int packetID = BitConverter.ToInt32(packet, packet.Length - sizeof(int));
+        //Debug.Log($"receive packetID: {packetID}");
         int headerSize = cursor += sizeof(int);
 
         // parse the packet data
@@ -739,7 +741,9 @@ public class UDPBroadcastClientNew : MonoBehaviour
         var verticesArr = verticesDict[objectID];
         var normalsArr = normalsDict[objectID];
         var trianglesArr = trianglesDict[objectID];
-        string gEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunk.id},\"type\":\"G\",\"subMeshIdx\":{chunk.subMeshIdx},\"chunkRecvTime\":\"{chunk.chunkRecvTime}\"}}";
+        int packetID = BitConverter.ToInt32(chunk_data, chunk_data.Length - sizeof(int));
+        //Debug.Log($"packetID: {packetID}");
+        string gEntry = $"{{\"objectID\":{objectID},\"chunkID\":{chunk.id},\"universal_packetID\":{packetID},\"type\":\"G\",\"subMeshIdx\":{chunk.subMeshIdx},\"chunkRecvTime\":\"{chunk.chunkRecvTime}\"}}";
         chunksThisFrame.Add(gEntry);
         chunksThisFrameToReport.Add((objectID, chunk.id));
         //decodedTotalChunkN++;

@@ -1,8 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using NUnit.Framework.Constraints;
 using UnityEngine;
+
 
 public class SimulatorVisibility
 {
@@ -144,7 +145,9 @@ public class SimulatorVisibility
         chunkVisGroundTruthRoot = new GameObject("ChunkVisGroundTruthRoot");
         // chunkVisGroundTruthRoot.SetActive(false);  // change to use layer instead
         Debug.Log($"SimulatorVisibility initialized with {objectsInScene.Count} objects in scene");
+        ReadAllFootprintByChunk();
     }
+
 
     private void AddAllObjects(Transform child)
     {
@@ -155,6 +158,40 @@ public class SimulatorVisibility
             objectsInScene.Add(child.gameObject);
         for (int i = 0; i < child.childCount; i++)
             AddAllObjects(child.GetChild(i));
+    }
+
+    private void ReadAllFootprintByChunk()
+    {
+        //Vector3 startPos = new Vector3(-63, 0, 190);
+        //Vector3 endPos = new Vector3(-182, 0, 105);
+        //float xStartPos = Mathf.FloorToInt((startPos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        //float zStartPos = Mathf.FloorToInt((startPos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+        //float xEndPos = Mathf.FloorToInt((endPos.x - gd.gridCornerParent.transform.position.x) / gd.gridSize);
+        //float zEndPos = Mathf.FloorToInt((endPos.z - gd.gridCornerParent.transform.position.z) / gd.gridSize);
+        //Debug.Log($"{xStartPos / 10}, {xEndPos / 10}, {zStartPos / 10}, {zEndPos / 10}");
+        chunkFootprintsAtCorner = new Dictionary<string, int[]>();
+
+        for (int unitX = 3; unitX < 15; unitX++)
+        {
+            for (int unitZ = 44; unitZ < 52; unitZ++)
+            {
+                string path = $"Assets/Data/CornerLevelFootprintsByChunkUnit/{unitX}_{unitZ}.bin";
+                byte[] bytes_read = File.ReadAllBytes(path);
+                int cursor = 0;
+                for (int k = 0; k < numInUnitX; k++)
+                {
+                    for (int l = 0; l < numInUnitZ; l++)
+                    {
+                        int gridX = unitX * numInUnitX + k, gridZ = unitZ * numInUnitZ + l;
+                        int length = BitConverter.ToInt32(bytes_read, cursor);
+                        int[] intData = new int[length / sizeof(int)]; cursor += sizeof(int);
+                        Buffer.BlockCopy(bytes_read, cursor, intData, 0, length); cursor += length;
+                        chunkFootprintsAtCorner.Add($"{gridX}_{gridZ}", intData);
+                    }
+                }
+                Debug.Log($"finished loading {unitX}_{unitZ}");
+            }
+        }
     }
 
     public void SetVisibilityObjectsInRegion(Vector3 head_position, float radius)
@@ -684,6 +721,10 @@ public class SimulatorVisibility
             newObject.transform.localScale = holder.scale;
             // Parent to chunkVisualizationRoot
             newObject.transform.SetParent(chunkVisGroundTruthRoot.transform);
+            if (objectID == 1173)
+            {
+                newObject.SetActive(false);
+            }
 
             visualizedObjects[objectID] = newObject;
         }
